@@ -1,0 +1,22 @@
+package com.jesuskrastev.bali.domain.model
+
+data class User(
+    val id: String = "",
+    val name: String? = null,
+    val licenseType: String? = null,
+    val experience: String? = null,
+    val reasons: String = "",
+    val examDateMillis: Long? = null,
+    val dailyGoal: String? = null,
+    val learningPreference: String? = null,
+    val difficultTopics: String = "",
+    val concern: String? = null,
+    val studyTime: String? = null,
+    val lastPracticeTimestamp: Long = 0,
+    val currentStreak: Int = 0,
+    val xp: Int = 0,
+    val level: Int = 0,
+    val energy: Int = 3,
+    val coins: Int = 0,
+    val streakFreezes: Int = 0
+)

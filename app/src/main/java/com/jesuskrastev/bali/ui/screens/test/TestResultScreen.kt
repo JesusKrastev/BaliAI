@@ -1,0 +1,282 @@
+package com.jesuskrastev.bali.ui.screens.test
+
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.airbnb.lottie.compose.*
+import com.jesuskrastev.bali.R
+
+@Composable
+fun TestResultScreen(
+    xpGained: Int,
+    baseXp: Int,
+    bonusPerfection: Int? = null,
+    bonusFast: Int? = null,
+    bonusStreak: Int? = null,
+    leveledUp: Boolean = false,
+    durationSeconds: Int,
+    accuracy: Int,
+    onContinueClick: () -> Unit
+) {
+    val isPassed = accuracy >= 90
+    val minutes = durationSeconds / 60
+    val seconds = durationSeconds % 60
+
+    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.confetti))
+    val progress by animateLottieCompositionAsState(
+        composition = composition,
+        iterations = LottieConstants.IterateForever
+    )
+
+    Scaffold(
+        bottomBar = {
+            Button(
+                onClick = onContinueClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("CONTINUAR", fontWeight = FontWeight.Black)
+            }
+        }) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (isPassed) {
+                LottieAnimation(
+                    composition = composition,
+                    progress = { progress },
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (leveledUp) {
+                    LevelUpBadge()
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Mascota Bali
+                Image(
+                    painter = painterResource(id = R.drawable.bali),
+                    contentDescription = "Bali",
+                    modifier = Modifier.size(120.dp),
+                    contentScale = ContentScale.Fit
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = if (isPassed) "¡Práctica Completada!" else "Sigue practicando",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = if (isPassed) "Has demostrado un gran dominio." else "Cada fallo es una oportunidad de aprender.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Stats Cards
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ResultStatCard(
+                        modifier = Modifier.weight(1f),
+                        label = "EXP Total",
+                        value = "+$xpGained",
+                        icon = Icons.Rounded.Bolt,
+                        color = Color(0xFFFACC15),
+                    )
+
+                    ResultStatCard(
+                        modifier = Modifier.weight(1f),
+                        label = "Aciertos",
+                        value = "$accuracy%",
+                        icon = Icons.Rounded.CheckCircle,
+                        color = Color(0xFF22C55E)
+                    )
+
+                    ResultStatCard(
+                        modifier = Modifier.weight(1f),
+                        label = "Tiempo",
+                        value = String.format("%02d:%02d", minutes, seconds),
+                        icon = Icons.Rounded.Timer,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // XP Breakdown
+                XpBreakdownCard(baseXp, bonusPerfection, bonusFast, bonusStreak)
+            }
+        }
+    }
+}
+
+@Composable
+fun XpRow(label: String, value: Int, icon: String? = null, isBonus: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Text(text = icon, modifier = Modifier.padding(end = 8.dp), fontSize = 14.sp)
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Text(
+            text = "+$value",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+fun LevelUpBadge() {
+    val infiniteTransition = rememberInfiniteTransition(label = "levelup")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
+    Surface(
+        color = MaterialTheme.colorScheme.primary,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Rounded.Star, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "¡SUBISTE DE NIVEL!",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+fun XpBreakdownCard(baseXp: Int, perfection: Int?, fast: Int?, streak: Int?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "Desglose de Experiencia",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+
+            XpRow(label = "Base de la lección", value = baseXp)
+
+            if (perfection != null) {
+                XpRow(label = "Bono: Perfección", value = perfection, icon = "🎯", isBonus = true)
+            }
+            if (fast != null) {
+                XpRow(label = "Bono: Velocidad", value = fast, icon = "⚡", isBonus = true)
+            }
+            if (streak != null) {
+                XpRow(label = "Bono: Racha", value = streak, icon = "🔥", isBonus = true)
+            }
+        }
+    }
+}
+
+@Composable
+fun ResultStatCard(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    icon: ImageVector,
+    color: Color
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
