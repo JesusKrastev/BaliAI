@@ -22,8 +22,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260227
-        versionName = "1.0"
+        versionCode = 20260228
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val properties = Properties()
@@ -117,4 +117,8 @@ dependencies {
 
     // One signal
     implementation(libs.onesignal)
+
+    // In-App updates
+    implementation("com.google.android.play:app-update:2.1.0")
+    implementation("com.google.android.play:app-update-ktx:2.1.0")
 }

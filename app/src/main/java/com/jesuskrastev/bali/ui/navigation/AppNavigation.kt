@@ -4,6 +4,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -78,11 +79,13 @@ data class TestResultRoute(
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AppNavigation(
+    modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     startDestination: Any = GreetingsRoute
 ) {
     SharedTransitionLayout {
         NavHost(
+            modifier = modifier,
             navController = navController,
             startDestination = startDestination
         ) {
