@@ -14,11 +14,11 @@ class ResetStreakUseCase @Inject constructor(
         private const val MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000L
     }
 
-    suspend operator fun invoke() {
-        val user = userRepository.get().first() ?: return
+    suspend operator fun invoke(): Int {
+        val user = userRepository.get().first() ?: return 0
 
         val shouldNotReset = user.lastPracticeTimestamp == 0L || user.currentStreak == 0
-        if (shouldNotReset) return
+        if (shouldNotReset) return 0
 
         val daysSinceLastPractice = dateTimeHelper.getDaysBetween(
             fromTimestamp = user.lastPracticeTimestamp,
@@ -36,9 +36,11 @@ class ResetStreakUseCase @Inject constructor(
 
                 userRepository.updateStreakFreezes(updatedFreezes)
                 userRepository.updateStreak(user.currentStreak, updatedTimestamp)
+                return missedDays
             } else {
                 userRepository.resetStreak()
             }
         }
+        return 0
     }
 }

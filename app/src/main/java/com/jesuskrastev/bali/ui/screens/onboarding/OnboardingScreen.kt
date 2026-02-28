@@ -42,8 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.ui.screens.onboarding.components.MascotHeader
 import com.onesignal.OneSignal
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -108,6 +106,8 @@ private fun OnboardingBottomBar(
     viewModel: OnboardingViewModel
 ) {
     if (!shouldShowBottomButton(uiState.currentStep)) return
+    
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -117,7 +117,14 @@ private fun OnboardingBottomBar(
     ) {
         Button(
             onClick = {
-                viewModel.onEvent(OnboardingEvent.GoToNextStep)
+                if (uiState.currentStep == OnboardingStep.Notifications) {
+                    scope.launch {
+                        OneSignal.Notifications.requestPermission(false)
+                        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+                    }
+                } else {
+                    viewModel.onEvent(OnboardingEvent.GoToNextStep)
+                }
             },
             enabled = uiState.canGoNext,
             modifier = Modifier
@@ -188,7 +195,7 @@ private fun OnboardingStepContent(state: OnboardingUiState, viewModel: Onboardin
             OnboardingStep.DifficultTopics -> StepMultiSelectorList(OnboardingConfig.difficultTopics, state.data.difficultTopics) { viewModel.onEvent(OnboardingEvent.ToggleDifficultTopic(it)) }
             OnboardingStep.Concern -> StepSelectorList(OnboardingConfig.concerns) { viewModel.onEvent(OnboardingEvent.SelectConcern(it)) }
             OnboardingStep.StudyTime -> StepSelectorList(OnboardingConfig.studyTimes) { viewModel.onEvent(OnboardingEvent.SelectStudyTime(it)) }
-            OnboardingStep.Notifications -> StepNotifications()
+            OnboardingStep.Notifications -> StepNotifications(viewModel)
             OnboardingStep.Processing -> StepProcessing(
                 progress = state.processingProgress
             )
@@ -203,7 +210,7 @@ private fun OnboardingStepContent(state: OnboardingUiState, viewModel: Onboardin
 @Composable
 fun StepName(name: String, viewModel: OnboardingViewModel) {
     val focusManager = LocalFocusManager.current
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -235,9 +242,9 @@ fun StepName(name: String, viewModel: OnboardingViewModel) {
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
             )
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Text(
             text = "Solo lo usaremos para personalizar tu experiencia.",
             style = MaterialTheme.typography.bodySmall,
@@ -327,8 +334,10 @@ fun StepExamDate(selectedDate: Long?, viewModel: OnboardingViewModel) {
 }
 
 @Composable
-fun StepNotifications() {
+fun StepNotifications(viewModel: OnboardingViewModel) {
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -338,7 +347,13 @@ fun StepNotifications() {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight(),
+                .wrapContentHeight()
+                .clickable {
+                    scope.launch {
+                        OneSignal.Notifications.requestPermission(false)
+                        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+                    }
+                },
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
@@ -376,14 +391,15 @@ fun StepNotifications() {
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 Box(contentAlignment = Alignment.TopCenter) {
                     Button(
                         onClick = {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            scope.launch {
                                 OneSignal.Notifications.requestPermission(false)
+                                viewModel.onEvent(OnboardingEvent.GoToNextStep)
                             }
                         },
                         modifier = Modifier
@@ -393,25 +409,25 @@ fun StepNotifications() {
                     ) {
                         Text("Activar avisos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
-                    
+
                     PointingFingerEmoji()
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 TextButton(
-                    onClick = {  },
+                    onClick = { viewModel.onEvent(OnboardingEvent.GoToNextStep) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Ahora no", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(20.dp))
-        
+
         SocialProofBadge()
-        
+
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
@@ -567,7 +583,7 @@ fun StepComparison() {
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -591,16 +607,16 @@ fun StepComparison() {
                 ComparisonHeaderItem(text = "Copiloto 24/7", icon = "🤖", isNegative = false)
             }
         }
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         Surface(
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = "Nuestra IA analiza tu perfil para que apruebes en tiempo récord.",
+                text = "Bali analiza tu perfil para que apruebes en tiempo récord.",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(16.dp),
@@ -616,7 +632,6 @@ fun ComparisonHeader(title: String, color: Color) {
     Surface(
         color = color.copy(alpha = 0.1f),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.3f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
@@ -804,5 +819,6 @@ fun shouldShowBottomButton(step: OnboardingStep): Boolean = when (step) {
 
 fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.Comparison -> "Entendido"
+    OnboardingStep.Notifications -> "Activar recordatorios"
     else -> "Continuar"
 }

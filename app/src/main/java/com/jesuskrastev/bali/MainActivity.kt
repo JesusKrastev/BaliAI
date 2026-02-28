@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
 import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
@@ -31,7 +32,8 @@ class MainViewModel @Inject constructor(
     private val userRepository: UserRepositoryImpl,
     private val authRepository: AuthRepository,
     private val resetStreakUseCase: ResetStreakUseCase,
-    private val restoreEnergyUseCase: RestoreEnergyUseCase
+    private val restoreEnergyUseCase: RestoreEnergyUseCase,
+    private val analyticsTracker: FirebaseAnalyticsTracker
 ) : ViewModel() {
 
     val isOnboardingCompleted: StateFlow<Boolean?> = 
@@ -45,7 +47,8 @@ class MainViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            resetStreakUseCase()
+            val freezersUsed = resetStreakUseCase()
+            if (freezersUsed > 0) analyticsTracker.streakFreezerUsed(freezersUsed)
             restoreEnergyUseCase()
         }
     }

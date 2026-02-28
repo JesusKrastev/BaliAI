@@ -325,10 +325,6 @@ fun TestContentView(
                 val isCorrect = currentQuestion.correctAnswerIndex == optionIndex
 
                 OptionCard(
-//                    modifier = Modifier.border(
-//                        width = 1.dp,
-//                        color = if(isCorrect) MaterialTheme.colorScheme.primary else Color.Transparent,
-//                    ),
                     text = option,
                     isSelected = isSelected,
                     isCorrect = if (uiState.isAnswerChecked) isCorrect else null,

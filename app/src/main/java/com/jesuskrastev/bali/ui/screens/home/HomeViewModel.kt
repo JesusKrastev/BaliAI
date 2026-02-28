@@ -159,6 +159,8 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val success = decrementCoinsUseCase(100)
             if (success) {
+                analyticsTracker.coinsSpent(100, "dgt_simulacro")
+                analyticsTracker.dgtSimulacroUnlocked()
                 onSuccess()
             } else {
                 _showNoCoinsDialog.value = true

@@ -81,6 +81,7 @@ class ShopViewModel @Inject constructor(
             val success = decrementCoinsUseCase(120)
             if (success) {
                 userRepository.updateStreakFreezes(user.streakFreezes + 1)
+                analyticsTracker.coinsSpent(120, "streak_freezer")
                 analyticsTracker.storeItemPurchased("StreakFreezer")
                 _selectedItem.value = null
             }
@@ -95,6 +96,7 @@ class ShopViewModel @Inject constructor(
             val success = decrementCoinsUseCase(50)
             if (success) {
                 userRepository.updateEnergy(3)
+                analyticsTracker.coinsSpent(50, "energy_refill")
                 analyticsTracker.storeItemPurchased("EnergyRefill")
                 _selectedItem.value = null
             }

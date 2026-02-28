@@ -9,8 +9,8 @@ class IncrementStreakUseCase @Inject constructor(
     private val userRepository: UserRepositoryImpl,
     private val dateTimeHelper: DateTimeHelper
 ) {
-    suspend operator fun invoke() {
-        val user = userRepository.get().first() ?: return
+    suspend operator fun invoke(): Int {
+        val user = userRepository.get().first() ?: return -1
         val currentTimestamp = System.currentTimeMillis()
 
         val hasAlreadyPracticedToday = dateTimeHelper.isSameDay(
@@ -18,12 +18,13 @@ class IncrementStreakUseCase @Inject constructor(
             timestamp2 = currentTimestamp
         )
 
-        if (hasAlreadyPracticedToday) return
+        if (hasAlreadyPracticedToday) return -1
 
         val updatedStreak = user.currentStreak + 1
         userRepository.updateStreak(
             streak = updatedStreak,
             timestamp = currentTimestamp
         )
+        return updatedStreak
     }
 }

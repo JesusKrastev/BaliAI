@@ -86,4 +86,31 @@ class FirebaseAnalyticsTracker @Inject constructor(
             putString("feature", feature)
         }
     }
+
+    // ── ECONOMÍA ─────────────────────────────────────────────────────
+
+    fun energyConsumed(remaining: Int) = log("energy_consumed") {
+        putInt("remaining", remaining)
+    }
+
+    fun energyDepleted() = log("energy_depleted")
+
+    fun coinsEarned(amount: Int) = log("coins_earned") {
+        putInt("amount", amount)
+    }
+
+    fun coinsSpent(amount: Int, item: String) = log("coins_spent") {
+        putInt("amount", amount)
+        putString("item", item)
+    }
+
+    fun streakRecorded(streak: Int) = log("streak_recorded") {
+        putInt("streak", streak)
+    }
+
+    fun streakFreezerUsed(count: Int) = log("streak_freezer_used") {
+        putInt("count", count)
+    }
+
+    fun dgtSimulacroUnlocked() = log("dgt_simulacro_unlocked")
 }

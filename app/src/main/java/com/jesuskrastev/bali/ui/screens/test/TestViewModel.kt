@@ -265,6 +265,7 @@ class TestViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase()
+        analyticsTracker.coinsEarned(coinsGained)
 
         viewModelScope.launch {
             val testId = testResultRepository.insert(
@@ -292,8 +293,13 @@ class TestViewModel @Inject constructor(
                 }
             }
 
-            decrementEnergyUseCase()
-            incrementStreakUseCase()
+            decrementEnergyUseCase().also { newEnergy ->
+                analyticsTracker.energyConsumed(newEnergy)
+                if (newEnergy == 0) analyticsTracker.energyDepleted()
+            }
+            incrementStreakUseCase().also { streak ->
+                if (streak > 0) analyticsTracker.streakRecorded(streak)
+            }
         }
 
         return TestSummary(

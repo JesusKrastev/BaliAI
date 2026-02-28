@@ -191,6 +191,7 @@ class OnboardingViewModel @Inject constructor(
                 processingProgress = 0f
             )
         }
+        updateMascotMessage() // Actualizar mensaje al empezar el procesamiento
         viewModelScope.launch {
             val totalSteps = 100
             for (i in 1..totalSteps) {
@@ -243,7 +244,7 @@ class OnboardingViewModel @Inject constructor(
             OnboardingStep.Concern -> "¿Qué es lo que más miedo te da?"
             OnboardingStep.StudyTime -> "¿Cuándo te cunde más estudiar?"
             OnboardingStep.Notifications -> "Activa las notis. Yo cuido tu racha 🔥"
-            OnboardingStep.Processing -> "Déjame pensar... Creando tu plan 🤔"
+            OnboardingStep.Processing -> "Analizando tus datos... ¡Esto promete! 🤖"
             OnboardingStep.Comparison -> "Mira cómo vas a estudiar conmigo 👇"
             OnboardingStep.Pact -> "Casi listo, ${state.data.name ?: ""}. Solo falta tu compromiso..."
             else -> ""

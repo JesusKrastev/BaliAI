@@ -7,11 +7,13 @@ import javax.inject.Inject
 class DecrementEnergyUseCase @Inject constructor(
     private val userRepository: UserRepositoryImpl,
 ) {
-    suspend operator fun invoke() {
-        val user = userRepository.get().first() ?: return
+    suspend operator fun invoke(): Int {
+        val user = userRepository.get().first() ?: return -1
         if (user.energy > 0) {
             val newEnergy = user.energy - 1
             userRepository.updateEnergy(newEnergy)
+            return newEnergy
         }
+        return user.energy
     }
 }
