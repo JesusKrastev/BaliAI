@@ -428,7 +428,6 @@ fun HomeScreen(
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         color = MaterialTheme.colorScheme.background,
-                        shadowElevation = 4.dp
                     ) {
                         UserStatusRow(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -618,12 +617,9 @@ fun SyncBanner(onAction: () -> Unit) {
 
 @Composable
 fun DailyTipCard(tip: String) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
-        ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -1114,7 +1110,6 @@ fun StatBox(modifier: Modifier, label: String, value: String, emoji: String) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -1163,8 +1158,6 @@ fun HomeCard(
         modifier = Modifier.fillMaxWidth().alpha(if (isLocked) 0.7f else 1f),
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
