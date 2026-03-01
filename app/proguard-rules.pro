@@ -19,3 +19,16 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# --- Firebase Firestore Data Models ---
+# Evita que Proguard ofusque las clases que mapean campos desde/hacia Firestore
+-keep class com.jesuskrastev.bali.data.remote.firestore.entities.** { *; }
+-keep class com.jesuskrastev.bali.domain.model.** { *; }
+
+# --- Room Database Entities ---
+# Mantiene las clases relacionadas con la base de datos local para evitar fallos de instanciación
+-keep class com.jesuskrastev.bali.data.local.room.entities.** { *; }
+
+# Mantener atributos Genéricos y Anotaciones para Gson/Firestore
+-keepattributes Signature
+-keepattributes *Annotation*
