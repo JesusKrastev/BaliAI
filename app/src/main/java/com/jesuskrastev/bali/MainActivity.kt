@@ -208,8 +208,7 @@ class MainActivity : ComponentActivity() {
                             // Navegación Normal (Aparece cuando el SplashScreen se oculta y no hay error)
                             val startDestination = if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute
                             AppNavigation(
-                                startDestination = startDestination,
-                                modifier = Modifier.padding(innerPadding)
+                                startDestination = startDestination
                             )
                         }
                     }
