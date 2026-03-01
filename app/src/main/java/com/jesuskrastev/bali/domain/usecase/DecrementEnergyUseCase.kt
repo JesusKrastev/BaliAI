@@ -11,7 +11,11 @@ class DecrementEnergyUseCase @Inject constructor(
         val user = userRepository.get().first() ?: return -1
         if (user.energy > 0) {
             val newEnergy = user.energy - 1
-            userRepository.updateEnergy(newEnergy)
+            if (user.energy >= 5) {
+                userRepository.updateEnergyAndTimestamp(newEnergy, System.currentTimeMillis())
+            } else {
+                userRepository.updateEnergy(newEnergy)
+            }
             return newEnergy
         }
         return user.energy

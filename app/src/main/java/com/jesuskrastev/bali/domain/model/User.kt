@@ -13,10 +13,11 @@ data class User(
     val concern: String? = null,
     val studyTime: String? = null,
     val lastPracticeTimestamp: Long = 0,
+    val lastEnergyUpdateTimestamp: Long = 0,
     val currentStreak: Int = 0,
     val xp: Int = 0,
     val level: Int = 0,
-    val energy: Int = 3,
+    val energy: Int = 5,
     val coins: Int = 0,
     val streakFreezes: Int = 0
 )

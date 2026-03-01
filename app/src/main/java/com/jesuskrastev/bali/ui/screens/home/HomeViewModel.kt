@@ -92,6 +92,7 @@ class HomeViewModel @Inject constructor(
                 xpLevel = user.level,
                 xpProgress = (user.xp % 100) / 100f,
                 energyCount = user.energy,
+                lastEnergyUpdateTimestamp = user.lastEnergyUpdateTimestamp,
                 mistakesCount = mistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,

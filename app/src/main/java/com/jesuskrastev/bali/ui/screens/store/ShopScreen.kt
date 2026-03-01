@@ -98,14 +98,14 @@ fun ShopScreen(
                 title = "Energía",
                 countLabel = ""
             ) {
-                val price = 50
-                val isEnergyFull = uiState.energyCount >= 3
+                val price = 35
+                val isEnergyFull = uiState.energyCount >= 5
                 val hasEnoughCoins = uiState.coinsCount >= price
                 
                 ShopItemCard(
                     icon = Icons.Rounded.Bolt,
                     iconColor = Color(0xFFFACC15),
-                    label = "Recargar",
+                    label = "+1 Energía",
                     price = price,
                     isEnabled = !isEnergyFull,
                     hasEnoughCoins = hasEnoughCoins,
@@ -184,11 +184,11 @@ fun PurchaseConfirmationContent(
         }
         val description = when (item) {
             ShopItem.StreakFreezer -> "Evita perder tu racha de días si un día no puedes practicar."
-            ShopItem.EnergyRefill -> "Recupera todas tus energías al instante para seguir practicando sin límites hoy."
+            ShopItem.EnergyRefill -> "Añade +1 a tu energía al instante para seguir practicando."
         }
         val price = when (item) {
             ShopItem.StreakFreezer -> 120
-            ShopItem.EnergyRefill -> 50
+            ShopItem.EnergyRefill -> 35
         }
 
         Text(

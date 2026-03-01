@@ -74,6 +74,14 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long) = withContext(Dispatchers.IO) {
+        if (authRepository.isLoggedIn.first()) {
+            firestoreUserDao.updateFields(userId, mapOf("energy" to energy, "lastEnergyUpdateTimestamp" to timestamp))
+        } else {
+            userDao.updateEnergyAndTimestamp(energy, timestamp)
+        }
+    }
+
     suspend fun updateCoins(coins: Int) = withContext(Dispatchers.IO) {
         if (authRepository.isLoggedIn.first()) {
             firestoreUserDao.updateFields(userId, mapOf("coins" to coins))

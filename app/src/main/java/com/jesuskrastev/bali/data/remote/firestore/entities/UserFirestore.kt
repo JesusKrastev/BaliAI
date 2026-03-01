@@ -16,10 +16,11 @@ data class UserFirestore(
     val concern: String = "",
     val studyTime: String = "",
     val lastPracticeTimestamp: Long = 0L,
+    val lastEnergyUpdateTimestamp: Long = 0L,
     val currentStreak: Int = 0,
     val xp: Int = 0,
     val level: Int = 0,
-    val energy: Int = 3,
+    val energy: Int = 5,
     val coins: Int = 0,
     val streakFreezes: Int = 0
 )

@@ -27,6 +27,9 @@ interface UserDao {
     @Query("UPDATE users SET energy = :energy")
     suspend fun updateEnergy(energy: Int)
 
+    @Query("UPDATE users SET energy = :energy, lastEnergyUpdateTimestamp = :timestamp")
+    suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long)
+
     @Query("UPDATE users SET coins = :coins")
     suspend fun updateCoins(coins: Int)
 

@@ -69,6 +69,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLevelLockedDialog by remember { mutableStateOf(false) }
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
+    var showEnergyBottomSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -436,7 +437,7 @@ fun HomeScreen(
                             energyCount = uiState.energyCount,
                             coinsCount = uiState.coinsCount,
                             onCoinsClick = onShopClick,
-                            onEnergyClick = onShopClick,
+                            onEnergyClick = { showEnergyBottomSheet = true },
                             onMenuClick = {
                                 scope.launch { drawerState.open() }
                             }
@@ -552,6 +553,131 @@ fun HomeScreen(
 
                 item { Spacer(modifier = Modifier.height(16.dp)) }
             }
+        }
+    }
+    
+    if (showEnergyBottomSheet) {
+        EnergyBottomSheet(
+            energyCount = uiState.energyCount,
+            lastEnergyUpdateTimestamp = uiState.lastEnergyUpdateTimestamp,
+            onDismissRequest = { showEnergyBottomSheet = false },
+            onGoToShopClick = {
+                showEnergyBottomSheet = false
+                onShopClick()
+            }
+        )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+fun EnergyBottomSheet(
+    energyCount: Int,
+    lastEnergyUpdateTimestamp: Long,
+    onDismissRequest: () -> Unit,
+    onGoToShopClick: () -> Unit
+) {
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(5) { index ->
+                    Icon(
+                        imageVector = Icons.Rounded.Bolt,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = if (index < energyCount) Color(0xFFFACC15) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            if (energyCount >= 5) {
+                Text(
+                    text = "Al máximo",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Vuestra energía está llena. Necesitas energía para continuar tu estudio. Cuando se agote, se rellenará automáticamente.",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                var remainingTime by remember { mutableStateOf(0L) }
+                
+                LaunchedEffect(lastEnergyUpdateTimestamp) {
+                    val twoHoursMillis = 2 * 60 * 60 * 1000L
+                    while(true) {
+                        val currentTime = System.currentTimeMillis()
+                        val diff = currentTime - lastEnergyUpdateTimestamp
+                        val remainder = diff % twoHoursMillis
+                        remainingTime = twoHoursMillis - remainder
+                        kotlinx.coroutines.delay(1000)
+                    }
+                }
+                
+                val hours = (remainingTime / (1000 * 60 * 60))
+                val minutes = (remainingTime / (1000 * 60)) % 60
+                val seconds = (remainingTime / 1000) % 60
+                val timeString = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+                
+                Text(
+                    text = buildAnnotatedString {
+                        append("Próxima energía en ")
+                        withStyle(style = SpanStyle(color = Color(0xFFEF4444))) {
+                            append(timeString)
+                        }
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Toma un breve descanso para recargar energía, o consigue más en la tienda para seguir aprendiendo.",
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
+            if (energyCount < 5) {
+                Button(
+                    onClick = onGoToShopClick,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFACC15), contentColor = Color.Black),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(Icons.Rounded.Bolt, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Ir a la tienda", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            TextButton(
+                onClick = onDismissRequest,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Salir", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -903,6 +1029,13 @@ fun UserStatusRow(
                         fontWeight = FontWeight.Black,
                         style = MaterialTheme.typography.labelLarge
                     )
+                    Spacer(Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Rounded.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
@@ -930,13 +1063,6 @@ fun UserStatusRow(
                         text = "$energyCount",
                         fontWeight = FontWeight.Black,
                         style = MaterialTheme.typography.labelLarge
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }

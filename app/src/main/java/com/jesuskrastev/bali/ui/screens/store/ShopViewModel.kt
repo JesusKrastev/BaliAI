@@ -91,12 +91,12 @@ class ShopViewModel @Inject constructor(
     private fun purchaseEnergyRefill() {
         viewModelScope.launch {
             val user = userRepository.get().first() ?: return@launch
-            if (user.energy >= 3) return@launch
+            if (user.energy >= 5) return@launch
 
-            val success = decrementCoinsUseCase(50)
+            val success = decrementCoinsUseCase(35)
             if (success) {
-                userRepository.updateEnergy(3)
-                analyticsTracker.coinsSpent(50, "energy_refill")
+                userRepository.updateEnergy(user.energy + 1)
+                analyticsTracker.coinsSpent(35, "energy_refill")
                 analyticsTracker.storeItemPurchased("EnergyRefill")
                 _selectedItem.value = null
             }

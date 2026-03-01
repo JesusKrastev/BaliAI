@@ -1,34 +1,48 @@
 package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
-import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 class RestoreEnergyUseCase @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val dateTimeHelper: DateTimeHelper
+    private val userRepository: UserRepositoryImpl
 ) {
     companion object {
-        private const val MAX_ENERGY = 3
-        private const val MINIMUM_DAYS_TO_RESTORE = 1
+        private const val MAX_ENERGY = 5
+        private const val REGENERATION_INTERVAL_MILLIS = 2 * 60 * 60 * 1000L // 2 hours
     }
 
     suspend operator fun invoke() {
         val user = userRepository.get().first() ?: return
 
-        val shouldNotRestore = user.lastPracticeTimestamp == 0L
-        if (shouldNotRestore) return
+        val currentTime = System.currentTimeMillis()
 
-        val daysSinceLastPractice = dateTimeHelper.getDaysBetween(
-            fromTimestamp = user.lastPracticeTimestamp,
-            toTimestamp = System.currentTimeMillis()
-        )
+        // If energy is already full, ensure the timestamp is synced so we don't start accumulating
+        if (user.energy >= MAX_ENERGY) {
+            userRepository.updateEnergyAndTimestamp(user.energy, currentTime)
+            return
+        }
 
-        val shouldRestoreEnergy = daysSinceLastPractice >= MINIMUM_DAYS_TO_RESTORE
+        // Initialize tracking if user doesn't have it set but has energy < MAX_ENERGY
+        if (user.lastEnergyUpdateTimestamp == 0L) {
+            userRepository.updateEnergyAndTimestamp(user.energy, currentTime)
+            return
+        }
 
-        if (shouldRestoreEnergy) {
-            userRepository.updateEnergy(MAX_ENERGY)
+        val timePassed = currentTime - user.lastEnergyUpdateTimestamp
+
+        if (timePassed >= REGENERATION_INTERVAL_MILLIS) {
+            val energyToAdd = (timePassed / REGENERATION_INTERVAL_MILLIS).toInt()
+            val newEnergy = minOf(MAX_ENERGY, user.energy + energyToAdd)
+            
+            val timeRemainder = timePassed % REGENERATION_INTERVAL_MILLIS
+            val newTimestamp = if (newEnergy == MAX_ENERGY) {
+                currentTime // Stop timer if we reached max
+            } else {
+                currentTime - timeRemainder // Keep the remainder for exactly spaced intervals
+            }
+            
+            userRepository.updateEnergyAndTimestamp(newEnergy, newTimestamp)
         }
     }
 }
