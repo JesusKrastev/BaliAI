@@ -41,6 +41,8 @@ import com.jesuskrastev.bali.ui.navigation.HomeRoute
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -140,8 +142,6 @@ class MainViewModel @Inject constructor(
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         val viewModel: MainViewModel by viewModels()
         
         installSplashScreen().apply {
@@ -150,6 +150,8 @@ class MainActivity : ComponentActivity() {
                 viewModel.isMigrating.value || viewModel.isOnboardingCompleted.value == null
             }
         }
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         setContent {
             BaliTheme {
