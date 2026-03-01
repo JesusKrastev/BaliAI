@@ -64,7 +64,8 @@ fun HomeScreen(
     onMistakesClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
     onShopClick: () -> Unit = {},
-    onFeedbackClick: () -> Unit = {}
+    onFeedbackClick: () -> Unit = {},
+    onAuthClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLevelLockedDialog by remember { mutableStateOf(false) }
@@ -143,7 +144,7 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .clickable { 
                                 scope.launch { drawerState.close() }
-                                viewModel.signInWithGoogle(context) 
+                                onAuthClick()
                             },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -423,7 +424,7 @@ fun HomeScreen(
                         visible = !uiState.isLoggedIn,
                     ) {
                         SyncBanner(
-                            onAction = { viewModel.signInWithGoogle(context) }
+                            onAction = onAuthClick
                         )
                     }
                     Surface(
@@ -612,7 +613,7 @@ fun EnergyBottomSheet(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Vuestra energía está llena. Necesitas energía para continuar tu estudio. Cuando se agote, se rellenará automáticamente.",
+                    text = "Tu energía está llena. Necesitas energía para continuar tu estudio. Cuando se agote, se rellenará automáticamente.",
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -14,6 +14,7 @@ import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
 import com.jesuskrastev.bali.domain.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,6 +31,12 @@ class FirestoreUserDao @Inject constructor(
     }
 
     // --- User Operations ---
+    suspend fun getSchemaVersion(userId: String): Int {
+        val snapshot = collection.document(userId).get().await()
+        if (!snapshot.exists()) return 1
+        return snapshot.getLong("schemaVersion")?.toInt() ?: 1
+    }
+
     fun getUser(userId: String): Flow<UserFirestore?> {
         return collection.document(userId).snapshots().map {
             it.toObject(UserFirestore::class.java)

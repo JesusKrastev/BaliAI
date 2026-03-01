@@ -32,6 +32,7 @@ import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
+import com.jesuskrastev.bali.domain.usecase.AppInitializationUseCase
 import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
 import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.ResetStreakUseCase
@@ -45,6 +46,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -54,10 +56,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     private val userRepository: UserRepositoryImpl,
     private val authRepository: AuthRepository,
-    private val resetStreakUseCase: ResetStreakUseCase,
-    private val restoreEnergyUseCase: RestoreEnergyUseCase,
-    private val executeFirestoreMigrationsUseCase: ExecuteFirestoreMigrationsUseCase,
-    private val analyticsTracker: FirebaseAnalyticsTracker,
+    private val appInitializationUseCase: AppInitializationUseCase,
     private val inAppUpdateManager: InAppUpdateManager
 ) : ViewModel() {
 
@@ -88,30 +87,22 @@ class MainViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            authRepository.isLoggedIn.collect { isLoggedIn ->
-                if (isLoggedIn) {
-                    try {
-                        _isMigrating.value = true
-                        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                        currentUser?.uid?.let { uid ->
-                            // Ejecutar migraciones de Firestore conectadas a este usuario
-                            executeFirestoreMigrationsUseCase(uid)
-                        }
-                        
-                        // Solo cargar datos si las migraciones terminaron con éxito
-                        val freezersUsed = resetStreakUseCase()
-                        if (freezersUsed > 0) analyticsTracker.streakFreezerUsed(freezersUsed)
-                        restoreEnergyUseCase()
-                        
-                        _isMigrating.value = false
-                    } catch (e: Exception) {
-                        _migrationError.value = e.message ?: "Error desconocido durante la migración de la base de datos."
-                        _isMigrating.value = false // Ya no está migrando, pero hay un error
-                    }
-                } else {
-                    // Si no está loggeado, no hay migraciones pendientes en Firestore que deban bloquear
+            val currentUserUid = authRepository.currentUser()
+            if (currentUserUid != null) {
+                _migrationError.value = null
+                _isMigrating.value = true
+                try {
+                    appInitializationUseCase(currentUserUid)
+                } catch (e: Exception) {
+                    _migrationError.value = e.message ?: "Error desconocido durante la inicialización de la base de datos."
+                    e.printStackTrace()
+                } finally {
                     _isMigrating.value = false
                 }
+            } else {
+                // Not logged in: nothing to migrate or initialize, allow visual entry.
+                _isMigrating.value = false
+                _migrationError.value = null
             }
         }
         inAppUpdateManager.checkForUpdate()

@@ -20,6 +20,5 @@ data class HomeUiState(
     val dailyTip: String = "",
     val isLoggedIn: Boolean = false,
     val showEnergyDialog: Boolean = false,
-    val showNoCoinsDialog: Boolean = false,
-    val isLoading: Boolean = true,
+    val showNoCoinsDialog: Boolean = false
 )

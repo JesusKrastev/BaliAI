@@ -96,7 +96,6 @@ class HomeViewModel @Inject constructor(
                 mistakesCount = mistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
-                isLoading = false,
                 showEnergyDialog = showEnergyDialog,
                 showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
@@ -109,50 +108,10 @@ class HomeViewModel @Inject constructor(
         initialValue = HomeUiState()
     )
 
-    fun signInWithGoogle(context: Context) {
-        viewModelScope.launch {
-            val localUser = userRepository.get().first()
-            val localTestResults = testResultRepository.getAll().first()
-            val localAnswers = answerRepository.getAll().first()
-            val result = authRepository.signInWithGoogle(context)
-
-            if(result.isSuccess) {
-                val userId = authRepository.currentUser()
-                val userExists = userRepository.exists(userId).first()
-                if (!userExists) {
-                    synchronizeLocalDataToFirestore(
-                        userId ?: "",
-                        localUser ?: User(),
-                        localTestResults,
-                        localAnswers
-                    )
-                    analyticsTracker.signUp()
-                } else {
-                    analyticsTracker.login()
-                }
-            }
-        }
-    }
-
     fun signOut(context: Context) {
         viewModelScope.launch {
             authRepository.signOut(context)
             analyticsTracker.logout()
-        }
-    }
-
-    private suspend fun synchronizeLocalDataToFirestore(
-        userId: String,
-        user: User,
-        testResults: List<TestResult>,
-        answers: List<Answer>,
-    ) {
-        val syncResult = userRepository.uploadAll(userId, user, testResults, answers)
-        
-        if (syncResult.isSuccess) {
-            userRepository.clear()
-            testResultRepository.clear()
-            answerRepository.clear()
         }
     }
 

@@ -34,6 +34,10 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    suspend fun getSchemaVersion(): Int = withContext(Dispatchers.IO) {
+        firestoreUserDao.getSchemaVersion(userId)
+    }
+
     suspend fun insert(user: User) = withContext(Dispatchers.IO) {
         if (authRepository.isLoggedIn.first()) {
             firestoreUserDao.updateUser(userId, user)

@@ -4,6 +4,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -59,6 +60,9 @@ object ShopRoute
 object SuggestionsRoute
 
 @Serializable
+data class AuthRoute(val restrictNewAccounts: Boolean = false)
+
+@Serializable
 data class CoinsGainedRoute(val coins: Int)
 
 @Serializable
@@ -99,6 +103,9 @@ fun AppNavigation(
                                 inclusive = true
                             }
                         }
+                    },
+                    onAuthClick = {
+                        navController.navigate(AuthRoute(restrictNewAccounts = true))
                     }
                 )
             }
@@ -129,7 +136,36 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
+                    },
+                    onAuthClick = {
+                        navController.navigate(AuthRoute(restrictNewAccounts = false))
                     }
+                )
+            }
+
+            composable<AuthRoute> { backStackEntry ->
+                val route: AuthRoute = backStackEntry.toRoute()
+                val viewModel: com.jesuskrastev.bali.ui.screens.auth.AuthViewModel = hiltViewModel()
+                val isLoggingIn = viewModel.isLoggingIn.collectAsState().value
+                val errorMsg = viewModel.errorMessage.collectAsState().value
+                val errorEmail = viewModel.errorEmail.collectAsState().value
+                
+                com.jesuskrastev.bali.ui.screens.auth.AuthScreen(
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@composable,
+                    onBackClick = { navController.popBackStack() },
+                    onLoginClick = { context -> 
+                        viewModel.signInWithGoogle(context, route.restrictNewAccounts) {
+                            // On success, go directly to Home
+                            navController.navigate(HomeRoute) {
+                                popUpTo(AuthRoute(route.restrictNewAccounts)) { inclusive = true }
+                            }
+                        }
+                    },
+                    isLoggingIn = isLoggingIn,
+                    errorMessage = errorMsg,
+                    errorEmail = errorEmail,
+                    onErrorDismiss = { viewModel.clearError() }
                 )
             }
 

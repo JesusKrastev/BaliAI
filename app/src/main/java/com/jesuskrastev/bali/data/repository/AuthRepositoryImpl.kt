@@ -47,7 +47,7 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         return auth.currentUser?.email
     }
 
-    override suspend fun signInWithGoogle(context: Context): Result<Unit> {
+    override suspend fun getGoogleIdTokenAndEmail(context: Context): Result<Pair<String, String>> {
         val activity = context.findActivity()
             ?: return Result.failure(Exception("Activity no encontrada"))
 
@@ -66,10 +66,21 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
                 filterByAuthorized = false
             ) ?: return Result.failure(Exception("No se encontró ninguna cuenta de Google en el dispositivo"))
 
-            authenticateWithFirebase(result)
+            val credential = result.credential
+            if (credential is CustomCredential &&
+                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+            ) {
+                val googleCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                Result.success(Pair(googleCredential.idToken, googleCredential.id))
+            } else {
+                Result.failure(Exception("Tipo de credencial inesperado: ${credential.type}"))
+            }
         } catch (e: GetCredentialCancellationException) {
             // El usuario canceló → no es un error, no hacemos nada
             Result.failure(CancellationException("Usuario canceló el inicio de sesión"))
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "Error obteniendo credencial de Google", e)
+            Result.failure(e)
         }
     }
 
@@ -100,22 +111,23 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         }
     }
 
-    private suspend fun authenticateWithFirebase(result: GetCredentialResponse): Result<Unit> {
+    override suspend fun signInWithGoogleCredential(idToken: String): Result<Unit> {
         return try {
-            val credential = result.credential
-            if (credential is CustomCredential &&
-                credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-            ) {
-                val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                auth.signInWithCredential(firebaseCredential).await()
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("Tipo de credencial inesperado: ${credential.type}"))
-            }
+            val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+            auth.signInWithCredential(firebaseCredential).await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Log.e("AuthRepository", "Error autenticando con Firebase", e)
             Result.failure(e)
+        }
+    }
+
+    override suspend fun existsInAuth(email: String): Boolean {
+        return try {
+            val result = auth.fetchSignInMethodsForEmail(email).await()
+            result.signInMethods?.isNotEmpty() == true
+        } catch (e: Exception) {
+            false
         }
     }
 

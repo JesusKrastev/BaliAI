@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -50,7 +52,8 @@ import com.jesuskrastev.bali.ui.theme.BaliPrimary
 fun GreetingsScreen(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    onStartClick: () -> Unit = {}
+    onStartClick: () -> Unit = {},
+    onAuthClick: () -> Unit = {}
 ) {
     var isVisible by remember { mutableStateOf(false) }
 
@@ -80,7 +83,9 @@ fun GreetingsScreen(
             )
 
             GreetingsFooter(
-                isVisible = isVisible, onStartClick = onStartClick
+                isVisible = isVisible,
+                onStartClick = onStartClick,
+                onAuthClick = onAuthClick
             )
         }
     }
@@ -205,7 +210,9 @@ private fun GreetingsContent(
 
 @Composable
 private fun GreetingsFooter(
-    isVisible: Boolean, onStartClick: () -> Unit
+    isVisible: Boolean,
+    onStartClick: () -> Unit,
+    onAuthClick: () -> Unit
 ) {
     AnimatedVisibility(
         visible = isVisible,
@@ -216,16 +223,32 @@ private fun GreetingsFooter(
             initialOffsetY = { 100 }, animationSpec = tween(durationMillis = 600, delayMillis = 900)
         ) + fadeIn(animationSpec = tween(durationMillis = 600, delayMillis = 900))
     ) {
-        Button(
-            onClick = onStartClick,
-            modifier = Modifier.height(56.dp),
-            shape = RoundedCornerShape(28.dp),
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "¡A por mi L!",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Button(
+                onClick = onStartClick,
+                modifier = Modifier.height(56.dp),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Text(
+                    text = "¡A por mi L!",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            TextButton(
+                onClick = onAuthClick,
+                modifier = Modifier.padding(bottom = 16.dp)
+            ) {
+                Text(
+                    text = "Ya tengo cuenta",
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
