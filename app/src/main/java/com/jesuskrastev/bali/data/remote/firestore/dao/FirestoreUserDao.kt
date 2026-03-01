@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
+import android.util.Log
 import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -10,13 +11,10 @@ import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
-import com.jesuskrastev.bali.domain.model.Answer
-import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
-import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +22,8 @@ import javax.inject.Singleton
 class FirestoreUserDao @Inject constructor(
     private val firestore: FirebaseFirestore
 ) {
-    private val collection = firestore.collection("env").document(BuildConfig.BUILD_TYPE).collection("users")
+    private val collection =
+        firestore.collection("env").document(BuildConfig.BUILD_TYPE).collection("users")
 
     companion object {
         private const val BATCH_LIMIT = 500
@@ -33,13 +32,12 @@ class FirestoreUserDao @Inject constructor(
     // --- User Operations ---
     fun getUser(userId: String): Flow<UserFirestore?> {
         return collection.document(userId).snapshots().map {
-            it.toObject(UserFirestore::class.java) 
+            it.toObject(UserFirestore::class.java)
         }
     }
 
     suspend fun updateUser(userId: String, user: User) {
-        collection.document(userId)
-            .set(user.toFirestore(), SetOptions.merge()).await()
+        collection.document(userId).set(user.toFirestore(), SetOptions.merge()).await()
     }
 
     suspend fun updateFields(userId: String, updates: Map<String, Any>) {
@@ -49,15 +47,12 @@ class FirestoreUserDao @Inject constructor(
     // --- Test Results Operations ---
     fun getTestResults(userId: String): Flow<List<TestResultFirestore>> {
         return collection.document(userId).collection("test_results")
-            .orderBy("dateMillis", Query.Direction.DESCENDING)
-            .snapshots()
+            .orderBy("dateMillis", Query.Direction.DESCENDING).snapshots()
             .map { it.toObjects(TestResultFirestore::class.java) }
     }
 
     fun getAnswers(userId: String): Flow<List<AnswerFirestore>> {
-        return collection.document(userId)
-            .collection("answers")
-            .snapshots()
+        return collection.document(userId).collection("answers").snapshots()
             .map { it.toObjects(AnswerFirestore::class.java) }
     }
 
@@ -69,10 +64,8 @@ class FirestoreUserDao @Inject constructor(
 
     // --- Answers Operations ---
     fun getRecentMistakes(userId: String): Flow<List<AnswerFirestore>> {
-        return collection.document(userId).collection("answers")
-            .whereEqualTo("correct", false)
-            .whereEqualTo("corrected", false)
-            .snapshots()
+        return collection.document(userId).collection("answers").whereEqualTo("correct", false)
+            .whereEqualTo("corrected", false).snapshots()
             .map { it.toObjects(AnswerFirestore::class.java) }
     }
 
@@ -82,9 +75,8 @@ class FirestoreUserDao @Inject constructor(
 
     suspend fun markAnswerAsCorrected(userId: String, questionText: String) {
         val snapshot = collection.document(userId).collection("answers")
-            .whereEqualTo("questionText", questionText)
-            .get().await()
-        
+            .whereEqualTo("questionText", questionText).get().await()
+
         val batch = firestore.batch()
         snapshot.documents.forEach { doc ->
             batch.update(doc.reference, "corrected", true)
@@ -112,8 +104,7 @@ class FirestoreUserDao @Inject constructor(
         }
 
         results.forEach { result ->
-            val testResultRef = collection.document(userId)
-                .collection("test_results").document()
+            val testResultRef = collection.document(userId).collection("test_results").document()
             val firestoreTestId = testResultRef.id
 
             operations.add { batch ->
@@ -121,8 +112,7 @@ class FirestoreUserDao @Inject constructor(
             }
 
             answers.filter { it.testId == result.id }.forEach { answer ->
-                val answerRef = collection.document(userId)
-                    .collection("answers").document()
+                val answerRef = collection.document(userId).collection("answers").document()
                 operations.add { batch ->
                     batch.set(answerRef, answer.copy(testId = firestoreTestId))
                 }
