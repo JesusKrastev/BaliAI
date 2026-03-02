@@ -1,11 +1,9 @@
 package com.jesuskrastev.bali.ui.screens.test
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.local.room.entities.TestResultEntity
 import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
 import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
 import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
@@ -17,6 +15,8 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,7 +28,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
-import java.util.UUID
 import javax.inject.Inject
 
 data class QuestionUiState(
@@ -117,7 +116,17 @@ class TestViewModel @Inject constructor(
     private fun retry() {
         sessionStreak = 0
         testFinished = false
-        _uiState.update { it.copy(isLoading = true, error = null, questions = emptyList(), currentQuestionIndex = 0, selectedAnswers = emptyMap(), isAnswerChecked = false, sessionStreak = 0) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                error = null,
+                questions = emptyList(),
+                currentQuestionIndex = 0,
+                selectedAnswers = emptyMap(),
+                isAnswerChecked = false,
+                sessionStreak = 0
+            )
+        }
         generateTest()
     }
 
@@ -129,7 +138,8 @@ class TestViewModel @Inject constructor(
                 val lastTests = testResultRepository.getRecent().first()
                 val totalTests = testResultRepository.count()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
+                val difficultTopics =
+                    user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
                 val studentLevel = user?.level ?: 1
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val historyContext = if (lastTests.isNotEmpty()) {
@@ -188,9 +198,9 @@ class TestViewModel @Inject constructor(
 
                 val response = gemini.generateContent(prompt)
                 analyticsTracker.geminiUsage(
-                    inputTokens  = response.usageMetadata?.promptTokenCount     ?: 0,
+                    inputTokens = response.usageMetadata?.promptTokenCount ?: 0,
                     outputTokens = response.usageMetadata?.candidatesTokenCount ?: 0,
-                    feature      = "PRACTICE"
+                    feature = "PRACTICE"
                 )
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
@@ -201,21 +211,34 @@ class TestViewModel @Inject constructor(
                 val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
                 val root = jsonContent.parseToJsonElement(jsonString).jsonObject
 
-                val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic ?: "Práctica General"
+                val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic
+                ?: "Práctica General"
                 val questionUiStates = root["questions"]?.jsonArray?.map { element ->
                     val obj = element.jsonObject
                     QuestionUiState(
                         text = obj["text"]?.jsonPrimitive?.content ?: "",
-                        options = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-                        correctAnswerIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toInt() ?: 0,
+                        options = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content }
+                            ?: emptyList(),
+                        correctAnswerIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toInt()
+                            ?: 0,
                         explanation = obj["explanation"]?.jsonPrimitive?.content ?: "",
-                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf { it != "null" && it != null && it.startsWith("http") }
+                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf {
+                            it != "null" && it != null && it.startsWith(
+                                "http"
+                            )
+                        }
                     )
                 } ?: emptyList()
 
                 startTime = System.currentTimeMillis()
                 analyticsTracker.testStarted("PRACTICE")
-                _uiState.update { it.copy(category = category, questions = questionUiStates, isLoading = false) }
+                _uiState.update {
+                    it.copy(
+                        category = category,
+                        questions = questionUiStates,
+                        isLoading = false
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
@@ -235,7 +258,8 @@ class TestViewModel @Inject constructor(
         val currentState = _uiState.value
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
-            val isCorrect = selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
+            val isCorrect =
+                selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
             analyticsTracker.questionAnswered(isCorrect)
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
@@ -245,7 +269,12 @@ class TestViewModel @Inject constructor(
     private fun nextQuestion() {
         val currentState = _uiState.value
         if (currentState.currentQuestionIndex < currentState.questions.size - 1) {
-            _uiState.update { it.copy(currentQuestionIndex = it.currentQuestionIndex + 1, isAnswerChecked = false) }
+            _uiState.update {
+                it.copy(
+                    currentQuestionIndex = it.currentQuestionIndex + 1,
+                    isAnswerChecked = false
+                )
+            }
         }
     }
 
@@ -255,7 +284,8 @@ class TestViewModel @Inject constructor(
             state.selectedAnswers[index] == state.questions[index].correctAnswerIndex
         }
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
-        val accuracy = if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
+        val accuracy =
+            if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
@@ -267,7 +297,7 @@ class TestViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase()
         analyticsTracker.coinsEarned(coinsGained)
 
-        viewModelScope.launch {
+        CoroutineScope(Dispatchers.IO).launch {
             val testId = testResultRepository.insert(
                 TestResult(
                     category = state.category,

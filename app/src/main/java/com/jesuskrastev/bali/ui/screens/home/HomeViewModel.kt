@@ -12,10 +12,12 @@ import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.Calendar
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -29,6 +31,7 @@ class HomeViewModel @Inject constructor(
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
     private val analyticsTracker: FirebaseAnalyticsTracker,
+    private val dateTimeHelper: DateTimeHelper,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -89,8 +92,8 @@ class HomeViewModel @Inject constructor(
                 streak = user.currentStreak,
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
+                practiceDays = user.practiceDays,
                 xpLevel = user.level,
-                xpProgress = (user.xp % 100) / 100f,
                 energyCount = user.energy,
                 lastEnergyUpdateTimestamp = user.lastEnergyUpdateTimestamp,
                 mistakesCount = mistakes.size,
@@ -99,7 +102,9 @@ class HomeViewModel @Inject constructor(
                 showEnergyDialog = showEnergyDialog,
                 showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
-                isLoggedIn = isLoggedIn
+                isLoggedIn = isLoggedIn,
+                weeklyStreak = generateWeeklyStreak(user.currentStreak, user.streakFreezes, user.practiceDays),
+                lastPracticeTimestamp = user.lastPracticeTimestamp
             )
         }
     }.stateIn(
@@ -138,5 +143,53 @@ class HomeViewModel @Inject constructor(
 
     fun dismissNoCoinsDialog() {
         _showNoCoinsDialog.value = false
+    }
+
+    private fun generateWeeklyStreak(streak: Int, freezes: Int, practiceDays: List<Long>): List<DailyStreakState> {
+        val today = Calendar.getInstance()
+        val currentDayOfWeek = today.get(Calendar.DAY_OF_WEEK)
+        // Lunes = 0, Domingo = 6
+        val offset = if (currentDayOfWeek == Calendar.SUNDAY) 6 else currentDayOfWeek - 2
+
+        val startOfWeek = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, -offset)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+
+        val weekDays = listOf("L", "M", "X", "J", "V", "S", "D")
+        val result = mutableListOf<DailyStreakState>()
+
+        for (i in 0..6) {
+            val day = Calendar.getInstance().apply {
+                timeInMillis = startOfWeek.timeInMillis
+                add(Calendar.DAY_OF_YEAR, i)
+            }
+            val isToday = i == offset
+            val isFuture = i > offset
+            val dayOfMonth = day.get(Calendar.DAY_OF_MONTH)
+            
+            // Current day's start timestamp
+            val dayStartMillis = day.timeInMillis
+            val hasPracticed = practiceDays.contains(dayStartMillis)
+
+            val status = if (isFuture) {
+                StreakStatus.FUTURE
+            } else if (isToday) {
+                if (hasPracticed) StreakStatus.COMPLETED else StreakStatus.TODAY
+            } else {
+                if (hasPracticed) {
+                    StreakStatus.COMPLETED
+                } else {
+                    // TODO: Advanced freezer logic can be mapped here later
+                    StreakStatus.FAILED
+                }
+            }
+            
+            result.add(DailyStreakState(weekDays[i], dayOfMonth, status, isToday))
+        }
+        return result
     }
 }

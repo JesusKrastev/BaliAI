@@ -21,9 +21,14 @@ class IncrementStreakUseCase @Inject constructor(
         if (hasAlreadyPracticedToday) return -1
 
         val updatedStreak = user.currentStreak + 1
+        
+        val startOfToday = dateTimeHelper.getStartOfDay(currentTimestamp)
+        val updatedPracticeDays = user.practiceDays + startOfToday
+
         userRepository.updateStreak(
             streak = updatedStreak,
-            timestamp = currentTimestamp
+            timestamp = currentTimestamp,
+            practiceDays = updatedPracticeDays
         )
         return updatedStreak
     }

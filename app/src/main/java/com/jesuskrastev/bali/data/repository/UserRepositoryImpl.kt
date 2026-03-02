@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
+import com.jesuskrastev.bali.data.local.room.Converters
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
@@ -54,11 +55,16 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    suspend fun updateStreak(streak: Int, timestamp: Long) = withContext(Dispatchers.IO) {
+    suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) = withContext(Dispatchers.IO) {
         if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("currentStreak" to streak, "lastPracticeTimestamp" to timestamp))
+            firestoreUserDao.updateFields(userId, mapOf(
+                "currentStreak" to streak, 
+                "lastPracticeTimestamp" to timestamp,
+                "practiceDays" to practiceDays
+            ))
         } else {
-            userDao.updateStreak(streak, timestamp)
+            val practiceDaysStr = Converters().fromLongList(practiceDays)
+            userDao.updateStreak(streak, timestamp, practiceDaysStr)
         }
     }
 

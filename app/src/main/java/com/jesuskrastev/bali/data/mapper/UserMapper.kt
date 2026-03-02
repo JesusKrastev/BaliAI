@@ -22,7 +22,8 @@ fun UserEntity.toDomain(): User = User(
     level = level,
     energy = energy,
     coins = coins,
-    streakFreezes = streakFreezes
+    streakFreezes = streakFreezes,
+    practiceDays = practiceDays
 )
 
 fun User.toEntity(): UserEntity = UserEntity(
@@ -43,7 +44,8 @@ fun User.toEntity(): UserEntity = UserEntity(
     level = level,
     energy = energy,
     coins = coins,
-    streakFreezes = streakFreezes
+    streakFreezes = streakFreezes,
+    practiceDays = practiceDays
 )
 
 fun User.toFirestore(): UserFirestore = UserFirestore(
@@ -65,7 +67,8 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     level = level,
     energy = energy,
     coins = coins,
-    streakFreezes = streakFreezes
+    streakFreezes = streakFreezes,
+    practiceDays = practiceDays
 )
 
 fun UserFirestore.toDomain(): User = User(
@@ -87,5 +90,6 @@ fun UserFirestore.toDomain(): User = User(
     level = level,
     energy = energy,
     coins = coins,
-    streakFreezes = streakFreezes
+    streakFreezes = streakFreezes,
+    practiceDays = practiceDays
 )

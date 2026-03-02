@@ -71,6 +71,7 @@ fun HomeScreen(
     var showLevelLockedDialog by remember { mutableStateOf(false) }
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
     var showEnergyBottomSheet by remember { mutableStateOf(false) }
+    var showMonthlyStreakCalendar by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -414,6 +415,15 @@ fun HomeScreen(
             )
         }
 
+        if (showMonthlyStreakCalendar) {
+            MonthlyStreakCalendarDialog(
+                currentStreak = uiState.streak,
+                freezersAvailable = uiState.streakFreezes,
+                practiceDays = uiState.practiceDays,
+                onDismiss = { showMonthlyStreakCalendar = false }
+            )
+        }
+
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
@@ -433,8 +443,7 @@ fun HomeScreen(
                     ) {
                         UserStatusRow(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            xpLevel = uiState.xpLevel,
-                            xpProgress = uiState.xpProgress,
+                            streak = uiState.streak,
                             energyCount = uiState.energyCount,
                             coinsCount = uiState.coinsCount,
                             onCoinsClick = onShopClick,
@@ -457,6 +466,18 @@ fun HomeScreen(
                 // 1.5. Daily Tip Card
                 item {
                     DailyTipCard(tip = uiState.dailyTip)
+                }
+
+                // 1.6. Weekly Streak Table
+                if (uiState.isLoggedIn) {
+                    item {
+                        WeeklyStreakTable(
+                            weeklyStreak = uiState.weeklyStreak,
+                            currentStreak = uiState.streak,
+                            freezersAvailable = uiState.streakFreezes,
+                            onClick = { showMonthlyStreakCalendar = true }
+                        )
+                    }
                 }
 
                 // 2. Weekly Challenge Card
@@ -944,8 +965,7 @@ fun PremiumBanner(
 @Composable
 fun UserStatusRow(
     modifier: Modifier = Modifier,
-    xpLevel: Int,
-    xpProgress: Float,
+    streak: Int,
     energyCount: Int,
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
@@ -959,52 +979,45 @@ fun UserStatusRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onMenuClick) {
-                Icon(
-                    imageVector = Icons.Rounded.Menu,
-                    contentDescription = "Menú",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
-                CircularProgressIndicator(
-                    progress = { xpProgress },
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = StrokeCap.Round,
-                    strokeWidth = 4.dp
-                )
-                Text(
-                    text = xpLevel.toString(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = "Nivel $xpLevel",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "EXP",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        IconButton(onClick = onMenuClick) {
+            Icon(
+                imageVector = Icons.Rounded.Menu,
+                contentDescription = "Menú",
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
+            // Streak
+            Surface(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.streak),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "$streak",
+                        fontWeight = FontWeight.Black,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+
             // Coins with clickable visual cue
             Surface(
                 modifier = Modifier
@@ -1030,7 +1043,6 @@ fun UserStatusRow(
                         fontWeight = FontWeight.Black,
                         style = MaterialTheme.typography.labelLarge
                     )
-                    Spacer(Modifier.width(4.dp))
                     Icon(
                         imageVector = Icons.Rounded.Add,
                         contentDescription = null,
@@ -1050,7 +1062,7 @@ fun UserStatusRow(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
@@ -1058,7 +1070,7 @@ fun UserStatusRow(
                         imageVector = Icons.Rounded.Bolt,
                         contentDescription = null,
                         tint = Color(0xFFFACC15),
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = "$energyCount",
@@ -1343,6 +1355,318 @@ fun HomeCard(
                             modifier = Modifier.size(16.dp)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WeeklyStreakTable(
+    weeklyStreak: List<DailyStreakState>,
+    currentStreak: Int,
+    freezersAvailable: Int,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Tu Semana",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = "Ver Calendario",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                weeklyStreak.forEach { day ->
+                    StreakDayItem(day)
+                }
+            }
+            
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Racha actual: ${currentStreak} días \uD83D\uDD25",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Congeladores: $freezersAvailable \u2744\uFE0F",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StreakDayItem(day: DailyStreakState) {
+    val isToday = day.isToday
+    
+    val backgroundColor = when (day.status) {
+        StreakStatus.COMPLETED -> Color(0xFFFACC15).copy(alpha = 0.2f)
+        StreakStatus.FROZEN -> Color(0xFF60A5FA).copy(alpha = 0.2f)
+        StreakStatus.FAILED, StreakStatus.FUTURE -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    
+    val contentColor = when (day.status) {
+        StreakStatus.COMPLETED -> Color(0xFFF59E0B)
+        StreakStatus.FROZEN -> Color(0xFF60A5FA)
+        StreakStatus.FAILED, StreakStatus.FUTURE -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    val icon = when (day.status) {
+        StreakStatus.COMPLETED -> "\uD83D\uDD25"
+        StreakStatus.FROZEN -> "\u2744\uFE0F"
+        else -> ""
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = day.dayOfWeek,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Surface(
+            shape = CircleShape,
+            color = backgroundColor,
+            modifier = Modifier.size(36.dp),
+            border = if (isToday) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (icon.isNotEmpty()) {
+                    Text(text = icon, fontSize = 16.sp, modifier = Modifier.offset(y = (-1).dp))
+                } else {
+                    Text(
+                        text = day.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthlyStreakCalendarDialog(
+    currentStreak: Int,
+    freezersAvailable: Int,
+    practiceDays: List<Long>,
+    onDismiss: () -> Unit
+) {
+    var displayMonth by remember { mutableStateOf(java.util.Calendar.getInstance()) }
+    val today = java.util.Calendar.getInstance()
+    
+    // Grid calculations
+    val daysInMonth = displayMonth.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    val firstDayOfMonth = displayMonth.clone() as java.util.Calendar
+    firstDayOfMonth.set(java.util.Calendar.DAY_OF_MONTH, 1)
+    
+    var firstDayOfWeek = firstDayOfMonth.get(java.util.Calendar.DAY_OF_WEEK) - 2
+    if (firstDayOfWeek < 0) firstDayOfWeek += 7
+    
+    val monthName = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale("es", "ES")).format(displayMonth.time).replaceFirstChar { it.uppercase() }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth().wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header (Navigation)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { 
+                        displayMonth = (displayMonth.clone() as java.util.Calendar).apply { add(java.util.Calendar.MONTH, -1) } 
+                    }) {
+                        Icon(Icons.Rounded.ChevronLeft, contentDescription = "Mes anterior")
+                    }
+                    Text(
+                        text = monthName,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = { 
+                        displayMonth = (displayMonth.clone() as java.util.Calendar).apply { add(java.util.Calendar.MONTH, 1) }
+                    }) {
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = "Mes siguiente")
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Days of week header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    listOf("L", "M", "X", "J", "V", "S", "D").forEach { d ->
+                        Text(
+                            text = d,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Grid
+                val totalCells = firstDayOfWeek + daysInMonth
+                val rows = kotlin.math.ceil(totalCells / 7.0).toInt()
+                
+                for (r in 0 until rows) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        for (c in 0..6) {
+                            val cellIndex = r * 7 + c
+                            val dayNumber = cellIndex - firstDayOfWeek + 1
+                            
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (dayNumber in 1..daysInMonth) {
+                                    val cal = displayMonth.clone() as java.util.Calendar
+                                    cal.set(java.util.Calendar.DAY_OF_MONTH, dayNumber)
+                                    
+                                    val isToday = com.jesuskrastev.bali.domain.util.DateTimeHelper().isSameDay(cal.timeInMillis, today.timeInMillis)
+                                    val isFuture = cal.after(today) && !isToday
+                                    
+                                    val dayStartMillis = cal.timeInMillis
+                                    val hasPracticed = practiceDays.contains(dayStartMillis)
+                                    
+                                    val status = if (isFuture) {
+                                        StreakStatus.FUTURE
+                                    } else if (isToday) {
+                                        if (hasPracticed) StreakStatus.COMPLETED else StreakStatus.TODAY
+                                    } else {
+                                        if (hasPracticed) {
+                                            StreakStatus.COMPLETED
+                                        } else {
+                                            StreakStatus.FAILED
+                                        }
+                                    }
+
+                                    val bg = when(status) {
+                                        StreakStatus.COMPLETED -> Color(0xFFFACC15).copy(alpha = 0.2f)
+                                        StreakStatus.FROZEN -> Color(0xFF60A5FA).copy(alpha = 0.2f)
+                                        else -> Color.Transparent
+                                    }
+                                    val fg = when(status) {
+                                        StreakStatus.COMPLETED -> Color(0xFFF59E0B)
+                                        StreakStatus.FROZEN -> Color(0xFF60A5FA)
+                                        StreakStatus.FUTURE, StreakStatus.FAILED -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                    val icon = when(status) {
+                                        StreakStatus.COMPLETED -> "\uD83D\uDD25"
+                                        StreakStatus.FROZEN -> "\u2744\uFE0F"
+                                        else -> ""
+                                    }
+
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = bg,
+                                        modifier = Modifier.size(36.dp).alpha(if (status == StreakStatus.FUTURE || status == StreakStatus.FAILED) 0.5f else 1f),
+                                        border = if (isToday) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            if (icon.isNotEmpty() && status != StreakStatus.FUTURE && !isFuture) {
+                                                Text(text = icon, fontSize = 16.sp, modifier = Modifier.offset(y = (-1).dp))
+                                            } else {
+                                                Text(
+                                                    text = dayNumber.toString(),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = fg
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Summary Stats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Racha \nActual", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        Text("${currentStreak}r", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Mejor \nRacha", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        Text("${currentStreak}r", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Congeladores\nDisponibles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        Text("$freezersAvailable", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("CERRAR CALENDARIO", fontWeight = FontWeight.Bold)
                 }
             }
         }

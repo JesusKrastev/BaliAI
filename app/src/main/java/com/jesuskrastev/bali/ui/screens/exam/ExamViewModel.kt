@@ -17,6 +17,8 @@ import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -302,7 +304,7 @@ class ExamViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase()
         analyticsTracker.coinsEarned(coinsGained)
 
-        viewModelScope.launch {
+        CoroutineScope(Dispatchers.IO).launch {
             val testId = testResultRepository.insert(
                 TestResult(
                     category = "Examen Oficial",

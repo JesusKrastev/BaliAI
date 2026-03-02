@@ -26,7 +26,7 @@ class DateTimeHelper @Inject constructor() {
                 day1.get(Calendar.DAY_OF_YEAR) == day2.get(Calendar.DAY_OF_YEAR)
     }
 
-    private fun getStartOfDay(timestamp: Long): Long {
+    fun getStartOfDay(timestamp: Long): Long {
         return Calendar.getInstance().apply {
             timeInMillis = timestamp
             set(Calendar.HOUR_OF_DAY, 0)

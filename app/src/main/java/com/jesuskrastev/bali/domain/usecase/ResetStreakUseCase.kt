@@ -35,7 +35,9 @@ class ResetStreakUseCase @Inject constructor(
                 val updatedTimestamp = user.lastPracticeTimestamp + (missedDays * MILLISECONDS_PER_DAY)
 
                 userRepository.updateStreakFreezes(updatedFreezes)
-                userRepository.updateStreak(user.currentStreak, updatedTimestamp)
+                
+                // Keep practice days intact, the freezes will be tracked via the property
+                userRepository.updateStreak(user.currentStreak, updatedTimestamp, user.practiceDays)
                 return missedDays
             } else {
                 userRepository.resetStreak()

@@ -26,7 +26,7 @@ object RoomModule {
                 BaliDatabase::class.java,
                 "bali_database"
             )
-            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3)
+            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3, BaliDatabase.MIGRATION_3_4)
             .build()
 
     @Provides
