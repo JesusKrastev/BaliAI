@@ -60,6 +60,7 @@ fun HomeScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: HomeViewModel,
     onStudyClick: () -> Unit = {},
+    onNodeTestClick: (String, String?, String) -> Unit = { _, _, _ -> },
     onTopicsClick: () -> Unit = {},
     onMistakesClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
@@ -498,26 +499,14 @@ fun HomeScreen(
                 }
 
                 item {
-                    HomeCard(
-                        title = "Test rapido",
-                        subtitle = "Sesiones cortas de 10 preguntas",
-                        emoji = "⚡",
-                        actionText = "Comenzar",
-                        onClick = {
-                            if (uiState.energyCount > 0) onStudyClick()
-                            else viewModel.showEnergyDialog()
-                        }
-                    )
-                }
-
-                item {
-                    HomeCard(
-                        title = "Tests por tema",
-                        subtitle = "Enfócate en lo que más te cuesta",
-                        emoji = "📚",
-                        actionText = "Explorar",
-                        onClick = {
-                            onTopicsClick()
+                    LearningPathGraph(
+                        pathNodes = uiState.pathNodes,
+                        isPathLoading = uiState.isPathLoading,
+                        onNodeClick = { node ->
+                            onNodeTestClick(node.title, node.description, node.id)
+                        },
+                        onGenerateClick = {
+                            viewModel.generateNextPathNodesCount()
                         }
                     )
                 }
@@ -1667,6 +1656,150 @@ fun MonthlyStreakCalendarDialog(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text("CERRAR CALENDARIO", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LearningPathGraph(
+    pathNodes: List<com.jesuskrastev.bali.domain.model.AILessonNode>,
+    isPathLoading: Boolean,
+    onNodeClick: (com.jesuskrastev.bali.domain.model.AILessonNode) -> Unit,
+    onGenerateClick: () -> Unit
+) {
+    if (pathNodes.isEmpty()) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(200.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                if (isPathLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Generando tu ruta de aprendizaje DGT...")
+                } else {
+                    Text("Tu camino de aprendizaje está vacío.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Dejanos crear una ruta personalizada basándonos en tu progreso.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onGenerateClick) {
+                        Text("GENERAR RUTA")
+                    }
+                }
+            }
+        }
+    } else {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            pathNodes.forEachIndexed { index, node ->
+                // Basic zigzag calculation: left, center, right, center, left...
+                val offset = when (index % 4) {
+                    0 -> 0.dp
+                    1 -> 40.dp
+                    2 -> 0.dp
+                    3 -> (-40).dp
+                    else -> 0.dp
+                }
+
+                PathNodeItem(
+                    node = node,
+                    offset = offset,
+                    onClick = { onNodeClick(node) }
+                )
+
+                if (index < pathNodes.size - 1) {
+                    // Connecting line
+                    Box(
+                        modifier = Modifier
+                            .width(4.dp)
+                            .height(30.dp)
+                            .background(
+                                color = if (node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED) 
+                                        MaterialTheme.colorScheme.primary 
+                                      else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(2.dp)
+                            )
+                    )
+                }
+            }
+            
+            if (pathNodes.last().status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED) {
+                Spacer(modifier = Modifier.height(24.dp))
+                if (isPathLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                } else {
+                    OutlinedButton(onClick = onGenerateClick) {
+                        Text("GENERAR MÁS LECCIONES")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PathNodeItem(
+    node: com.jesuskrastev.bali.domain.model.AILessonNode,
+    offset: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit
+) {
+    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
+    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
+    
+    val bgColor = when {
+        isCompleted -> MaterialTheme.colorScheme.primary
+        isLocked -> MaterialTheme.colorScheme.surfaceVariant
+        else -> androidx.compose.ui.graphics.Color(0xFF10B981) // Unlocked, active
+    }
+    
+    val contentColor = when {
+        isCompleted -> MaterialTheme.colorScheme.onPrimary
+        isLocked -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> androidx.compose.ui.graphics.Color.White
+    }
+
+    val icon = when {
+        isCompleted -> androidx.compose.material.icons.Icons.Rounded.Check
+        isLocked -> androidx.compose.material.icons.Icons.Rounded.Lock
+        else -> androidx.compose.material.icons.Icons.Rounded.MenuBook
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().offset(x = offset),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = node.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                modifier = Modifier.size(70.dp).clickable(enabled = !isLocked) { onClick() },
+                shape = CircleShape,
+                color = bgColor,
+                shadowElevation = if (isLocked) 0.dp else 4.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = contentColor
+                    )
                 }
             }
         }

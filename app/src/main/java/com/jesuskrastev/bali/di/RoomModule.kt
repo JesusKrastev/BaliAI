@@ -26,7 +26,7 @@ object RoomModule {
                 BaliDatabase::class.java,
                 "bali_database"
             )
-            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3, BaliDatabase.MIGRATION_3_4)
+            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3, BaliDatabase.MIGRATION_3_4, BaliDatabase.MIGRATION_4_5)
             .build()
 
     @Provides
@@ -40,4 +40,8 @@ object RoomModule {
     @Provides
     fun provideAnswerDao(db: BaliDatabase): AnswerDao =
         db.answerDao()
+
+    @Provides
+    fun provideAILessonNodeDao(db: BaliDatabase): com.jesuskrastev.bali.data.local.room.dao.AILessonNodeDao =
+        db.aiLessonNodeDao()
 }

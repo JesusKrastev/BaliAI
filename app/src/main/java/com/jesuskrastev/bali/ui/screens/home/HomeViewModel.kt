@@ -14,7 +14,11 @@ import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
+import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
+import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
@@ -30,10 +34,16 @@ class HomeViewModel @Inject constructor(
     private val answerRepository: AnswerRepositoryImpl,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
+    private val pathRepository: PathRepository,
+    private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
     private val analyticsTracker: FirebaseAnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val auth = FirebaseAuth.getInstance()
+    private val _isPathLoading = MutableStateFlow(false)
+    private val _pathError = MutableStateFlow<String?>(null)
 
     private val _showEnergyDialog = MutableStateFlow(false)
     private val _showNoCoinsDialog = MutableStateFlow(false)
@@ -63,7 +73,10 @@ class HomeViewModel @Inject constructor(
         _showEnergyDialog,
         _showNoCoinsDialog,
         _dailyTip,
-        authRepository.isLoggedIn
+        authRepository.isLoggedIn,
+        authRepository.isLoggedIn.flatMapLatest { pathRepository.getPathNodes(auth.currentUser?.uid ?: "") },
+        _isPathLoading,
+        _pathError
     ) { flows ->
         val user = flows[0] as? User
         val totalTests = flows[1] as Int
@@ -73,6 +86,10 @@ class HomeViewModel @Inject constructor(
         val showNoCoinsDialog = flows[5] as Boolean
         val dailyTip = flows[6] as String
         val isLoggedIn = flows[7] as Boolean
+        @Suppress("UNCHECKED_CAST")
+        val pathNodes = flows[8] as List<AILessonNode>
+        val isPathLoading = flows[9] as Boolean
+        val pathError = flows[10] as? String
 
         val profilePictureUrl = authRepository.currentUserPhotoUrl()
         val userEmail = authRepository.currentUserEmail()
@@ -104,7 +121,10 @@ class HomeViewModel @Inject constructor(
                 dailyTip = dailyTip,
                 isLoggedIn = isLoggedIn,
                 weeklyStreak = generateWeeklyStreak(user.currentStreak, user.streakFreezes, user.practiceDays),
-                lastPracticeTimestamp = user.lastPracticeTimestamp
+                lastPracticeTimestamp = user.lastPracticeTimestamp,
+                pathNodes = pathNodes,
+                isPathLoading = isPathLoading,
+                pathError = pathError
             )
         }
     }.stateIn(
@@ -143,6 +163,21 @@ class HomeViewModel @Inject constructor(
 
     fun dismissNoCoinsDialog() {
         _showNoCoinsDialog.value = false
+    }
+
+    fun generateNextPathNodesCount(count: Int = 5) {
+        if (_isPathLoading.value) return
+        viewModelScope.launch {
+            _isPathLoading.value = true
+            _pathError.value = null
+            try {
+                generateNextPathNodesUseCase(count)
+            } catch (e: Exception) {
+                _pathError.value = e.localizedMessage
+            } finally {
+                _isPathLoading.value = false
+            }
+        }
     }
 
     private fun generateWeeklyStreak(streak: Int, freezes: Int, practiceDays: List<Long>): List<DailyStreakState> {

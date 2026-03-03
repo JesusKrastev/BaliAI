@@ -11,10 +11,12 @@ import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.entities.AnswerEntity
 import com.jesuskrastev.bali.data.local.room.entities.TestResultEntity
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
+import com.jesuskrastev.bali.data.local.room.entities.AILessonNodeEntity
+import com.jesuskrastev.bali.data.local.room.dao.AILessonNodeDao
 
 @Database(
-    entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class],
-    version = 4,
+    entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, AILessonNodeEntity::class],
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -22,8 +24,25 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun testResultDao(): TestResultDao
     abstract fun answerDao(): AnswerDao
+    abstract fun aiLessonNodeDao(): AILessonNodeDao
 
     companion object {
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `ai_lesson_nodes` (
+                        `id` TEXT NOT NULL, 
+                        `orderIndex` INTEGER NOT NULL, 
+                        `title` TEXT NOT NULL, 
+                        `description` TEXT NOT NULL, 
+                        `status` TEXT NOT NULL, 
+                        `scorePercentage` INTEGER, 
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE users ADD COLUMN practiceDays TEXT NOT NULL DEFAULT '[]'")

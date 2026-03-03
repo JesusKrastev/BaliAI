@@ -19,4 +19,10 @@ abstract class RepositoryModule {
     abstract fun bindSuggestionsRepository(
         suggestionsRepositoryImpl: SuggestionsRepositoryImpl
     ): SuggestionsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindPathRepository(
+        pathRepositoryImpl: com.jesuskrastev.bali.data.repository.PathRepositoryImpl
+    ): com.jesuskrastev.bali.domain.repository.PathRepository
 }

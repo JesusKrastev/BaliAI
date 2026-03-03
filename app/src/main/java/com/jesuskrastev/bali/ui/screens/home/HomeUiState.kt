@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.home
 
+import com.jesuskrastev.bali.domain.model.AILessonNode
+
 enum class StreakStatus {
     COMPLETED,
     FROZEN,
@@ -36,5 +38,8 @@ data class HomeUiState(
     val showEnergyDialog: Boolean = false,
     val showNoCoinsDialog: Boolean = false,
     val weeklyStreak: List<DailyStreakState> = emptyList(),
-    val lastPracticeTimestamp: Long = 0L
+    val lastPracticeTimestamp: Long = 0L,
+    val pathNodes: List<AILessonNode> = emptyList(),
+    val isPathLoading: Boolean = false,
+    val pathError: String? = null
 )

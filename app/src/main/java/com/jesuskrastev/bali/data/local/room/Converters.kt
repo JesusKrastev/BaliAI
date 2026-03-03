@@ -20,4 +20,18 @@ class Converters {
             emptyList()
         }
     }
+
+    @TypeConverter
+    fun fromNodeStatus(value: com.jesuskrastev.bali.domain.model.NodeStatus): String {
+        return value.name
+    }
+
+    @TypeConverter
+    fun toNodeStatus(value: String): com.jesuskrastev.bali.domain.model.NodeStatus {
+        return try {
+            com.jesuskrastev.bali.domain.model.NodeStatus.valueOf(value)
+        } catch (e: Exception) {
+            com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
+        }
+    }
 }

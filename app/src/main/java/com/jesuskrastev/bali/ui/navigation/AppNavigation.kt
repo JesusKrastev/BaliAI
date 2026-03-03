@@ -42,7 +42,12 @@ object OnboardingRoute
 object HomeRoute
 
 @Serializable
-data class TestRoute(val topic: String? = null)
+data class TestRoute(
+    val topic: String? = null,
+    val nodeTitle: String? = null,
+    val nodeDescription: String? = null,
+    val nodeId: String? = null
+)
 
 @Serializable
 object ExamRoute
@@ -119,6 +124,9 @@ fun AppNavigation(
                     viewModel = viewModel,
                     onStudyClick = {
                         navController.navigate(TestRoute())
+                    },
+                    onNodeTestClick = { title, desc, id ->
+                        navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id))
                     },
                     onTopicsClick = {
                         navController.navigate(TopicsRoute)
@@ -223,8 +231,12 @@ fun AppNavigation(
                 val route: TestRoute = backStackEntry.toRoute()
                 val viewModel: TestViewModel = hiltViewModel()
                 
-                LaunchedEffect(route.topic) {
-                    viewModel.setTopic(route.topic)
+                LaunchedEffect(route) {
+                    if (route.nodeTitle != null) {
+                        viewModel.setAiNodeParams(route.nodeTitle, route.nodeDescription, route.nodeId)
+                    } else {
+                        viewModel.setTopic(route.topic)
+                    }
                 }
 
                 TestScreen(

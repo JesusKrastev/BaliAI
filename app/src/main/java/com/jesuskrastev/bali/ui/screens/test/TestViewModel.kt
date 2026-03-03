@@ -10,6 +10,7 @@ import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
@@ -73,7 +74,8 @@ class TestViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val analyticsTracker: FirebaseAnalyticsTracker
+    private val analyticsTracker: FirebaseAnalyticsTracker,
+    private val pathRepository: PathRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TestUiState())
@@ -81,6 +83,9 @@ class TestViewModel @Inject constructor(
     private var startTime: Long = 0
     private var sessionStreak: Int = 0
     private var currentTopic: String? = null
+    private var aiNodeTitle: String? = null
+    private var aiNodeDescription: String? = null
+    private var aiNodeId: String? = null
     private var testFinished = false
 
     private val jsonContent = Json {
@@ -92,6 +97,18 @@ class TestViewModel @Inject constructor(
     fun setTopic(topic: String?) {
         if (currentTopic == topic && _uiState.value.questions.isNotEmpty()) return
         currentTopic = topic
+        aiNodeTitle = null
+        aiNodeDescription = null
+        aiNodeId = null
+        generateTest()
+    }
+
+    fun setAiNodeParams(title: String, desc: String?, id: String?) {
+        if (aiNodeTitle == title && _uiState.value.questions.isNotEmpty()) return
+        aiNodeTitle = title
+        aiNodeDescription = desc
+        aiNodeId = id
+        currentTopic = null
         generateTest()
     }
 
@@ -147,7 +164,9 @@ class TestViewModel @Inject constructor(
                 } else {
                     "Sin tests previos."
                 }
-                val topicInstruction = if (currentTopic != null) {
+                val topicInstruction = if (aiNodeTitle != null) {
+                    "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en este objetivo de ruta de aprendizaje: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad estrictamente al nivel del alumno."
+                } else if (currentTopic != null) {
                     "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad de este tema al nivel del alumno."
                 } else {
                     "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
@@ -182,7 +201,7 @@ class TestViewModel @Inject constructor(
                     
                     FORMATO DE RESPUESTA (JSON PURO):
                     {
-                      "selectedCategory": "Nombre exacto de la categoría elegida o $currentTopic",
+                      "selectedCategory": "Nombre exacto de la categoría elegida o $currentTopic o $aiNodeTitle",
                       "questions": [
                         {
                           "text": "¿Pregunta?",
@@ -298,6 +317,8 @@ class TestViewModel @Inject constructor(
         analyticsTracker.coinsEarned(coinsGained)
 
         CoroutineScope(Dispatchers.IO).launch {
+            val user = userRepository.get().first()
+            val userId = user?.id ?: ""
             val testId = testResultRepository.insert(
                 TestResult(
                     category = state.category,
@@ -329,6 +350,21 @@ class TestViewModel @Inject constructor(
             }
             incrementStreakUseCase().also { streak ->
                 if (streak > 0) analyticsTracker.streakRecorded(streak)
+            }
+
+            if (aiNodeId != null && userId.isNotEmpty()) {
+                if (accuracy >= 70) {
+                    pathRepository.updateNodeStatus(userId, aiNodeId!!, com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED.name, accuracy)
+                    // Find next node to unlock
+                    val allNodes = pathRepository.getPathNodes(userId).first()
+                    val currentNode = allNodes.find { it.id == aiNodeId }
+                    if (currentNode != null) {
+                        val nextNode = allNodes.find { it.orderIndex == currentNode.orderIndex + 1 }
+                        if (nextNode != null && nextNode.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED) {
+                            pathRepository.updateNodeStatus(userId, nextNode.id, com.jesuskrastev.bali.domain.model.NodeStatus.UNLOCKED.name, null)
+                        }
+                    }
+                }
             }
         }
 
