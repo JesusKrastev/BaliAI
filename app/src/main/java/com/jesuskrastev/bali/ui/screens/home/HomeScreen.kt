@@ -14,6 +14,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -1669,77 +1672,343 @@ fun LearningPathGraph(
     onNodeClick: (com.jesuskrastev.bali.domain.model.AILessonNode) -> Unit,
     onGenerateClick: () -> Unit
 ) {
+    // Loading state — empty + loading
+    if (pathNodes.isEmpty() && isPathLoading) {
+        PathLoadingState()
+        return
+    }
+
+    // Empty state — no nodes, not loading
     if (pathNodes.isEmpty()) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().height(200.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp).fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                if (isPathLoading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Generando tu ruta de aprendizaje DGT...")
-                } else {
-                    Text("Tu camino de aprendizaje está vacío.", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Dejanos crear una ruta personalizada basándonos en tu progreso.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onGenerateClick) {
-                        Text("GENERAR RUTA")
-                    }
-                }
+        return
+    }
+
+    // Group nodes by section (derived, stable)
+    val nodesBySection by remember(pathNodes) {
+        derivedStateOf { pathNodes.groupBy { it.sectionIndex } }
+    }
+    val sortedSectionKeys by remember(nodesBySection) {
+        derivedStateOf { nodesBySection.keys.sorted() }
+    }
+
+    var selectedNodeId by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
+            val sectionNodes = nodesBySection[sectionKey].orEmpty()
+            if (sectionNodes.isEmpty()) return@forEachIndexed
+
+            val sectionTitle = sectionNodes.first().sectionTitle
+            val completedCount = sectionNodes.count { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED }
+            val totalCount = sectionNodes.size
+
+            // Spacer between sections (not before the first)
+            if (sectionIdx > 0) {
+                Spacer(modifier = Modifier.height(48.dp))
             }
-        }
-    } else {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            pathNodes.forEachIndexed { index, node ->
-                // Basic zigzag calculation: left, center, right, center, left...
-                val offset = when (index % 4) {
-                    0 -> 0.dp
-                    1 -> 40.dp
-                    2 -> 0.dp
-                    3 -> (-40).dp
-                    else -> 0.dp
+
+            // Section Header
+            SectionHeaderCard(
+                sectionIndex = sectionKey,
+                sectionTitle = sectionTitle,
+                completedCount = completedCount,
+                totalCount = totalCount
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Nodes in this section
+            sectionNodes.forEachIndexed { nodeIdx, node ->
+                if (nodeIdx > 0) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                // Zigzag offset — EXAM nodes always centered
+                val xOffset = if (node.nodeType == com.jesuskrastev.bali.domain.model.NodeType.EXAM) {
+                    0.dp
+                } else {
+                    when (node.unitIndex % 4) {
+                        0 -> 0.dp
+                        1 -> 60.dp
+                        2 -> 0.dp
+                        3 -> (-60).dp
+                        else -> 0.dp
+                    }
                 }
 
                 PathNodeItem(
                     node = node,
-                    offset = offset,
-                    onClick = { onNodeClick(node) }
+                    offset = xOffset,
+                    isSelected = selectedNodeId == node.id,
+                    onSelect = {
+                        selectedNodeId = if (selectedNodeId == node.id) null else node.id
+                    }
                 )
 
-                if (index < pathNodes.size - 1) {
-                    // Connecting line
-                    Box(
-                        modifier = Modifier
-                            .width(4.dp)
-                            .height(30.dp)
-                            .background(
-                                color = if (node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED) 
-                                        MaterialTheme.colorScheme.primary 
-                                      else MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(2.dp)
-                            )
+                // Callout bubble below the node
+                PathNodeCallout(
+                    node = node,
+                    isVisible = selectedNodeId == node.id,
+                    onActionClick = {
+                        selectedNodeId = null
+                        onNodeClick(node)
+                    }
+                )
+            }
+        }
+
+        // "Generate more" button when all nodes are completed
+        if (pathNodes.isNotEmpty() && pathNodes.all { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED }) {
+            Spacer(modifier = Modifier.height(32.dp))
+            if (isPathLoading) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            } else {
+                OutlinedButton(
+                    onClick = onGenerateClick,
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("GENERAR MÁS LECCIONES", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+// ─── Section Header ─────────────────────────────────────────────────────────
+
+@Composable
+fun SectionHeaderCard(
+    sectionIndex: Int,
+    sectionTitle: String,
+    completedCount: Int,
+    totalCount: Int
+) {
+    val progress = if (totalCount > 0) completedCount.toFloat() / totalCount.toFloat() else 0f
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "SECCIÓN ${sectionIndex + 1}, UNIDAD ${sectionIndex + 1}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = sectionTitle,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "$completedCount de $totalCount completadas",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+// ─── Path Node Item ─────────────────────────────────────────────────────────
+
+@Composable
+fun PathNodeItem(
+    node: com.jesuskrastev.bali.domain.model.AILessonNode,
+    offset: androidx.compose.ui.unit.Dp,
+    isSelected: Boolean,
+    onSelect: () -> Unit
+) {
+    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
+    val isUnlocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.UNLOCKED
+    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
+    val isExam = node.nodeType == com.jesuskrastev.bali.domain.model.NodeType.EXAM
+    val context = LocalContext.current
+
+    // Pulse animation for UNLOCKED nodes
+    val scale = if (isUnlocked) {
+        val infiniteTransition = rememberInfiniteTransition(label = "node_pulse")
+        infiniteTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.06f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1400, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "scale"
+        ).value
+    } else {
+        1.0f
+    }
+
+    val bgColor = when {
+        isCompleted -> MaterialTheme.colorScheme.primary
+        isUnlocked -> Color(0xFF10B981)
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+
+    val nodeBorder = if (isExam) {
+        BorderStroke(3.dp, Color(0xFFFFD700))
+    } else {
+        null
+    }
+
+    // Resolve drawable icon
+    val resId = remember(node.iconResName) {
+        context.resources.getIdentifier(node.iconResName, "drawable", context.packageName)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(x = offset),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Surface(
+            modifier = Modifier
+                .size(80.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .then(
+                    if (!isLocked) Modifier.clickable { onSelect() } else Modifier
+                ),
+            shape = CircleShape,
+            color = bgColor,
+            shadowElevation = if (isLocked) 0.dp else 6.dp,
+            border = nodeBorder
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (resId != 0) {
+                    Image(
+                        painter = painterResource(id = resId),
+                        contentDescription = node.title,
+                        modifier = Modifier.size(48.dp),
+                        alpha = if (isLocked) 0.4f else 1.0f,
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    // Fallback icon if drawable not found
+                    Icon(
+                        imageVector = Icons.Rounded.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.size(32.dp),
+                        tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant
+                        else Color.White
                     )
                 }
             }
-            
-            if (pathNodes.last().status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED) {
-                Spacer(modifier = Modifier.height(24.dp))
-                if (isPathLoading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                } else {
-                    OutlinedButton(onClick = onGenerateClick) {
-                        Text("GENERAR MÁS LECCIONES")
+        }
+
+        // Score label for completed nodes
+        if (isCompleted && node.scorePercentage != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${node.scorePercentage}%",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// ─── Path Node Callout (Bubble) ─────────────────────────────────────────────
+
+@Composable
+fun PathNodeCallout(
+    node: com.jesuskrastev.bali.domain.model.AILessonNode,
+    isVisible: Boolean,
+    onActionClick: () -> Unit
+) {
+    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
+    if (isLocked) return
+
+    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
+    val bubbleColor = MaterialTheme.colorScheme.primaryContainer
+    val capturedBubbleColor = bubbleColor
+
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+        exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(top = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Triangle arrow pointing up
+            Canvas(
+                modifier = Modifier
+                    .size(width = 24.dp, height = 12.dp)
+            ) {
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(size.width / 2f, 0f)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(path, color = capturedBubbleColor)
+            }
+
+            // Bubble card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                color = capturedBubbleColor
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = node.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    if (node.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = node.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onActionClick,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text(
+                            text = if (isCompleted) "REPASAR" else "EMPEZAR  ⚡ +20 XP",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
                     }
                 }
             }
@@ -1747,61 +2016,46 @@ fun LearningPathGraph(
     }
 }
 
+// ─── Loading State ──────────────────────────────────────────────────────────
+
 @Composable
-fun PathNodeItem(
-    node: com.jesuskrastev.bali.domain.model.AILessonNode,
-    offset: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
-) {
-    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
-    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
-    
-    val bgColor = when {
-        isCompleted -> MaterialTheme.colorScheme.primary
-        isLocked -> MaterialTheme.colorScheme.surfaceVariant
-        else -> androidx.compose.ui.graphics.Color(0xFF10B981) // Unlocked, active
-    }
-    
-    val contentColor = when {
-        isCompleted -> MaterialTheme.colorScheme.onPrimary
-        isLocked -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> androidx.compose.ui.graphics.Color.White
-    }
+fun PathLoadingState() {
+    val infiniteTransition = rememberInfiniteTransition(label = "mascot_float")
+    val offsetY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -10f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "float"
+    )
 
-    val icon = when {
-        isCompleted -> androidx.compose.material.icons.Icons.Rounded.Check
-        isLocked -> androidx.compose.material.icons.Icons.Rounded.Lock
-        else -> androidx.compose.material.icons.Icons.Rounded.MenuBook
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth().offset(x = offset),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = node.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=0.5f) else MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                modifier = Modifier.size(70.dp).clickable(enabled = !isLocked) { onClick() },
-                shape = CircleShape,
-                color = bgColor,
-                shadowElevation = if (isLocked) 0.dp else 4.dp
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = contentColor
-                    )
-                }
-            }
-        }
+        Image(
+            painter = painterResource(R.drawable.bali),
+            contentDescription = null,
+            modifier = Modifier
+                .size(100.dp)
+                .offset(y = offsetY.dp)
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = "Preparando tu ruta de aprendizaje…",
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.height(12.dp))
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth(0.5f)
+                .clip(RoundedCornerShape(4.dp))
+        )
     }
 }

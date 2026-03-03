@@ -16,6 +16,7 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
+import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.AILessonNode
 import com.google.firebase.auth.FirebaseAuth
@@ -36,6 +37,7 @@ class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val pathRepository: PathRepository,
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
+    private val generateInitialPathUseCase: GenerateInitialPathUseCase,
     private val analyticsTracker: FirebaseAnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     @ApplicationContext private val context: Context
@@ -51,6 +53,34 @@ class HomeViewModel @Inject constructor(
 
     init {
         loadDailyTip()
+        observeAndAutoGeneratePath()
+    }
+
+    private fun observeAndAutoGeneratePath() {
+        viewModelScope.launch {
+            authRepository.isLoggedIn
+                .flatMapLatest { pathRepository.getPathNodes(auth.currentUser?.uid ?: "") }
+                .distinctUntilChanged { old, new -> old.isNotEmpty() == new.isNotEmpty() }
+                .collect { nodes ->
+                    if (nodes.isEmpty() && !_isPathLoading.value) {
+                        generateInitialPath()
+                    }
+                }
+        }
+    }
+
+    private fun generateInitialPath() {
+        viewModelScope.launch {
+            _isPathLoading.value = true
+            _pathError.value = null
+            try {
+                generateInitialPathUseCase()
+            } catch (e: Exception) {
+                _pathError.value = e.localizedMessage
+            } finally {
+                _isPathLoading.value = false
+            }
+        }
     }
 
     private fun loadDailyTip() {

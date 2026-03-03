@@ -12,5 +12,10 @@ data class AILessonNode(
     val title: String,
     val description: String,
     val status: NodeStatus,
-    val scorePercentage: Int? = null
+    val scorePercentage: Int? = null,
+    val sectionIndex: Int = 0,
+    val sectionTitle: String = "",
+    val unitIndex: Int = 0,
+    val nodeType: NodeType = NodeType.LESSON,
+    val iconResName: String = "lesson_test"
 )
