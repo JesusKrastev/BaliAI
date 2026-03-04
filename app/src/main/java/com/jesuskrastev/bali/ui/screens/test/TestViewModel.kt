@@ -8,15 +8,16 @@ import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
 import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
 import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -86,6 +88,7 @@ class TestViewModel @Inject constructor(
     private var aiNodeTitle: String? = null
     private var aiNodeDescription: String? = null
     private var aiNodeId: String? = null
+    private var aiNodeType: String? = null
     private var testFinished = false
 
     private val jsonContent = Json {
@@ -100,16 +103,60 @@ class TestViewModel @Inject constructor(
         aiNodeTitle = null
         aiNodeDescription = null
         aiNodeId = null
-        generateTest()
+        aiNodeType = null
+        generateGeminiTest()
     }
 
-    fun setAiNodeParams(title: String, desc: String?, id: String?) {
+    fun setAiNodeParams(title: String, desc: String?, id: String?, nodeType: String?) {
         if (aiNodeTitle == title && _uiState.value.questions.isNotEmpty()) return
         aiNodeTitle = title
         aiNodeDescription = desc
         aiNodeId = id
+        aiNodeType = nodeType
         currentTopic = null
-        generateTest()
+
+        // Route based on node type
+        when (nodeType) {
+            "LESSON" -> loadStaticQuestions(id)
+            "REVIEW", "EXAM" -> generateGeminiTest()
+            else -> generateGeminiTest()
+        }
+    }
+
+    // Loads questions from the static bank without calling Gemini
+    private fun loadStaticQuestions(nodeId: String?) {
+        if (nodeId == null) {
+            generateGeminiTest()
+            return
+        }
+
+        val staticQuestions = LessonQuestionBank.getQuestionsForNode(nodeId)
+
+        if (staticQuestions.isEmpty()) {
+            // No static questions for this node → fall back to Gemini
+            generateGeminiTest()
+            return
+        }
+
+        val questionUiStates = staticQuestions.map { q ->
+            QuestionUiState(
+                text = q.text,
+                options = q.options,
+                correctAnswerIndex = q.correctAnswerIndex,
+                explanation = q.explanation,
+                imageUrl = q.imageUrl
+            )
+        }
+
+        startTime = System.currentTimeMillis()
+        _uiState.update {
+            it.copy(
+                category = aiNodeTitle ?: "Lección",
+                questions = questionUiStates,
+                isLoading = false,
+                error = null
+            )
+        }
     }
 
     fun onEvent(event: TestEvent) {
@@ -126,7 +173,6 @@ class TestViewModel @Inject constructor(
                     event.onResult(result)
                 }
             }
-
         }
     }
 
@@ -144,10 +190,14 @@ class TestViewModel @Inject constructor(
                 sessionStreak = 0
             )
         }
-        generateTest()
+        // Respect node type on retry
+        when (aiNodeType) {
+            "LESSON" -> loadStaticQuestions(aiNodeId)
+            else -> generateGeminiTest()
+        }
     }
 
-    private fun generateTest() {
+    private fun generateGeminiTest() {
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
@@ -164,12 +214,22 @@ class TestViewModel @Inject constructor(
                 } else {
                     "Sin tests previos."
                 }
-                val topicInstruction = if (aiNodeTitle != null) {
-                    "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en este objetivo de ruta de aprendizaje: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad estrictamente al nivel del alumno."
-                } else if (currentTopic != null) {
-                    "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad de este tema al nivel del alumno."
-                } else {
-                    "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
+
+                // Context of failures for REVIEW and EXAM
+                val sectionFailuresContext = if (aiNodeType == "REVIEW" || aiNodeType == "EXAM") {
+                    buildSectionFailuresContext()
+                } else ""
+
+                val topicInstruction = when {
+                    aiNodeTitle != null && (aiNodeType == "REVIEW" || aiNodeType == "EXAM") -> """
+                        Tu misión es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÓN" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
+                        $sectionFailuresContext
+                        INSTRUCCIÓN CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado más.
+                        El 40% restante cubre el resto de la sección para una revisión completa.
+                    """.trimIndent()
+                    aiNodeTitle != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
+                    currentTopic != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
+                    else -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
                 }
 
                 val prompt = """
@@ -242,9 +302,7 @@ class TestViewModel @Inject constructor(
                             ?: 0,
                         explanation = obj["explanation"]?.jsonPrimitive?.content ?: "",
                         imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf {
-                            it != "null" && it != null && it.startsWith(
-                                "http"
-                            )
+                            it != "null" && it != null && it.startsWith("http")
                         }
                     )
                 } ?: emptyList()
@@ -261,6 +319,31 @@ class TestViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
+        }
+    }
+
+    // Builds context of recent failures for REVIEW/EXAM prompts
+    private suspend fun buildSectionFailuresContext(): String {
+        return try {
+            val allAnswers = answerRepository.getAll().first()
+            val mistakes = allAnswers.filter { !it.isCorrect }.takeLast(50)
+            if (mistakes.isEmpty()) return ""
+
+            val frequentMistakes = mistakes
+                .groupBy { it.questionText }
+                .entries
+                .sortedByDescending { it.value.size }
+                .take(5)
+                .joinToString("\n") { (questionText, answers) ->
+                    "- Falló ${answers.size} veces en: '${questionText.take(80)}'"
+                }
+
+            """
+            CONTEXTO DE FALLOS RECIENTES DEL USUARIO:
+            $frequentMistakes
+            """.trimIndent()
+        } catch (e: Exception) {
+            ""
         }
     }
 
@@ -316,9 +399,12 @@ class TestViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase()
         analyticsTracker.coinsEarned(coinsGained)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        // Sequential Firestore operations with withContext instead of detached CoroutineScope
+        withContext(Dispatchers.IO) {
             val user = userRepository.get().first()
             val userId = user?.id ?: ""
+
+            // 1. Save test result
             val testId = testResultRepository.insert(
                 TestResult(
                     category = state.category,
@@ -329,6 +415,7 @@ class TestViewModel @Inject constructor(
                 )
             )
 
+            // 2. Save individual answers
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
@@ -344,6 +431,7 @@ class TestViewModel @Inject constructor(
                 }
             }
 
+            // 3. Decrement energy and increment streak
             decrementEnergyUseCase().also { newEnergy ->
                 analyticsTracker.energyConsumed(newEnergy)
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
@@ -352,17 +440,35 @@ class TestViewModel @Inject constructor(
                 if (streak > 0) analyticsTracker.streakRecorded(streak)
             }
 
+            // 4. Update path ONLY if coming from a path node and score >= 70%
             if (aiNodeId != null && userId.isNotEmpty()) {
-                if (accuracy >= 70) {
-                    pathRepository.updateNodeStatus(userId, aiNodeId!!, com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED.name, accuracy)
-                    // Find next node to unlock
-                    val allNodes = pathRepository.getPathNodes(userId).first()
-                    val currentNode = allNodes.find { it.id == aiNodeId }
-                    if (currentNode != null) {
-                        val nextNode = allNodes.find { it.orderIndex == currentNode.orderIndex + 1 }
-                        if (nextNode != null && nextNode.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED) {
-                            pathRepository.updateNodeStatus(userId, nextNode.id, com.jesuskrastev.bali.domain.model.NodeStatus.UNLOCKED.name, null)
-                        }
+
+                // 4a. Mark current node as COMPLETED and WAIT for confirmation
+                pathRepository.updateNodeStatus(
+                    userId,
+                    aiNodeId!!,
+                    NodeStatus.COMPLETED.name,
+                    accuracy
+                )
+
+                // 4b. Read updated state (update already finished)
+                val allNodes = pathRepository.getPathNodes(userId).first()
+                val currentNode = allNodes.find { it.id == aiNodeId }
+
+                if (currentNode != null) {
+                    // Find the next LOCKED node with immediately higher orderIndex
+                    val nextLockedNode = allNodes
+                        .filter { it.orderIndex > currentNode.orderIndex }
+                        .minByOrNull { it.orderIndex }
+
+                    if (nextLockedNode != null && nextLockedNode.status == NodeStatus.LOCKED) {
+                        // 4c. Unlock the next node
+                        pathRepository.updateNodeStatus(
+                            userId,
+                            nextLockedNode.id,
+                            NodeStatus.UNLOCKED.name,
+                            null
+                        )
                     }
                 }
             }

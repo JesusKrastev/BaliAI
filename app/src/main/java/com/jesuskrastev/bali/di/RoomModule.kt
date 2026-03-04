@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.data.local.room.BaliDatabase
 import com.jesuskrastev.bali.data.local.room.dao.AnswerDao
 import com.jesuskrastev.bali.data.local.room.dao.TestResultDao
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
+import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -26,7 +27,7 @@ object RoomModule {
                 BaliDatabase::class.java,
                 "bali_database"
             )
-            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3, BaliDatabase.MIGRATION_3_4, BaliDatabase.MIGRATION_4_5)
+            .addMigrations(BaliDatabase.MIGRATION_1_2, BaliDatabase.MIGRATION_2_3, BaliDatabase.MIGRATION_3_4, BaliDatabase.MIGRATION_4_5, BaliDatabase.MIGRATION_5_6, BaliDatabase.MIGRATION_6_7)
             .build()
 
     @Provides
@@ -42,6 +43,6 @@ object RoomModule {
         db.answerDao()
 
     @Provides
-    fun provideAILessonNodeDao(db: BaliDatabase): com.jesuskrastev.bali.data.local.room.dao.AILessonNodeDao =
-        db.aiLessonNodeDao()
+    fun provideLessonNodeDao(db: BaliDatabase): LessonNodeDao =
+        db.lessonNodeDao()
 }

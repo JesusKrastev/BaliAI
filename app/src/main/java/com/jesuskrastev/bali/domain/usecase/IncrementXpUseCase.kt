@@ -67,16 +67,21 @@ class IncrementXpUseCase @Inject constructor(
         mode: TestMode,
         correctAnswers: Int,
         totalQuestions: Int,
-        durationSeconds: Int
+        durationSeconds: Int,
+        isRepeat: Boolean = false
     ): XpEarned {
         val user = userRepository.get().first()
             ?: throw IllegalStateException("No user found to update XP")
 
         val accuracy = if (totalQuestions > 0) ((correctAnswers.toFloat() / totalQuestions) * 100).toInt() else 0
 
-        val baseXp = calculateBaseXp(mode, accuracy)
-        val speedBonus = calculateSpeedBonus(durationSeconds, totalQuestions, accuracy)
-        val perfectionBonus = calculatePerfectionBonus(accuracy, totalQuestions)
+        val baseXp = if (isRepeat) {
+            (calculateBaseXp(mode, accuracy) * 0.3).toInt()
+        } else {
+            calculateBaseXp(mode, accuracy)
+        }
+        val speedBonus = if (isRepeat) null else calculateSpeedBonus(durationSeconds, totalQuestions, accuracy)
+        val perfectionBonus = if (isRepeat) null else calculatePerfectionBonus(accuracy, totalQuestions)
         val streakBonus = calculateStreakBonus(user.currentStreak)
 
         val totalXpGained = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)

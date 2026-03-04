@@ -1,12 +1,12 @@
 package com.jesuskrastev.bali.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
-import com.jesuskrastev.bali.data.local.room.dao.AILessonNodeDao
+import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
 import com.jesuskrastev.bali.data.mapper.toFirestore
-import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreAILessonNodeDao
-import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreLessonNodeDao
+import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import kotlinx.coroutines.Dispatchers
@@ -18,15 +18,15 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class PathRepositoryImpl @Inject constructor(
-    private val localDao: AILessonNodeDao,
-    private val remoteDao: FirestoreAILessonNodeDao,
+    private val localDao: LessonNodeDao,
+    private val remoteDao: FirestoreLessonNodeDao,
     private val authRepository: AuthRepository
 ) : PathRepository {
 
     private val auth = FirebaseAuth.getInstance()
     private val userId: String get() = auth.currentUser?.uid ?: ""
 
-    override fun getPathNodes(userId: String): Flow<List<AILessonNode>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
+    override fun getPathNodes(userId: String): Flow<List<LessonNode>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
         if (loggedIn) {
             remoteDao.getPathNodes(userId).map { list -> list.map { it.toDomain() } }
         } else {
@@ -34,7 +34,7 @@ class PathRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun saveGeneratedNodes(userId: String, nodes: List<AILessonNode>) = withContext(Dispatchers.IO) {
+    override suspend fun saveGeneratedNodes(userId: String, nodes: List<LessonNode>) = withContext(Dispatchers.IO) {
         if (authRepository.isLoggedIn.first()) {
             remoteDao.insertNodes(userId, nodes.map { it.toFirestore() })
         } else {

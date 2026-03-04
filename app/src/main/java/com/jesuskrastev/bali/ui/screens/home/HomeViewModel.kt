@@ -18,7 +18,7 @@ import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
-import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.jesuskrastev.bali.domain.model.LessonNode
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -117,7 +117,7 @@ class HomeViewModel @Inject constructor(
         val dailyTip = flows[6] as String
         val isLoggedIn = flows[7] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val pathNodes = flows[8] as List<AILessonNode>
+        val pathNodes = flows[8] as List<LessonNode>
         val isPathLoading = flows[9] as Boolean
         val pathError = flows[10] as? String
 

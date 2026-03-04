@@ -1,13 +1,12 @@
 package com.jesuskrastev.bali.domain.path
 
-import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
-import java.util.UUID
 
 /**
  * Template pedagógico completo para el examen teórico de la DGT española.
- * Contiene ~70 nodos organizados en 9 secciones con lecciones, repasos y exámenes.
+ * Contiene ~102 nodos organizados en 10 secciones con lecciones, repasos y exámenes.
  */
 object DgtLearningPathTemplate {
 
@@ -21,11 +20,11 @@ object DgtLearningPathTemplate {
         val iconResName: String
     )
 
-    fun buildInitialPath(): List<AILessonNode> {
+    fun buildInitialPath(): List<LessonNode> {
         val defs = buildNodeDefinitions()
         return defs.mapIndexed { index, def ->
-            AILessonNode(
-                id = UUID.randomUUID().toString(),
+            LessonNode(
+                id = "node_${def.sectionIndex}_${def.unitIndex}_${def.nodeType.name.lowercase()}",
                 orderIndex = index,
                 title = def.title,
                 description = def.description,
@@ -48,18 +47,18 @@ object DgtLearningPathTemplate {
             sectionIndex = 0,
             sectionTitle = "El Conductor",
             lessons = listOf(
-                "Factores que afectan a la conducción" to "Descubre qué factores influyen al volante.",
-                "Alcohol al volante: efectos y límites" to "Conoce los límites legales de alcohol.",
+                "Factores físicos y psíquicos" to "Descubre qué te afecta al volante.",
+                "Alcohol: efectos, límites y sanciones" to "Conoce los límites legales y sus consecuencias.",
                 "Drogas, medicamentos y conducción" to "Entiende cómo afectan las sustancias.",
-                "Fatiga y somnolencia" to "Aprende a reconocer la fatiga al conducir.",
-                "Distracciones: móvil, GPS, pasajeros" to "Evita las distracciones más comunes.",
-                "Cinturón de seguridad y airbag" to "Uso correcto de los sistemas de seguridad.",
-                "Sistemas de Retención Infantil (SRI)" to "Protege a los más pequeños en el coche."
+                "Fatiga, somnolencia y microsueños" to "Aprende a reconocer la fatiga.",
+                "Distracciones: móvil, GPS y pasajeros" to "Evita las distracciones más comunes.",
+                "Cinturón, airbag y cabecero" to "Uso correcto de los sistemas de seguridad.",
+                "Sistemas de Retención Infantil (SRI)" to "Protege a los más pequeños."
             ),
-            reviewTitle = "Repaso del Conductor",
-            reviewDesc = "Repasa todo lo aprendido sobre el conductor.",
+            reviewTitle = "Repaso — El Conductor",
+            reviewDesc = "Repasa todo sobre el conductor.",
             examTitle = "Examen — El Conductor",
-            examDesc = "Demuestra lo que sabes sobre el conductor."
+            examDesc = "Demuestra lo que sabes."
         )
 
         // ── SECCIÓN 2 — El Vehículo ──
@@ -67,136 +66,161 @@ object DgtLearningPathTemplate {
             sectionIndex = 1,
             sectionTitle = "El Vehículo",
             lessons = listOf(
-                "Documentación obligatoria del vehículo" to "Conoce los papeles imprescindibles.",
-                "Partes del vehículo y funcionamiento" to "Domina los componentes del coche.",
-                "Neumáticos: presión, desgaste y norma" to "Cuida tus neumáticos correctamente.",
-                "Luces del vehículo: tipos y uso" to "Aprende cuándo usar cada luz.",
+                "Documentación obligatoria" to "Conoce los papeles imprescindibles.",
+                "Partes externas del vehículo" to "Carrocería y acristalamientos.",
+                "Motor, transmisión y tracción" to "Domina los componentes mecánicos.",
+                "Neumáticos: presión y desgaste" to "Cuida tus neumáticos correctamente.",
+                "Sistema de iluminación" to "Aprende cuándo usar cada luz.",
                 "Frenos: ABS, EBD y distancias" to "Entiende los sistemas de frenado.",
-                "Sistemas de asistencia (ADAS)" to "Conoce las ayudas electrónicas.",
-                "Mantenimiento preventivo y averías" to "Previene problemas mecánicos.",
-                "Carga del vehículo y remolques" to "Aprende a cargar de forma legal y segura."
+                "Sistemas ADAS" to "Conoce las ayudas electrónicas.",
+                "Mantenimiento preventivo e ITV" to "Previene problemas mecánicos.",
+                "Carga, remolques y masas máximas" to "Carga de forma legal y segura."
             ),
-            reviewTitle = "Repaso del Vehículo",
+            reviewTitle = "Repaso — El Vehículo",
             reviewDesc = "Repasa todo lo aprendido sobre el vehículo.",
             examTitle = "Examen — El Vehículo",
             examDesc = "Demuestra lo que sabes sobre el vehículo."
         )
 
-        // ── SECCIÓN 3 — Señales de Tráfico I ──
+        // ── SECCIÓN 3 — Señales de Tráfico I: Peligro y Prohibición ──
         all += section(
             sectionIndex = 2,
-            sectionTitle = "Señales de Tráfico I",
+            sectionTitle = "Señales I: Peligro y Prohibición",
             lessons = listOf(
                 "Prelación entre señales" to "¿Qué señal manda sobre otra?",
                 "Señales de peligro (triángulos)" to "Reconoce las señales de advertencia.",
                 "Señales de prohibición de entrada" to "Aprende dónde no puedes entrar.",
-                "Señales de prohibición y restricción" to "Domina las limitaciones en la vía.",
-                "Señales de obligación (círculos azules)" to "Conoce lo que estás obligado a hacer.",
-                "Señales de fin de prohibición" to "Identifica cuándo termina una restricción."
+                "Señales de prohibición: velocidad" to "Domina los límites y restricciones.",
+                "Señales de restricción: peso y altura" to "Limitaciones por dimensiones.",
+                "Señales de fin de prohibición" to "Cuándo termina una restricción.",
+                "Señales de obligación (azules)" to "Conoce lo que estás obligado a hacer."
             ),
-            reviewTitle = "Repaso Señales I",
-            reviewDesc = "Repasa las señales de tráfico básicas.",
+            reviewTitle = "Repaso — Señales I",
+            reviewDesc = "Repasa las señales de peligro y prohibición.",
             examTitle = "Examen — Señales I",
             examDesc = "Demuestra tu dominio de señales básicas."
         )
 
-        // ── SECCIÓN 4 — Señales de Tráfico II ──
+        // ── SECCIÓN 4 — Señales de Tráfico II: Indicación y Marcas ──
         all += section(
             sectionIndex = 3,
-            sectionTitle = "Señales de Tráfico II",
+            sectionTitle = "Señales II: Indicación y Marcas",
             lessons = listOf(
-                "Señales de indicación: información" to "Conoce las señales informativas.",
-                "Señales de indicación: carriles" to "Gestiona carriles y autopistas.",
+                "Señales de indicación general" to "Conoce las señales informativas.",
+                "Señales de autopistas y autovías" to "Gestiona vías de alta capacidad.",
+                "Señales de carriles y servicios" to "Carriles especiales y servicios.",
                 "Marcas viales longitudinales" to "Aprende qué significan las líneas.",
-                "Marcas viales transversales y otras" to "Domina el resto de marcas viales.",
-                "Semáforos: tipos y significado" to "Interpreta cada tipo de semáforo.",
-                "Señales de los agentes" to "Entiende las señales manuales.",
-                "Señales circunstanciales y de obras" to "Actúa ante señales temporales."
+                "Marcas viales transversales" to "STOP, ceda el paso, paso peatones.",
+                "Otras marcas: flechas y badenes" to "Flechas, chevrones, resaltos.",
+                "Semáforos: tipos y fases" to "Interpreta cada tipo de semáforo.",
+                "Señales de los agentes" to "Entiende los gestos y posiciones."
             ),
-            reviewTitle = "Repaso Señales II",
-            reviewDesc = "Repasa las señales de tráfico avanzadas.",
+            reviewTitle = "Repaso — Señales II",
+            reviewDesc = "Repasa las señales de indicación y marcas.",
             examTitle = "Examen — Señales II",
             examDesc = "Demuestra tu dominio de señales avanzadas."
         )
 
-        // ── SECCIÓN 5 — Normas de Circulación I ──
+        // ── SECCIÓN 5 — Normas de Circulación I: Velocidad y Carriles ──
         all += section(
             sectionIndex = 4,
-            sectionTitle = "Normas de Circulación I",
+            sectionTitle = "Normas I: Velocidad y Carriles",
             lessons = listOf(
                 "Velocidades máximas por tipo de vía" to "Conoce los límites en cada vía.",
-                "Velocidades mínimas y marcha lenta" to "Aprende cuándo ir demasiado lento es peligroso.",
-                "Distancia de seguridad" to "Mantén la distancia correcta siempre.",
-                "Uso correcto de los carriles" to "Circula por el carril adecuado.",
+                "Velocidades específicas: novatos, lluvia" to "Casos especiales de velocidad.",
+                "Velocidades mínimas y circulación" to "Cuándo ir lento es peligroso.",
+                "Distancia de seguridad" to "Mantén la distancia correcta.",
+                "Carriles en vías de varios sentidos" to "Circula por el carril adecuado.",
+                "Carriles en vías de un solo sentido" to "Uso correcto de vías unidireccionales.",
                 "Cambio de carril y señalización" to "Cambia de carril de forma segura.",
-                "Incorporación a la circulación" to "Incorpórate sin poner en riesgo a nadie.",
-                "Circulación en autopistas y autovías" to "Domina las vías de alta capacidad."
+                "Incorporación a la circulación" to "Incorpórate sin riesgo."
             ),
-            reviewTitle = "Repaso Normas I",
-            reviewDesc = "Repasa las normas de circulación básicas.",
+            reviewTitle = "Repaso — Normas I",
+            reviewDesc = "Repasa velocidad y carriles.",
             examTitle = "Examen — Normas I",
             examDesc = "Demuestra tu dominio de normas básicas."
         )
 
-        // ── SECCIÓN 6 — Normas de Circulación II ──
+        // ── SECCIÓN 6 — Normas de Circulación II: Prioridad y Maniobras ──
         all += section(
             sectionIndex = 5,
-            sectionTitle = "Normas de Circulación II",
+            sectionTitle = "Normas II: Prioridad y Maniobras",
             lessons = listOf(
-                "Prioridad de paso en intersecciones" to "Aprende quién pasa primero.",
-                "Glorietas y rotondas" to "Circula correctamente en rotondas.",
-                "Adelantamiento: cuándo y cómo" to "Adelanta de forma segura y legal.",
-                "Prohibiciones de adelantamiento" to "Conoce cuándo no puedes adelantar.",
-                "Parada y estacionamiento" to "Aparca cumpliendo la normativa.",
-                "Zonas de estacionamiento regulado" to "ORA, disco horario y zonas azules.",
-                "Giros y cambio de sentido" to "Gira a izquierda, derecha y sentido contrario.",
-                "Marcha atrás: normativa y límites" to "Conoce cuándo y cómo dar marcha atrás."
+                "Prioridad en cruces sin señalizar" to "Aprende quién pasa primero.",
+                "Prioridad en cruces señalizados" to "Intersecciones con señales.",
+                "Glorietas y rotondas" to "Entrada, circulación y salida.",
+                "Adelantamiento: cuándo y cómo" to "Adelanta de forma segura.",
+                "Prohibiciones de adelantamiento" to "Cuándo no puedes adelantar.",
+                "Parada: lugares y prohibiciones" to "Dónde puedes y no puedes parar.",
+                "Estacionamiento: zonas reguladas" to "ORA, disco horario y zonas.",
+                "Giros y cambio de sentido" to "Gira a derecha, izquierda y sentido contrario.",
+                "Marcha atrás: normativa" to "Cuándo y cómo dar marcha atrás."
             ),
-            reviewTitle = "Repaso Normas II",
-            reviewDesc = "Repasa las normas de circulación avanzadas.",
+            reviewTitle = "Repaso — Normas II",
+            reviewDesc = "Repasa prioridad y maniobras.",
             examTitle = "Examen — Normas II",
             examDesc = "Demuestra tu dominio de normas avanzadas."
         )
 
-        // ── SECCIÓN 7 — Vías y Medio Ambiente ──
+        // ── SECCIÓN 7 — Vías, Entorno y Conducción Especial ──
         all += section(
             sectionIndex = 6,
-            sectionTitle = "Vías y Medio Ambiente",
+            sectionTitle = "Vías, Entorno y Conducción Especial",
             lessons = listOf(
-                "Tipos de vías y características" to "Conoce cada tipo de vía española.",
-                "Condiciones meteorológicas adversas" to "Conduce seguro con lluvia, nieve o niebla.",
+                "Tipos de vía y características" to "Conoce cada tipo de vía española.",
+                "Condiciones meteorológicas adversas" to "Lluvia, nieve, niebla y viento.",
                 "Conducción nocturna" to "Domina la conducción de noche.",
-                "Conducción eficiente y eco-driving" to "Ahorra combustible y cuida el planeta.",
-                "Emisiones y zonas de bajas emisiones" to "Entiende las ZBE y la normativa.",
-                "Accidentes: auxilios y conducta" to "Actúa correctamente ante un accidente.",
-                "Triángulos de emergencia y seguridad" to "Señaliza correctamente una avería."
+                "Túneles y pasos subterráneos" to "Conducción segura en túneles.",
+                "Conducción eficiente y eco-driving" to "Ahorra combustible.",
+                "Emisiones, etiquetas DGT y ZBE" to "Entiende las zonas de bajas emisiones.",
+                "Accidentes: conducta y PAS" to "Actúa correctamente ante un accidente.",
+                "Señalización de emergencia" to "Triángulos, chaleco y balizas."
             ),
-            reviewTitle = "Repaso Vías y Medio Ambiente",
-            reviewDesc = "Repasa todo sobre vías y medio ambiente.",
-            examTitle = "Examen — Vías y Medio Ambiente",
+            reviewTitle = "Repaso — Vías y Entorno",
+            reviewDesc = "Repasa vías y conducción especial.",
+            examTitle = "Examen — Vías y Entorno",
             examDesc = "Demuestra lo que sabes sobre vías y entorno."
         )
 
-        // ── SECCIÓN 8 — Otros Usuarios y Casos Especiales ──
+        // ── SECCIÓN 8 — Otros Usuarios de la Vía ──
         all += section(
             sectionIndex = 7,
-            sectionTitle = "Otros Usuarios y Casos Especiales",
+            sectionTitle = "Otros Usuarios de la Vía",
             lessons = listOf(
-                "Peatones: cruce, acera y calzada" to "Respeta a los peatones en la vía.",
-                "Ciclistas y VMP en la vía" to "Convive con bicicletas y patinetes.",
+                "Peatones: derechos y cruces" to "Respeta a los peatones en la vía.",
+                "Ciclistas: normas y carril bici" to "Convive con bicicletas.",
+                "VMP: patinetes y similares" to "Normas para movilidad personal.",
                 "Motocicletas y ciclomotores" to "Comparte vía con las motos.",
-                "Vehículos de emergencia y especiales" to "Cede el paso a emergencias.",
+                "Vehículos de emergencia" to "Cede el paso a emergencias.",
                 "Transporte escolar y de viajeros" to "Normas con autobuses escolares.",
-                "Mercancías peligrosas (básico)" to "Conoce las reglas para mercancías peligrosas."
+                "Mercancías peligrosas" to "Paneles, etiquetas y distancias."
             ),
-            reviewTitle = "Repaso Casos Especiales",
-            reviewDesc = "Repasa los casos especiales de circulación.",
-            examTitle = "Examen — Casos Especiales",
-            examDesc = "Demuestra tu dominio de casos especiales."
+            reviewTitle = "Repaso — Otros Usuarios",
+            reviewDesc = "Repasa otros usuarios de la vía.",
+            examTitle = "Examen — Otros Usuarios",
+            examDesc = "Demuestra tu dominio sobre otros usuarios."
         )
 
-        // ── SECCIÓN 9 — Simulacros Finales ──
-        val simSection = 8
+        // ── SECCIÓN 9 — Infracciones, Sanciones y Responsabilidad ──
+        all += section(
+            sectionIndex = 8,
+            sectionTitle = "Infracciones y Sanciones",
+            lessons = listOf(
+                "Clasificación de infracciones" to "Leves, graves y muy graves.",
+                "Sanciones: multas y retirada" to "Consecuencias de las infracciones.",
+                "Pérdida y recuperación de puntos" to "Sistema de puntos del carné.",
+                "Seguro obligatorio: tipos" to "Coberturas del seguro.",
+                "Responsabilidad civil y penal" to "Responsabilidad del conductor.",
+                "Alcoholemia: pruebas y consecuencias" to "Pruebas, negativa y penas."
+            ),
+            reviewTitle = "Repaso — Infracciones",
+            reviewDesc = "Repasa infracciones y sanciones.",
+            examTitle = "Examen — Infracciones",
+            examDesc = "Demuestra lo que sabes sobre sanciones."
+        )
+
+        // ── SECCIÓN 10 — Simulacros Finales DGT ──
+        val simSection = 9
         val simTitle = "Simulacros Finales"
         for (i in 1..5) {
             all += NodeDef(

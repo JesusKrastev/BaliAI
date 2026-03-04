@@ -23,5 +23,6 @@ data class UserFirestore(
     val energy: Int = 5,
     val coins: Int = 0,
     val streakFreezes: Int = 0,
-    val practiceDays: List<Long> = emptyList()
+    val practiceDays: List<Long> = emptyList(),
+    val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap()
 )

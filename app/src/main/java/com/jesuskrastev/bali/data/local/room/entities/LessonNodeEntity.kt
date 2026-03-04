@@ -6,8 +6,8 @@ import androidx.room.PrimaryKey
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
 
-@Entity(tableName = "ai_lesson_nodes")
-data class AILessonNodeEntity(
+@Entity(tableName = "lesson_nodes")
+data class LessonNodeEntity(
     @PrimaryKey val id: String,
     val orderIndex: Int,
     val title: String,

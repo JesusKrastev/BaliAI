@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -23,7 +24,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -63,7 +67,7 @@ fun HomeScreen(
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: HomeViewModel,
     onStudyClick: () -> Unit = {},
-    onNodeTestClick: (String, String?, String) -> Unit = { _, _, _ -> },
+    onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onTopicsClick: () -> Unit = {},
     onMistakesClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
@@ -460,113 +464,19 @@ fun HomeScreen(
                 }
             }
         ) { paddingValues ->
-            LazyColumn(
+            LearningPathGraph(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                // 1.5. Daily Tip Card
-                item {
-                    DailyTipCard(tip = uiState.dailyTip)
+                pathNodes = uiState.pathNodes,
+                isPathLoading = uiState.isPathLoading,
+                onNodeClick = { node ->
+                    onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                },
+                onGenerateClick = {
+                    viewModel.generateNextPathNodesCount()
                 }
-
-                // 1.6. Weekly Streak Table
-                if (uiState.isLoggedIn) {
-                    item {
-                        WeeklyStreakTable(
-                            weeklyStreak = uiState.weeklyStreak,
-                            currentStreak = uiState.streak,
-                            freezersAvailable = uiState.streakFreezes,
-                            onClick = { showMonthlyStreakCalendar = true }
-                        )
-                    }
-                }
-
-                // 2. Weekly Challenge Card
-                item {
-                    WeeklyChallengeCard(
-                        title = "Reto de Señales",
-                        subtitle = "Domina las señales para asegurar tu aprobado.",
-                        onStartClick = {
-                            if (uiState.energyCount > 0) onStudyClick()
-                            else viewModel.showEnergyDialog()
-                        }
-                    )
-                }
-
-                // 3. PREPARATION SECTION
-                item {
-                    SectionHeader(title = "Tu Preparación")
-                }
-
-                item {
-                    LearningPathGraph(
-                        pathNodes = uiState.pathNodes,
-                        isPathLoading = uiState.isPathLoading,
-                        onNodeClick = { node ->
-                            onNodeTestClick(node.title, node.description, node.id)
-                        },
-                        onGenerateClick = {
-                            viewModel.generateNextPathNodesCount()
-                        }
-                    )
-                }
-
-                if(uiState.mistakesCount > 0) {
-                    item {
-                        HomeCard(
-                            title = "Repasar errores",
-                            subtitle = "Aprende de tus últimos fallos",
-                            emoji = "❌",
-                            actionText = "Repasar",
-                            onClick = {
-                                if (uiState.energyCount > 0) onMistakesClick()
-                                else viewModel.showEnergyDialog()
-                            }
-                        )
-                    }
-                }
-
-                item {
-                    val isExamLocked = uiState.xpLevel < 7
-                    HomeCard(
-                        title = "Examen DGT",
-                        subtitle = if (isExamLocked) "Desbloquea al nivel 7" else "Simulacro oficial de 30 preguntas",
-                        emoji = if (isExamLocked) "🔒" else "🎓",
-                        actionText = if (isExamLocked) "Bloqueado" else "100",
-                        actionIcon = if (isExamLocked) null else R.drawable.coin,
-                        isLocked = isExamLocked,
-                        onClick = {
-                            if (isExamLocked) {
-                                showLevelLockedDialog = true
-                            } else if (uiState.energyCount > 0) {
-                                viewModel.startExam {
-                                    onExamClick()
-                                }
-                            } else {
-                                viewModel.showEnergyDialog()
-                            }
-                        }
-                    )
-                }
-
-                // 4. STATISTICS SECTION
-                item {
-                    SectionHeader(title = "Estadísticas")
-                }
-
-                item {
-                    QuickStatsRow(
-                        streak = uiState.streak,
-                        accuracy = uiState.avgScore,
-                        totalTests = uiState.totalTests
-                    )
-                }
-
-                item { Spacer(modifier = Modifier.height(16.dp)) }
-            }
+            )
         }
     }
     
@@ -1665,11 +1575,13 @@ fun MonthlyStreakCalendarDialog(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LearningPathGraph(
-    pathNodes: List<com.jesuskrastev.bali.domain.model.AILessonNode>,
+    modifier: Modifier = Modifier,
+    pathNodes: List<com.jesuskrastev.bali.domain.model.LessonNode>,
     isPathLoading: Boolean,
-    onNodeClick: (com.jesuskrastev.bali.domain.model.AILessonNode) -> Unit,
+    onNodeClick: (com.jesuskrastev.bali.domain.model.LessonNode) -> Unit,
     onGenerateClick: () -> Unit
 ) {
     // Loading state — empty + loading
@@ -1693,35 +1605,33 @@ fun LearningPathGraph(
 
     var selectedNodeId by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
     ) {
         sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
             val sectionNodes = nodesBySection[sectionKey].orEmpty()
             if (sectionNodes.isEmpty()) return@forEachIndexed
 
-            val sectionTitle = sectionNodes.first().sectionTitle
-            val completedCount = sectionNodes.count { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED }
-            val totalCount = sectionNodes.size
-
-            // Spacer between sections (not before the first)
-            if (sectionIdx > 0) {
-                Spacer(modifier = Modifier.height(48.dp))
+            // Sticky section header
+            stickyHeader(key = "section_$sectionKey") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(top = if (sectionIdx > 0) 48.dp else 16.dp, bottom = 16.dp)
+                ) {
+                    SectionHeaderCard(
+                        sectionIndex = sectionKey,
+                        sectionTitle = sectionNodes.first().sectionTitle,
+                        completedCount = sectionNodes.count { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED },
+                        totalCount = sectionNodes.size
+                    )
+                }
             }
 
-            // Section Header
-            SectionHeaderCard(
-                sectionIndex = sectionKey,
-                sectionTitle = sectionTitle,
-                completedCount = completedCount,
-                totalCount = totalCount
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
             // Nodes in this section
-            sectionNodes.forEachIndexed { nodeIdx, node ->
+            itemsIndexed(sectionNodes, key = { _, node -> node.id }) { nodeIdx, node ->
                 if (nodeIdx > 0) {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
@@ -1752,6 +1662,7 @@ fun LearningPathGraph(
                 PathNodeCallout(
                     node = node,
                     isVisible = selectedNodeId == node.id,
+                    offset = xOffset,
                     onActionClick = {
                         selectedNodeId = null
                         onNodeClick(node)
@@ -1762,15 +1673,17 @@ fun LearningPathGraph(
 
         // "Generate more" button when all nodes are completed
         if (pathNodes.isNotEmpty() && pathNodes.all { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED }) {
-            Spacer(modifier = Modifier.height(32.dp))
-            if (isPathLoading) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            } else {
-                OutlinedButton(
-                    onClick = onGenerateClick,
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("GENERAR MÁS LECCIONES", fontWeight = FontWeight.Bold)
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                if (isPathLoading) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                } else {
+                    OutlinedButton(
+                        onClick = onGenerateClick,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("GENERAR MÁS LECCIONES", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -1832,7 +1745,7 @@ fun SectionHeaderCard(
 
 @Composable
 fun PathNodeItem(
-    node: com.jesuskrastev.bali.domain.model.AILessonNode,
+    node: com.jesuskrastev.bali.domain.model.LessonNode,
     offset: androidx.compose.ui.unit.Dp,
     isSelected: Boolean,
     onSelect: () -> Unit
@@ -1843,33 +1756,28 @@ fun PathNodeItem(
     val isExam = node.nodeType == com.jesuskrastev.bali.domain.model.NodeType.EXAM
     val context = LocalContext.current
 
-    // Pulse animation for UNLOCKED nodes
-    val scale = if (isUnlocked) {
-        val infiniteTransition = rememberInfiniteTransition(label = "node_pulse")
+    // Rotating glow animation for UNLOCKED nodes
+    val rotation = if (isUnlocked) {
+        val infiniteTransition = rememberInfiniteTransition(label = "node_rotate")
         infiniteTransition.animateFloat(
-            initialValue = 1.0f,
-            targetValue = 1.06f,
+            initialValue = 0f,
+            targetValue = 360f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1400, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
+                animation = tween(3000, easing = LinearEasing)
             ),
-            label = "scale"
+            label = "rotation"
         ).value
     } else {
-        1.0f
+        0f
     }
 
     val bgColor = when {
-        isCompleted -> MaterialTheme.colorScheme.primary
-        isUnlocked -> Color(0xFF10B981)
+        isCompleted -> Color(0xFF22C55E)  // Verde éxito
+        isUnlocked -> Color(0xFFFACC15)   // Amarillo Bali
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
-    val nodeBorder = if (isExam) {
-        BorderStroke(3.dp, Color(0xFFFFD700))
-    } else {
-        null
-    }
+    val nodeBorder: BorderStroke? = null // Sin borde dorado en ningún nodo
 
     // Resolve drawable icon
     val resId = remember(node.iconResName) {
@@ -1882,39 +1790,52 @@ fun PathNodeItem(
             .offset(x = offset),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            modifier = Modifier
-                .size(80.dp)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
+        Box(contentAlignment = Alignment.Center) {
+            // Rotating glow arc behind the node for UNLOCKED state
+            if (isUnlocked) {
+                Canvas(modifier = Modifier.size(86.dp)) {
+                    drawArc(
+                        brush = Brush.sweepGradient(
+                            listOf(Color(0xFFFACC15), Color.Transparent, Color(0xFFFACC15))
+                        ),
+                        startAngle = rotation,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+                    )
                 }
-                .then(
-                    if (!isLocked) Modifier.clickable { onSelect() } else Modifier
-                ),
-            shape = CircleShape,
-            color = bgColor,
-            shadowElevation = if (isLocked) 0.dp else 6.dp,
-            border = nodeBorder
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (resId != 0) {
-                    Image(
-                        painter = painterResource(id = resId),
-                        contentDescription = node.title,
-                        modifier = Modifier.size(48.dp),
-                        alpha = if (isLocked) 0.4f else 1.0f,
-                        contentScale = ContentScale.Fit
-                    )
-                } else {
-                    // Fallback icon if drawable not found
-                    Icon(
-                        imageVector = Icons.Rounded.MenuBook,
-                        contentDescription = null,
-                        modifier = Modifier.size(32.dp),
-                        tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant
-                        else Color.White
-                    )
+            }
+
+            Surface(
+                modifier = Modifier
+                    .size(80.dp)
+                    .then(
+                        if (!isLocked) Modifier.clickable { onSelect() } else Modifier
+                    ),
+                shape = CircleShape,
+                color = bgColor,
+                shadowElevation = if (isUnlocked) 12.dp else if (isLocked) 0.dp else 6.dp,
+                border = if (isUnlocked) BorderStroke(3.dp, Color(0xFFF59E0B)) else nodeBorder
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (resId != 0) {
+                        Image(
+                            painter = painterResource(id = resId),
+                            contentDescription = node.title,
+                            modifier = Modifier.size(48.dp),
+                            alpha = if (isLocked) 0.4f else 1.0f,
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        // Fallback icon if drawable not found
+                        Icon(
+                            imageVector = Icons.Rounded.MenuBook,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant
+                            else Color.White
+                        )
+                    }
                 }
             }
         }
@@ -1926,7 +1847,7 @@ fun PathNodeItem(
                 text = "${node.scorePercentage}%",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
+                color = Color(0xFF22C55E),
                 textAlign = TextAlign.Center
             )
         }
@@ -1937,8 +1858,9 @@ fun PathNodeItem(
 
 @Composable
 fun PathNodeCallout(
-    node: com.jesuskrastev.bali.domain.model.AILessonNode,
+    node: com.jesuskrastev.bali.domain.model.LessonNode,
     isVisible: Boolean,
+    offset: androidx.compose.ui.unit.Dp = 0.dp,
     onActionClick: () -> Unit
 ) {
     val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
@@ -1959,18 +1881,24 @@ fun PathNodeCallout(
                 .padding(top = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Triangle arrow pointing up
-            Canvas(
-                modifier = Modifier
-                    .size(width = 24.dp, height = 12.dp)
+            // Triangle arrow pointing up, offset to follow node position
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(size.width / 2f, 0f)
-                    lineTo(size.width, size.height)
-                    lineTo(0f, size.height)
-                    close()
+                Canvas(
+                    modifier = Modifier
+                        .size(width = 24.dp, height = 12.dp)
+                        .offset(x = offset * 0.85f)
+                ) {
+                    val path = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(size.width / 2f, 0f)
+                        lineTo(size.width, size.height)
+                        lineTo(0f, size.height)
+                        close()
+                    }
+                    drawPath(path, color = capturedBubbleColor)
                 }
-                drawPath(path, color = capturedBubbleColor)
             }
 
             // Bubble card
@@ -2005,7 +1933,7 @@ fun PathNodeCallout(
                         )
                     ) {
                         Text(
-                            text = if (isCompleted) "REPASAR" else "EMPEZAR  ⚡ +20 XP",
+                            text = if (isCompleted) "REPASAR  ⚡ +6 XP" else "EMPEZAR  ⚡ +20 XP",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )

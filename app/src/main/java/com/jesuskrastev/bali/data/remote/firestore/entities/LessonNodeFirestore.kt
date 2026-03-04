@@ -1,7 +1,7 @@
 package com.jesuskrastev.bali.data.remote.firestore.entities
 
 // Status and nodeType are stored as Strings for Firestore compatibility.
-data class AILessonNodeFirestore(
+data class LessonNodeFirestore(
     val id: String = "",
     val orderIndex: Int = 0,
     val title: String = "",

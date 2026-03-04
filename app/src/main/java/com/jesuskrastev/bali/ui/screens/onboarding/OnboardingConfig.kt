@@ -6,7 +6,7 @@ package com.jesuskrastev.bali.ui.screens.onboarding
  */
 object OnboardingConfig {
     val licenses = listOf(
-        "🚗 Coche (B)", "🏍️ Moto (A2)", "\uD83C\uDFCD Moto (A1)", "🛵 Ciclomotor (AM)", "🚛 Camión (C)", "🚌 Autobús (D)", "🚜 Remolque (E)"
+        "🚗 Coche (B)", "🏍️ Moto (A2)", "\uD83C\uDFCD Moto (A1)", "🛵 Ciclomotor (AM)"
     )
 
     val experiences = listOf(

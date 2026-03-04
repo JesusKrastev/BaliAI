@@ -2,7 +2,7 @@ package com.jesuskrastev.bali.domain.usecase
 
 import com.google.ai.client.generativeai.GenerativeModel
 import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
-import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import kotlinx.coroutines.flow.first
@@ -20,7 +20,7 @@ class GenerateNextPathNodesUseCase @Inject constructor(
 ) {
     private val jsonContent = Json { ignoreUnknownKeys = true }
 
-    suspend operator fun invoke(count: Int = 5): List<AILessonNode> {
+    suspend operator fun invoke(count: Int = 5): List<LessonNode> {
         val user = userRepository.get().first() ?: throw Exception("Usuario no encontrado")
         val userId = user.id
 
@@ -72,7 +72,7 @@ class GenerateNextPathNodesUseCase @Inject constructor(
 
         val generatedNodes = nodesArray.mapIndexed { index, element ->
             val obj = element.jsonObject
-            AILessonNode(
+            LessonNode(
                 id = UUID.randomUUID().toString(),
                 orderIndex = startOrderIndex + index,
                 title = obj["title"]?.jsonPrimitive?.content ?: "Práctica DGT",

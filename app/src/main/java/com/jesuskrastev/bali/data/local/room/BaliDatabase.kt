@@ -11,12 +11,12 @@ import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.entities.AnswerEntity
 import com.jesuskrastev.bali.data.local.room.entities.TestResultEntity
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
-import com.jesuskrastev.bali.data.local.room.entities.AILessonNodeEntity
-import com.jesuskrastev.bali.data.local.room.dao.AILessonNodeDao
+import com.jesuskrastev.bali.data.local.room.entities.LessonNodeEntity
+import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 
 @Database(
-    entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, AILessonNodeEntity::class],
-    version = 5,
+    entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, LessonNodeEntity::class],
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -24,9 +24,25 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun testResultDao(): TestResultDao
     abstract fun answerDao(): AnswerDao
-    abstract fun aiLessonNodeDao(): AILessonNodeDao
+    abstract fun lessonNodeDao(): LessonNodeDao
 
     companion object {
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE ai_lesson_nodes RENAME TO lesson_nodes")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE ai_lesson_nodes ADD COLUMN sectionIndex INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE ai_lesson_nodes ADD COLUMN sectionTitle TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE ai_lesson_nodes ADD COLUMN unitIndex INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE ai_lesson_nodes ADD COLUMN nodeType TEXT NOT NULL DEFAULT 'LESSON'")
+                database.execSQL("ALTER TABLE ai_lesson_nodes ADD COLUMN iconResName TEXT NOT NULL DEFAULT 'lesson_test'")
+            }
+        }
+
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("""

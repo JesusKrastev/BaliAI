@@ -46,7 +46,8 @@ data class TestRoute(
     val topic: String? = null,
     val nodeTitle: String? = null,
     val nodeDescription: String? = null,
-    val nodeId: String? = null
+    val nodeId: String? = null,
+    val nodeType: String? = null
 )
 
 @Serializable
@@ -125,8 +126,8 @@ fun AppNavigation(
                     onStudyClick = {
                         navController.navigate(TestRoute())
                     },
-                    onNodeTestClick = { title, desc, id ->
-                        navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id))
+                    onNodeTestClick = { title, desc, id, type ->
+                        navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                     },
                     onTopicsClick = {
                         navController.navigate(TopicsRoute)
@@ -233,7 +234,7 @@ fun AppNavigation(
                 
                 LaunchedEffect(route) {
                     if (route.nodeTitle != null) {
-                        viewModel.setAiNodeParams(route.nodeTitle, route.nodeDescription, route.nodeId)
+                        viewModel.setAiNodeParams(route.nodeTitle, route.nodeDescription, route.nodeId, route.nodeType)
                     } else {
                         viewModel.setTopic(route.topic)
                     }

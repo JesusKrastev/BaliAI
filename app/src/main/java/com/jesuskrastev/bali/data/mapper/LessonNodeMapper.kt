@@ -1,13 +1,13 @@
 package com.jesuskrastev.bali.data.mapper
 
-import com.jesuskrastev.bali.data.local.room.entities.AILessonNodeEntity
-import com.jesuskrastev.bali.data.remote.firestore.entities.AILessonNodeFirestore
-import com.jesuskrastev.bali.domain.model.AILessonNode
+import com.jesuskrastev.bali.data.local.room.entities.LessonNodeEntity
+import com.jesuskrastev.bali.data.remote.firestore.entities.LessonNodeFirestore
+import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
 
-fun AILessonNodeEntity.toDomain(): AILessonNode {
-    return AILessonNode(
+fun LessonNodeEntity.toDomain(): LessonNode {
+    return LessonNode(
         id = id,
         orderIndex = orderIndex,
         title = title,
@@ -22,8 +22,8 @@ fun AILessonNodeEntity.toDomain(): AILessonNode {
     )
 }
 
-fun AILessonNodeFirestore.toDomain(): AILessonNode {
-    return AILessonNode(
+fun LessonNodeFirestore.toDomain(): LessonNode {
+    return LessonNode(
         id = id,
         orderIndex = orderIndex,
         title = title,
@@ -38,8 +38,8 @@ fun AILessonNodeFirestore.toDomain(): AILessonNode {
     )
 }
 
-fun AILessonNode.toEntity(): AILessonNodeEntity {
-    return AILessonNodeEntity(
+fun LessonNode.toEntity(): LessonNodeEntity {
+    return LessonNodeEntity(
         id = id,
         orderIndex = orderIndex,
         title = title,
@@ -54,8 +54,8 @@ fun AILessonNode.toEntity(): AILessonNodeEntity {
     )
 }
 
-fun AILessonNode.toFirestore(): AILessonNodeFirestore {
-    return AILessonNodeFirestore(
+fun LessonNode.toFirestore(): LessonNodeFirestore {
+    return LessonNodeFirestore(
         id = id,
         orderIndex = orderIndex,
         title = title,

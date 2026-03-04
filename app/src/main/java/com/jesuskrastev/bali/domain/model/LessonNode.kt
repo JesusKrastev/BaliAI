@@ -6,7 +6,7 @@ enum class NodeStatus {
     COMPLETED
 }
 
-data class AILessonNode(
+data class LessonNode(
     val id: String,
     val orderIndex: Int,
     val title: String,
@@ -17,5 +17,6 @@ data class AILessonNode(
     val sectionTitle: String = "",
     val unitIndex: Int = 0,
     val nodeType: NodeType = NodeType.LESSON,
-    val iconResName: String = "lesson_test"
+    val iconResName: String = "lesson_test",
+    val completedCount: Int = 0
 )
