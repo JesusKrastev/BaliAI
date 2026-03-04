@@ -20,5 +20,6 @@ data class User(
     val energy: Int = 5,
     val coins: Int = 0,
     val streakFreezes: Int = 0,
+    val highestStreak: Int = 0,
     val practiceDays: List<Long> = emptyList()
 )

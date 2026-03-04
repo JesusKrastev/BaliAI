@@ -23,6 +23,36 @@ import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.*
 import com.jesuskrastev.bali.R
 
+fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, String> {
+    val minutes = durationSeconds / 60
+    return when {
+        accuracy == 100 -> Pair(
+            "¡Perfección absoluta! \uD83C\uDFAF",
+            "10 de 10. Has dominado esta lección por completo."
+        )
+        accuracy >= 90 -> Pair(
+            "¡Excelente resultado! \uD83D\uDD25",
+            "Casi perfecto. Estás muy cerca de dominar esto."
+        )
+        accuracy >= 70 -> Pair(
+            "¡Buen trabajo! \uD83D\uDCAA",
+            "Sólido. Repasa los fallos y la próxima será perfecta."
+        )
+        accuracy >= 50 -> Pair(
+            "Vas por buen camino \uD83D\uDCC8",
+            "Más de la mitad bien. Sigue practicando y mejorarás."
+        )
+        accuracy >= 30 -> Pair(
+            "No te rindas \uD83E\uDDE0",
+            "Cada fallo es una lección. Repasa y vuelve a intentarlo."
+        )
+        else -> Pair(
+            "Aquí empieza el aprendizaje \uD83C\uDF31",
+            "No importa el comienzo, importa no parar. ¡Tú puedes!"
+        )
+    }
+}
+
 @Composable
 fun TestResultScreen(
     xpGained: Int,
@@ -35,7 +65,7 @@ fun TestResultScreen(
     accuracy: Int,
     onContinueClick: () -> Unit
 ) {
-    val isPassed = accuracy >= 90
+    val showConfetti = accuracy >= 70
     val minutes = durationSeconds / 60
     val seconds = durationSeconds % 60
 
@@ -59,7 +89,7 @@ fun TestResultScreen(
             }
         }) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            if (isPassed) {
+            if (showConfetti) {
                 LottieAnimation(
                     composition = composition,
                     progress = { progress },
@@ -91,15 +121,19 @@ fun TestResultScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val (title, subtitle) = remember(accuracy, durationSeconds) {
+                    getMotivationalMessage(accuracy, durationSeconds)
+                }
+
                 Text(
-                    text = if (isPassed) "¡Práctica Completada!" else "Sigue practicando",
+                    text = title,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center
                 )
 
                 Text(
-                    text = if (isPassed) "Has demostrado un gran dominio." else "Cada fallo es una oportunidad de aprender.",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

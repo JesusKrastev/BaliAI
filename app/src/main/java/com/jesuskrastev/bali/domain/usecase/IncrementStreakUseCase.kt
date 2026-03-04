@@ -30,6 +30,11 @@ class IncrementStreakUseCase @Inject constructor(
             timestamp = currentTimestamp,
             practiceDays = updatedPracticeDays
         )
+
+        // Update highestStreak if new record
+        if (updatedStreak > user.highestStreak) {
+            userRepository.updateHighestStreak(updatedStreak)
+        }
         return updatedStreak
     }
 }

@@ -8,9 +8,13 @@ import kotlin.random.Random
 class IncrementCoinsUseCase @Inject constructor(
     private val userRepository: UserRepositoryImpl
 ) {
-    suspend operator fun invoke(): Int {
+    suspend operator fun invoke(accuracy: Int = 50): Int {
         val user = userRepository.get().first() ?: return 0
-        val coinsToGained = Random.nextInt(8, 11) // Random between 8 and 10
+        val coinsToGained = if (accuracy >= 50) {
+            Random.nextInt(8, 11)   // 8, 9 o 10 monedas
+        } else {
+            Random.nextInt(3, 6)    // 3, 4 o 5 monedas
+        }
         val newTotalCoins = user.coins + coinsToGained
         userRepository.updateCoins(newTotalCoins)
         return coinsToGained

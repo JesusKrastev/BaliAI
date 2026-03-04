@@ -108,6 +108,14 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    suspend fun updateHighestStreak(highestStreak: Int) = withContext(Dispatchers.IO) {
+        if (authRepository.isLoggedIn.first()) {
+            firestoreUserDao.updateFields(userId, mapOf("highestStreak" to highestStreak))
+        } else {
+            userDao.updateHighestStreak(highestStreak)
+        }
+    }
+
     fun exists(userId: String? = null): Flow<Boolean> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
         if (loggedIn) {
             firestoreUserDao.exists(userId ?: "")

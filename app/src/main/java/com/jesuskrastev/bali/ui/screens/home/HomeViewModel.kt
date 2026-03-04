@@ -146,6 +146,7 @@ class HomeViewModel @Inject constructor(
                 mistakesCount = mistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
+                highestStreak = user.highestStreak,
                 showEnergyDialog = showEnergyDialog,
                 showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,

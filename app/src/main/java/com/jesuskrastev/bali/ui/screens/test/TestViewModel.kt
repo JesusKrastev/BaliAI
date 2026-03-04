@@ -396,7 +396,7 @@ class TestViewModel @Inject constructor(
             durationSeconds = durationSeconds
         )
 
-        val coinsGained = incrementCoinsUseCase()
+        val coinsGained = incrementCoinsUseCase(accuracy)
         analyticsTracker.coinsEarned(coinsGained)
 
         // Sequential Firestore operations with withContext instead of detached CoroutineScope

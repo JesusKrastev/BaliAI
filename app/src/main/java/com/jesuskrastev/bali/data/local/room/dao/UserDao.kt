@@ -36,6 +36,9 @@ interface UserDao {
     @Query("UPDATE users SET streakFreezes = :count")
     suspend fun updateStreakFreezes(count: Int)
 
+    @Query("UPDATE users SET highestStreak = :highestStreak")
+    suspend fun updateHighestStreak(highestStreak: Int)
+
     @Query("SELECT COUNT(*) > 0 FROM users")
     fun exists(): Flow<Boolean>
 

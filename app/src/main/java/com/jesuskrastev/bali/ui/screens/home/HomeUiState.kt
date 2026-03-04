@@ -32,6 +32,7 @@ data class HomeUiState(
     val coinsCount: Int = 0,
     val mistakesCount: Int = 0,
     val streakFreezes: Int = 0,
+    val highestStreak: Int = 0,
     val difficultTopics: List<String> = emptyList(),
     val dailyTip: String = "",
     val isLoggedIn: Boolean = false,

@@ -241,7 +241,7 @@ class MistakesViewModel @Inject constructor(
             durationSeconds = durationSeconds
         )
 
-        val coinsGained = incrementCoinsUseCase()
+        val coinsGained = incrementCoinsUseCase(accuracy)
         analyticsTracker.coinsEarned(coinsGained)
 
         CoroutineScope(Dispatchers.IO).launch {

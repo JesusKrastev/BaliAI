@@ -426,6 +426,7 @@ fun HomeScreen(
         if (showMonthlyStreakCalendar) {
             MonthlyStreakCalendarDialog(
                 currentStreak = uiState.streak,
+                highestStreak = uiState.highestStreak,
                 freezersAvailable = uiState.streakFreezes,
                 practiceDays = uiState.practiceDays,
                 onDismiss = { showMonthlyStreakCalendar = false }
@@ -458,7 +459,8 @@ fun HomeScreen(
                             onEnergyClick = { showEnergyBottomSheet = true },
                             onMenuClick = {
                                 scope.launch { drawerState.open() }
-                            }
+                            },
+                            onStreakClick = { showMonthlyStreakCalendar = true }
                         )
                     }
                 }
@@ -872,7 +874,8 @@ fun UserStatusRow(
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
     onEnergyClick: () -> Unit = {},
-    onMenuClick: () -> Unit = {}
+    onMenuClick: () -> Unit = {},
+    onStreakClick: () -> Unit = {}
 ) {
     Row(
         modifier = modifier
@@ -897,7 +900,8 @@ fun UserStatusRow(
             // Streak
             Surface(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onStreakClick() },
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
@@ -1388,6 +1392,7 @@ fun StreakDayItem(day: DailyStreakState) {
 @Composable
 fun MonthlyStreakCalendarDialog(
     currentStreak: Int,
+    highestStreak: Int,
     freezersAvailable: Int,
     practiceDays: List<Long>,
     onDismiss: () -> Unit
@@ -1498,20 +1503,15 @@ fun MonthlyStreakCalendarDialog(
                                     }
 
                                     val bg = when(status) {
-                                        StreakStatus.COMPLETED -> Color(0xFFFACC15).copy(alpha = 0.2f)
-                                        StreakStatus.FROZEN -> Color(0xFF60A5FA).copy(alpha = 0.2f)
+                                        StreakStatus.COMPLETED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                        StreakStatus.FROZEN -> Color(0xFF60A5FA).copy(alpha = 0.1f)
                                         else -> Color.Transparent
                                     }
                                     val fg = when(status) {
-                                        StreakStatus.COMPLETED -> Color(0xFFF59E0B)
+                                        StreakStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                                         StreakStatus.FROZEN -> Color(0xFF60A5FA)
                                         StreakStatus.FUTURE, StreakStatus.FAILED -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                                         else -> MaterialTheme.colorScheme.onSurface
-                                    }
-                                    val icon = when(status) {
-                                        StreakStatus.COMPLETED -> "\uD83D\uDD25"
-                                        StreakStatus.FROZEN -> "\u2744\uFE0F"
-                                        else -> ""
                                     }
 
                                     Surface(
@@ -1521,13 +1521,23 @@ fun MonthlyStreakCalendarDialog(
                                         border = if (isToday) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
-                                            if (icon.isNotEmpty() && status != StreakStatus.FUTURE && !isFuture) {
-                                                Text(text = icon, fontSize = 16.sp, modifier = Modifier.offset(y = (-1).dp))
-                                            } else {
-                                                Text(
+                                            when {
+                                                status == StreakStatus.COMPLETED -> Icon(
+                                                    imageVector = Icons.Rounded.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                status == StreakStatus.FROZEN -> Icon(
+                                                    imageVector = Icons.Rounded.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF60A5FA),
+                                                    modifier = Modifier.size(22.dp)
+                                                )
+                                                else -> Text(
                                                     text = dayNumber.toString(),
                                                     style = MaterialTheme.typography.labelMedium,
-                                                    fontWeight = FontWeight.Bold,
+                                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                                     color = fg
                                                 )
                                             }
@@ -1554,7 +1564,7 @@ fun MonthlyStreakCalendarDialog(
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Mejor \nRacha", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                        Text("${currentStreak}r", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("${highestStreak}r", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Congeladores\nDisponibles", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -1728,8 +1738,8 @@ fun SectionHeaderCard(
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+                color = Color(0xFFFACC15),
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.25f),
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -1772,7 +1782,7 @@ fun PathNodeItem(
     }
 
     val bgColor = when {
-        isCompleted -> Color(0xFF22C55E)  // Verde éxito
+        isCompleted -> MaterialTheme.colorScheme.surfaceVariant
         isUnlocked -> Color(0xFFFACC15)   // Amarillo Bali
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
@@ -1823,7 +1833,7 @@ fun PathNodeItem(
                             painter = painterResource(id = resId),
                             contentDescription = node.title,
                             modifier = Modifier.size(48.dp),
-                            alpha = if (isLocked) 0.4f else 1.0f,
+                            alpha = if (isLocked) 0.4f else if (isCompleted) 0.45f else 1.0f,
                             contentScale = ContentScale.Fit
                         )
                     } else {
@@ -1833,24 +1843,28 @@ fun PathNodeItem(
                             contentDescription = null,
                             modifier = Modifier.size(32.dp),
                             tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant
-                            else Color.White
+                                   else if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                   else Color.White
+                        )
+                    }
+
+                    // Check de completado superpuesto
+                    if (isCompleted) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 4.dp, y = 4.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
             }
         }
 
-        // Score label for completed nodes
-        if (isCompleted && node.scorePercentage != null) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "${node.scorePercentage}%",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF22C55E),
-                textAlign = TextAlign.Center
-            )
-        }
+
     }
 }
 
