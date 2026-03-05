@@ -1,4 +1,4 @@
-package com.jesuskrastev.bali.data.repository
+﻿package com.jesuskrastev.bali.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
@@ -10,6 +10,7 @@ import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -18,113 +19,118 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val firestoreUserDao: FirestoreUserDao,
     private val authRepository: AuthRepository
-) {
-    private val auth = FirebaseAuth.getInstance()
-    private val userId: String get() = auth.currentUser?.uid ?: ""
+) : UserRepository {
 
-    fun get(): Flow<User?> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override fun get(): Flow<User?> = authRepository.currentUserFlow.flatMapLatest { userId ->
+        if (userId != null) {
             firestoreUserDao.getUser(userId).map { it?.toDomain() }
         } else {
             userDao.get().map { it?.toDomain() }
         }
     }
 
-    suspend fun getSchemaVersion(): Int = withContext(Dispatchers.IO) {
-        firestoreUserDao.getSchemaVersion(userId)
+    override suspend fun getSchemaVersion(): Int = withContext(Dispatchers.IO) {
+        authRepository.currentUser()?.let { userId ->
+            firestoreUserDao.getSchemaVersion(userId)
+        } ?: 0 // Return a default or throw an error if not logged in
     }
 
-    suspend fun insert(user: User) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateUser(userId, user)
+    /**
+     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
+     * Both actions run on [Dispatchers.IO].
+     */
+    private suspend inline fun <T> withAuthRouting(
+        actionRemote: suspend (String) -> T,
+        actionLocal: suspend () -> T
+    ): T {
+        val userId = authRepository.currentUser()
+        return if (userId != null) {
+            actionRemote(userId)
         } else {
-            userDao.insert(user.toEntity())
+            actionLocal()
         }
     }
 
-    suspend fun resetStreak() = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("currentStreak" to 0))
-        } else {
-            userDao.resetStreak()
-        }
-    }
+    /**
+     * Writes [fields] to Firestore if logged in, or runs [localAction] otherwise.
+     */
+    private suspend fun updateField(
+        fields: Map<String, Any>,
+        localAction: suspend () -> Unit
+    ) = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.updateFields(userId, fields) },
+        actionLocal = localAction
+    )
 
-    suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf(
-                "currentStreak" to streak, 
-                "lastPracticeTimestamp" to timestamp,
-                "practiceDays" to practiceDays
-            ))
-        } else {
+    override suspend fun insert(user: User) = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.updateUser(userId, user) },
+        actionLocal = { userDao.insert(user.toEntity()) }
+    )
+
+    override suspend fun resetStreak() = updateField(
+        fields = mapOf("currentStreak" to 0),
+        localAction = { userDao.resetStreak() }
+    )
+
+    override suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) = updateField(
+        fields = mapOf(
+            "currentStreak" to streak, 
+            "lastPracticeTimestamp" to timestamp,
+            "practiceDays" to practiceDays
+        ),
+        localAction = {
             val practiceDaysStr = Converters().fromLongList(practiceDays)
             userDao.updateStreak(streak, timestamp, practiceDaysStr)
         }
-    }
+    )
 
-    suspend fun updateXp(xp: Int, level: Int) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("xp" to xp, "level" to level))
-        } else {
-            userDao.updateXp(xp, level)
-        }
-    }
+    override suspend fun updateXp(xp: Int, level: Int) = updateField(
+        fields = mapOf("xp" to xp, "level" to level),
+        localAction = { userDao.updateXp(xp, level) }
+    )
 
-    suspend fun updateEnergy(energy: Int) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("energy" to energy))
-        } else {
-            userDao.updateEnergy(energy)
-        }
-    }
+    override suspend fun updateEnergy(energy: Int) = updateField(
+        fields = mapOf("energy" to energy),
+        localAction = { userDao.updateEnergy(energy) }
+    )
 
-    suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("energy" to energy, "lastEnergyUpdateTimestamp" to timestamp))
-        } else {
-            userDao.updateEnergyAndTimestamp(energy, timestamp)
-        }
-    }
+    override suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long) = updateField(
+        fields = mapOf("energy" to energy, "lastEnergyUpdateTimestamp" to timestamp),
+        localAction = { userDao.updateEnergyAndTimestamp(energy, timestamp) }
+    )
 
-    suspend fun updateCoins(coins: Int) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("coins" to coins))
-        } else {
-            userDao.updateCoins(coins)
-        }
-    }
+    override suspend fun updateCoins(coins: Int) = updateField(
+        fields = mapOf("coins" to coins),
+        localAction = { userDao.updateCoins(coins) }
+    )
 
-    suspend fun updateStreakFreezes(count: Int) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("streakFreezes" to count))
-        } else {
-            userDao.updateStreakFreezes(count)
-        }
-    }
+    override suspend fun updateStreakFreezes(count: Int) = updateField(
+        fields = mapOf("streakFreezes" to count),
+        localAction = { userDao.updateStreakFreezes(count) }
+    )
 
-    suspend fun updateHighestStreak(highestStreak: Int) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.updateFields(userId, mapOf("highestStreak" to highestStreak))
-        } else {
-            userDao.updateHighestStreak(highestStreak)
-        }
-    }
+    override suspend fun updateHighestStreak(highestStreak: Int) = updateField(
+        fields = mapOf("highestStreak" to highestStreak),
+        localAction = { userDao.updateHighestStreak(highestStreak) }
+    )
 
-    fun exists(userId: String? = null): Flow<Boolean> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
-            firestoreUserDao.exists(userId ?: "")
+    override fun exists(userId: String?): Flow<Boolean> = authRepository.currentUserFlow.flatMapLatest { currentUserId ->
+        val targetId = userId ?: currentUserId
+        if (targetId != null) {
+            firestoreUserDao.exists(targetId)
         } else {
             userDao.exists()
         }
     }
 
-    suspend fun uploadAll(
+    override suspend fun uploadAll(
         userId: String,
         user: User,
         results: List<TestResult>,
@@ -143,9 +149,9 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    override suspend fun clear() = withContext(Dispatchers.IO) {
         userDao.clear()
     }
 
-    fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
+    override fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
 }

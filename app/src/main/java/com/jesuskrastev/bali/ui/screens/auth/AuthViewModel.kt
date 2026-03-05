@@ -1,17 +1,17 @@
-package com.jesuskrastev.bali.ui.screens.auth
+﻿package com.jesuskrastev.bali.ui.screens.auth
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
-import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
-import com.jesuskrastev.bali.domain.usecase.AppInitializationUseCase
+import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,12 +22,12 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val testResultRepository: TestResultRepositoryImpl,
-    private val answerRepository: AnswerRepositoryImpl,
+    private val userRepository: UserRepository,
+    private val testResultRepository: TestResultRepository,
+    private val answerRepository: AnswerRepository,
     private val authRepository: AuthRepository,
     private val analyticsTracker: FirebaseAnalyticsTracker,
-    private val appInitializationUseCase: AppInitializationUseCase
+    private val executeFirestoreMigrationsUseCase: ExecuteFirestoreMigrationsUseCase
 ) : ViewModel() {
 
     private val _isLoggingIn = MutableStateFlow(false)
@@ -50,7 +50,7 @@ class AuthViewModel @Inject constructor(
             
             // Leemos los datos locales de Room antes del login
             val localUser = userRepository.get().first()
-            val localTestResults = testResultRepository.getAll().first()
+            val localTestResults = testResultRepository.get().first()
             val localAnswers = answerRepository.getAll().first()
             
             val tokenResult = authRepository.getGoogleIdTokenAndEmail(context)
@@ -84,9 +84,9 @@ class AuthViewModel @Inject constructor(
                         analyticsTracker.signUp()
                     } else {
                         analyticsTracker.login()
-                        // One-shot inicialización (Rachas, energía, migraciones) post-login
+                        // One-shot inicializaciÃ³n (Rachas, energÃ­a, migraciones) post-login
                         userId?.let {
-                            appInitializationUseCase(it)
+                            executeFirestoreMigrationsUseCase(it)
                         }
                     }
                     // Navigate back

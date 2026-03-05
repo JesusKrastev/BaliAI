@@ -1,22 +1,23 @@
-package com.jesuskrastev.bali.ui.screens.mistakes
+﻿package com.jesuskrastev.bali.ui.screens.mistakes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
-import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,9 +44,9 @@ data class MistakesUiState(
 
 @HiltViewModel
 class MistakesViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val answerRepository: AnswerRepositoryImpl,
-    private val testResultRepository: TestResultRepositoryImpl,
+    private val userRepository: UserRepository,
+    private val answerRepository: AnswerRepository,
+    private val testResultRepository: TestResultRepository,
     private val gemini: GenerativeModel,
     private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
@@ -98,7 +99,7 @@ class MistakesViewModel @Inject constructor(
             try {
                 val recentMistakes = answerRepository.getRecentMistakes().first()
                 if (recentMistakes.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false, error = "¡Felicidades! No tienes errores pendientes por repasar.") }
+                    _uiState.update { it.copy(isLoading = false, error = "Â¡Felicidades! No tienes errores pendientes por repasar.") }
                     return@launch
                 }
 
@@ -109,48 +110,48 @@ class MistakesViewModel @Inject constructor(
                 val totalTests = testResultRepository.count()
 
                 val prompt = """
-                    Eres un Profesor Experto y Tutor Personal de la DGT (Dirección General de Tráfico) en España. 
+                    Eres un Profesor Experto y Tutor Personal de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a. 
                     Tu alumno ha fallado recientemente estas preguntas en sus tests:
                     $mistakesContext
     
-                    Tu misión es generar una SESIÓN DE REPASO de EXACTAMENTE ${recentMistakes.size} preguntas, enfocada EXCLUSIVAMENTE en corregir estos conceptos.
+                    Tu misiÃ³n es generar una SESIÃ“N DE REPASO de EXACTAMENTE ${recentMistakes.size} preguntas, enfocada EXCLUSIVAMENTE en corregir estos conceptos.
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos).
                     - Total de tests realizados: $totalTests.
                     
                     REGLAS DE LA PREGUNTA (REPASO DE ERRORES):
                     - Genera EXACTAMENTE UNA pregunta por cada concepto fallado en la lista proporcionada.
-                    - REFORMULA la pregunta y las opciones para que NO sean idénticas a las originales, pero evalúen la misma norma o situación. Obliga al alumno a pensar, no a memorizar la respuesta correcta anterior.
-                    - Estilo DGT oficial: Lenguaje técnico, preciso.
+                    - REFORMULA la pregunta y las opciones para que NO sean idÃ©nticas a las originales, pero evalÃºen la misma norma o situaciÃ³n. Obliga al alumno a pensar, no a memorizar la respuesta correcta anterior.
+                    - Estilo DGT oficial: Lenguaje tÃ©cnico, preciso.
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta (nada de "A", "B", "C"). Solo una es correcta.
-                    - EXPLICACIÓN: Máximo 25 palabras. Al ser un test de repaso, la explicación debe ser muy didáctica, aclarando la "trampa" o el concepto que el alumno suele confundir.
+                    - EXPLICACIÃ“N: MÃ¡ximo 25 palabras. Al ser un test de repaso, la explicaciÃ³n debe ser muy didÃ¡ctica, aclarando la "trampa" o el concepto que el alumno suele confundir.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡ESTRICTAMENTE OBLIGATORIO!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio. ESTÁ PROHIBIDO repetir la misma posición correcta más de 2 veces seguidas.
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente (ej. baliza V-16, límites de 30 km/h en vías urbanas de un carril, nueva normativa de patinetes VMP).
-                    - TRAMPAS TÍPICAS DGT: Haz que las respuestas incorrectas atraigan el error típico que el alumno cometió antes.
+                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
+                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas.
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de patinetes VMP).
+                    - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas atraigan el error tÃ­pico que el alumno cometiÃ³ antes.
                     
-                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
-                    - Usa imágenes SOLO si la pregunta reformulada describe una situación visual o una señal física.
+                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
+                    - Usa imÃ¡genes SOLO si la pregunta reformulada describe una situaciÃ³n visual o una seÃ±al fÃ­sica.
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - Códigos válidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teórica (ej: tasa de alcohol, documentación), usa null.
+                    - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
+                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, documentaciÃ³n), usa null.
     
                     FORMATO DE RESPUESTA (JSON PURO):
                     {
                       "questions": [
                         {
-                          "text": "¿Pregunta reformulada con estilo DGT?",
-                          "options": ["Texto detallado de la opción 1", "Texto detallado de la opción 2", "Texto detallado de la opción 3"],
+                          "text": "Â¿Pregunta reformulada con estilo DGT?",
+                          "options": ["Texto detallado de la opciÃ³n 1", "Texto detallado de la opciÃ³n 2", "Texto detallado de la opciÃ³n 3"],
                           "correctAnswerIndex": 0,
-                          "explanation": "Explicación didáctica sobre el error frecuente...",
+                          "explanation": "ExplicaciÃ³n didÃ¡ctica sobre el error frecuente...",
                           "imageUrl": "URL_O_NULL"
                         }
                       ]
                     }
-                    Responde SOLO el JSON válido y cierra correctamente todas las llaves y corchetes.
+                    Responde SOLO el JSON vÃ¡lido y cierra correctamente todas las llaves y corchetes.
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
@@ -163,21 +164,11 @@ class MistakesViewModel @Inject constructor(
 
                 val jsonStartIndex = rawText.indexOf('{')
                 val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON inválido devuelto por la IA")
+                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON invÃ¡lido devuelto por la IA")
 
                 val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
-                val root = jsonContent.parseToJsonElement(jsonString).jsonObject
-
-                val questionUiStates = root["questions"]?.jsonArray?.map { element ->
-                    val obj = element.jsonObject
-                    QuestionUiState(
-                        text = obj["text"]?.jsonPrimitive?.content ?: "",
-                        options = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList(),
-                        correctAnswerIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toInt() ?: 0,
-                        explanation = obj["explanation"]?.jsonPrimitive?.content ?: "",
-                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf { it != "null" && it != null && it.startsWith("http") }
-                    )
-                } ?: emptyList()
+                
+                val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
                 analyticsTracker.testStarted("MISTAKES")
@@ -244,7 +235,7 @@ class MistakesViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase(accuracy)
         analyticsTracker.coinsEarned(coinsGained)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        withContext(Dispatchers.IO) {
             testResultRepository.insert(
                 TestResult(
                     category = "Repaso de Fallos",

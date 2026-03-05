@@ -1,9 +1,9 @@
-package com.jesuskrastev.bali.ui.screens.store
+﻿package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -32,7 +32,7 @@ data class ShopUiState(
 
 @HiltViewModel
 class ShopViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
+    private val userRepository: UserRepository,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val analyticsTracker: FirebaseAnalyticsTracker
 ) : ViewModel() {

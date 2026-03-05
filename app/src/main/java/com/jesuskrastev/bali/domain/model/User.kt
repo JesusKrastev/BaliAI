@@ -1,5 +1,21 @@
 package com.jesuskrastev.bali.domain.model
 
+/**
+ * Represents a user in the Bali App.
+ *
+ * This domain model encapsulates all user-related data, including their profile information,
+ * learning preferences, progress metrics (XP, level, coins, energy), and streak tracking.
+ *
+ * @property id The unique identifier of the user (typically from Firebase Auth).
+ * @property name The user's display name.
+ * @property licenseType The type of driving license the user is studying for.
+ * @property currentStreak The user's current consecutive days of study.
+ * @property xp The user's accumulated experience points.
+ * @property level The user's current level based on their XP.
+ * @property energy The user's current energy count (used to taking tests).
+ * @property coins The user's current coin balance (used for purchases or taking exams).
+ * @property streakFreezes The number of streak freezes the user currently owns.
+ */
 data class User(
     val id: String = "",
     val name: String? = null,

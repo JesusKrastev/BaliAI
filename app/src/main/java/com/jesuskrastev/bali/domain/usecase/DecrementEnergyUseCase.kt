@@ -1,11 +1,11 @@
-package com.jesuskrastev.bali.domain.usecase
+﻿package com.jesuskrastev.bali.domain.usecase
 
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 class DecrementEnergyUseCase @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
+    private val userRepository: UserRepository,
 ) {
     suspend operator fun invoke(): Int {
         val user = userRepository.get().first() ?: return -1

@@ -1,14 +1,20 @@
-package com.jesuskrastev.bali.domain.usecase
+﻿package com.jesuskrastev.bali.domain.usecase
 
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.path.DgtLearningPathTemplate
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
+/**
+ * Use case responsible for generating the initial learning path for a new user.
+ * 
+ * It uses the predefined layout from [DgtLearningPathTemplate] and saves
+ * the resulting nodes to the user's data source via [PathRepository].
+ */
 class GenerateInitialPathUseCase @Inject constructor(
     private val pathRepository: PathRepository,
-    private val userRepository: UserRepositoryImpl
+    private val userRepository: UserRepository
 ) {
     suspend operator fun invoke() {
         val user = userRepository.get().first() ?: return

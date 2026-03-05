@@ -1,12 +1,12 @@
-package com.jesuskrastev.bali.ui.screens.exam
+﻿package com.jesuskrastev.bali.ui.screens.exam
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
-import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -14,10 +14,10 @@ import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -49,9 +50,9 @@ data class ExamUiState(
 
 @HiltViewModel
 class ExamViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val testResultRepository: TestResultRepositoryImpl,
-    private val answerRepository: AnswerRepositoryImpl,
+    private val userRepository: UserRepository,
+    private val testResultRepository: TestResultRepository,
+    private val answerRepository: AnswerRepository,
     private val gemini: GenerativeModel,
     private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
@@ -124,7 +125,7 @@ class ExamViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics ?: "Ninguno específico (distribución estándar)"
+                val difficultTopics = user?.difficultTopics ?: "Ninguno especÃ­fico (distribuciÃ³n estÃ¡ndar)"
                 val studentLevel = user?.level
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val daysToExam = user?.examDateMillis?.let {
@@ -133,56 +134,56 @@ class ExamViewModel @Inject constructor(
                 }
                 val totalTests = testResultRepository.count()
                 val examUrgency = if (daysToExam != null && daysToExam in 1..15) {
-                    "¡El examen es en $daysToExam días! Sé estricto y pon preguntas de alta probabilidad de fallo."
+                    "Â¡El examen es en $daysToExam dÃ­as! SÃ© estricto y pon preguntas de alta probabilidad de fallo."
                 } else {
-                    "Modo simulacro estándar."
+                    "Modo simulacro estÃ¡ndar."
                 }
 
                 val prompt = """
-                    Eres el Examinador Jefe de la DGT (Dirección General de Tráfico) en España. Tu misión es generar un EXAMEN OFICIAL COMPLETO y riguroso de EXACTAMENTE 30 preguntas.
+                    Eres el Examinador Jefe de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a. Tu misiÃ³n es generar un EXAMEN OFICIAL COMPLETO y riguroso de EXACTAMENTE 30 preguntas.
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos y sutiles).
-                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones más didácticas paso a paso. Si son muchos, asume que tiene experiencia y usa un tono más exigente).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos y sutiles).
+                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones mÃ¡s didÃ¡cticas paso a paso. Si son muchos, asume que tiene experiencia y usa un tono mÃ¡s exigente).
                     - Experiencia previa: $experience.
-                    - Temas que más le cuestan: $difficultTopics. (IMPORTANTE: Asegúrate de que varias preguntas del examen ataquen estos puntos débiles específicos para que practique).
+                    - Temas que mÃ¡s le cuestan: $difficultTopics. (IMPORTANTE: AsegÃºrate de que varias preguntas del examen ataquen estos puntos dÃ©biles especÃ­ficos para que practique).
                     - Urgencia: $examUrgency
                     
-                    REGLAS DE DISTRIBUCIÓN (ESTRICTAS PARA 30 PREGUNTAS):
+                    REGLAS DE DISTRIBUCIÃ“N (ESTRICTAS PARA 30 PREGUNTAS):
                     - Debe ser un simulacro exacto del examen real para el permiso $license.
-                    - Variedad obligatoria. Distribuye las preguntas así: Señales (aprox. 6), Normativa y Velocidad (aprox. 6), Seguridad Vial y Accidentes (aprox. 5), Maniobras e Intersecciones (aprox. 5), El Conductor, fatiga y Alcohol/Drogas (aprox. 5), Mecánica básica y Mantenimiento (aprox. 3).
-                    - Si los "Temas que más le cuestan" encajan en alguna de estas categorías, aumenta la dificultad de esas preguntas específicas.
+                    - Variedad obligatoria. Distribuye las preguntas asÃ­: SeÃ±ales (aprox. 6), Normativa y Velocidad (aprox. 6), Seguridad Vial y Accidentes (aprox. 5), Maniobras e Intersecciones (aprox. 5), El Conductor, fatiga y Alcohol/Drogas (aprox. 5), MecÃ¡nica bÃ¡sica y Mantenimiento (aprox. 3).
+                    - Si los "Temas que mÃ¡s le cuestan" encajan en alguna de estas categorÃ­as, aumenta la dificultad de esas preguntas especÃ­ficas.
                     
                     REGLAS DE LA PREGUNTA Y OPCIONES:
-                    - Estilo DGT oficial: Lenguaje técnico, preciso y con situaciones hipotéticas ("Circula por una vía...", "Como norma general...").
+                    - Estilo DGT oficial: Lenguaje tÃ©cnico, preciso y con situaciones hipotÃ©ticas ("Circula por una vÃ­a...", "Como norma general...").
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta (no pongas solo "A", "B" o "C"). Solo una es correcta.
-                    - Las respuestas incorrectas (distractores) deben ser muy creíbles y usar trampas típicas de la DGT (ej. usar absolutos como "siempre" o "nunca" para confundir).
-                    - EXPLICACIÓN: Máximo 20 palabras. Debe ser clara, pedagógica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difíciles.
+                    - Las respuestas incorrectas (distractores) deben ser muy creÃ­bles y usar trampas tÃ­picas de la DGT (ej. usar absolutos como "siempre" o "nunca" para confundir).
+                    - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara, pedagÃ³gica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difÃ­ciles.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡MUY IMPORTANTE!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 30 preguntas. ESTÁ PROHIBIDO repetir la misma posición correcta más de 2 veces seguidas.
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente (ej. baliza V-16 en lugar de triángulos en autopista, límites de 30 km/h en vías urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
+                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡MUY IMPORTANTE!):
+                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 30 preguntas. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas.
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16 en lugar de triÃ¡ngulos en autopista, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
                     
-                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
-                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física. (Máximo 10-12 imágenes en todo el examen para no saturar).
+                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
+                    - Usa imÃ¡genes SOLO si la pregunta describe una situaciÃ³n visual o una seÃ±al fÃ­sica. (MÃ¡ximo 10-12 imÃ¡genes en todo el examen para no saturar).
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - Códigos válidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teórica (ej: tasa de alcohol, mecánica), usa null.
+                    - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
+                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, mecÃ¡nica), usa null.
                     
                     FORMATO DE RESPUESTA (JSON PURO):
                     {
                       "questions": [
                         {
-                          "text": "¿Pregunta real con estilo DGT?",
-                          "options": ["Texto detallado de la opción 1", "Texto detallado de la opción 2", "Texto detallado de la opción 3"],
+                          "text": "Â¿Pregunta real con estilo DGT?",
+                          "options": ["Texto detallado de la opciÃ³n 1", "Texto detallado de la opciÃ³n 2", "Texto detallado de la opciÃ³n 3"],
                           "correctAnswerIndex": 0,
-                          "explanation": "Breve justificación de la norma...",
+                          "explanation": "Breve justificaciÃ³n de la norma...",
                           "imageUrl": "URL_O_NULL"
                         }
                       ]
                     }
-                    Responde SOLO con el JSON válido. Asegúrate de que el array "questions" tenga EXACTAMENTE 30 elementos y cierra correctamente todas las llaves y corchetes.
+                    Responde SOLO con el JSON vÃ¡lido. AsegÃºrate de que el array "questions" tenga EXACTAMENTE 30 elementos y cierra correctamente todas las llaves y corchetes.
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
@@ -196,24 +197,8 @@ class ExamViewModel @Inject constructor(
                 val jsonStartIndex = rawText.indexOf('{')
                 val jsonEndIndex = rawText.lastIndexOf('}')
                 val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
-                val root = jsonContent.parseToJsonElement(jsonString).jsonObject
-
-                val questionUiStates = root["questions"]?.jsonArray?.map { element ->
-                    val obj = element.jsonObject
-                    QuestionUiState(
-                        text = obj["text"]?.jsonPrimitive?.content ?: "",
-                        options = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content }
-                            ?: emptyList(),
-                        correctAnswerIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toInt()
-                            ?: 0,
-                        explanation = obj["explanation"]?.jsonPrimitive?.content ?: "",
-                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf {
-                            it != "null" && it != null && it.startsWith(
-                                "http"
-                            )
-                        }
-                    )
-                } ?: emptyList()
+                
+                val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
                 analyticsTracker.testStarted("EXAM")
@@ -304,7 +289,7 @@ class ExamViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase(accuracy)
         analyticsTracker.coinsEarned(coinsGained)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
                 TestResult(
                     category = "Examen Oficial",

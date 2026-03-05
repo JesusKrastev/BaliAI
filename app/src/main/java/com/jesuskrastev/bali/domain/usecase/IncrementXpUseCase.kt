@@ -1,14 +1,21 @@
-package com.jesuskrastev.bali.domain.usecase
+﻿package com.jesuskrastev.bali.domain.usecase
 
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.XpEarned
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
+import com.jesuskrastev.bali.domain.util.LevelCalculator
 
+/**
+ * Use case responsible for calculating and applying XP rewards after a user completes a test.
+ *
+ * It factors in the test mode, accuracy, speed, and current streak to determine
+ * base XP and various bonuses. It also checks if the accumulated XP results in a level-up,
+ * updating the user's progress in the repository.
+ */
 class IncrementXpUseCase @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val calculateLevelUseCase: CalculateLevelUseCase
+    private val userRepository: UserRepository
 ) {
 
     fun calculateBaseXp(mode: TestMode, accuracy: Int): Int {
@@ -87,7 +94,7 @@ class IncrementXpUseCase @Inject constructor(
         val totalXpGained = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)
 
         val newTotalXp = user.xp + totalXpGained
-        val newLevel = calculateLevelUseCase.calculateLevel(newTotalXp)
+        val newLevel = LevelCalculator.calculateLevel(newTotalXp)
         val hasLeveledUp = newLevel > user.level
 
         if (totalXpGained > 0) {

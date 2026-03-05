@@ -1,12 +1,12 @@
-package com.jesuskrastev.bali.domain.usecase
+﻿package com.jesuskrastev.bali.domain.usecase
 
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import kotlin.random.Random
 
 class IncrementCoinsUseCase @Inject constructor(
-    private val userRepository: UserRepositoryImpl
+    private val userRepository: UserRepository
 ) {
     suspend operator fun invoke(accuracy: Int = 50): Int {
         val user = userRepository.get().first() ?: return 0

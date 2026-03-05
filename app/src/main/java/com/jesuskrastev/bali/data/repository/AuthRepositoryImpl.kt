@@ -39,6 +39,12 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         return auth.currentUser?.uid
     }
 
+    override val currentUserFlow: Flow<String?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser?.uid) }
+        auth.addAuthStateListener(listener)
+        awaitClose { auth.removeAuthStateListener(listener) }
+    }
+
     override suspend fun currentUserPhotoUrl(): String? {
         return auth.currentUser?.photoUrl?.toString()
     }

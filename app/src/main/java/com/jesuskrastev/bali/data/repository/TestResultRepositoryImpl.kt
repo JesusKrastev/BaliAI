@@ -1,12 +1,12 @@
 package com.jesuskrastev.bali.data.repository
 
-import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.data.local.room.dao.TestResultDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,17 +16,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class TestResultRepositoryImpl @Inject constructor(
     private val testResultDao: TestResultDao,
     private val firestoreUserDao: FirestoreUserDao,
     private val authRepository: AuthRepository
-) {
-    private val auth = FirebaseAuth.getInstance()
-    private val userId: String get() = auth.currentUser?.uid ?: ""
+) : TestResultRepository {
 
-    fun getRecent(): Flow<List<TestResult>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override fun getRecent(): Flow<List<TestResult>> = authRepository.currentUserFlow.flatMapLatest { userId ->
+        if (userId != null) {
             firestoreUserDao.getTestResults(userId).map { results -> 
                 results.take(10).map { it.toDomain() } 
             }
@@ -35,8 +35,8 @@ class TestResultRepositoryImpl @Inject constructor(
         }
     }
 
-    fun get(): Flow<List<TestResult>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override fun get(): Flow<List<TestResult>> = authRepository.currentUserFlow.flatMapLatest { userId ->
+        if (userId != null) {
             firestoreUserDao.getTestResults(userId).map { results -> 
                 results.map { it.toDomain() } 
             }
@@ -45,25 +45,42 @@ class TestResultRepositoryImpl @Inject constructor(
         }
     }
 
-    fun getAll(): Flow<List<TestResult>> = get()
 
-    suspend fun insert(result: TestResult): String = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.insertTestResult(userId, result.toFirestore())
+    /**
+     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
+     * Both actions run on [Dispatchers.IO].
+     */
+    private suspend inline fun <T> withAuthRouting(
+        crossinline actionRemote: suspend (String) -> T,
+        crossinline actionLocal: suspend () -> T
+    ): T = withContext(Dispatchers.IO) {
+        val userId = authRepository.currentUser()
+        if (userId != null) {
+            actionRemote(userId)
         } else {
+            actionLocal()
+        }
+    }
+
+    override suspend fun insert(result: TestResult): String = withAuthRouting(
+        actionRemote = { userId ->
+            firestoreUserDao.insertTestResult(userId, result.toFirestore())
+            result.id
+        },
+        actionLocal = {
             val resultEntity = result.toEntity()
             testResultDao.insert(resultEntity)
             resultEntity.id
         }
-    }
+    )
 
-    fun count(): Flow<Int> = get().map { it.size }
+    override fun count(): Flow<Int> = get().map { it.size }
 
-    fun getAverageScore(): Flow<Double?> = get().map { results ->
+    override fun getAverageScore(): Flow<Double?> = get().map { results ->
         if (results.isEmpty()) null else results.map { it.score }.average()
     }
 
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    override suspend fun clear() = withContext(Dispatchers.IO) {
         testResultDao.clear()
     }
 }

@@ -7,6 +7,7 @@ import com.jesuskrastev.bali.data.mapper.toEntity
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -22,20 +23,31 @@ class AnswerRepositoryImpl @Inject constructor(
     private val answerDao: AnswerDao,
     private val firestoreUserDao: FirestoreUserDao,
     private val authRepository: AuthRepository
-) {
-    private val auth = FirebaseAuth.getInstance()
-    private val userId: String get() = auth.currentUser?.uid ?: ""
+) : AnswerRepository {
 
-    suspend fun insert(answer: Answer) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.insertAnswer(userId, answer.toFirestore())
+    /**
+     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
+     * Both actions run on [Dispatchers.IO].
+     */
+    private suspend inline fun <T> withAuthRouting(
+        crossinline actionRemote: suspend (String) -> T,
+        crossinline actionLocal: suspend () -> T
+    ): T = withContext(Dispatchers.IO) {
+        val userId = authRepository.currentUser()
+        if (userId != null) {
+            actionRemote(userId)
         } else {
-            answerDao.insert(answer.toEntity())
+            actionLocal()
         }
     }
 
-    fun getRecentMistakes(): Flow<List<Answer>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override suspend fun insert(answer: Answer) = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.insertAnswer(userId, answer.toFirestore()) },
+        actionLocal = { answerDao.insert(answer.toEntity()) }
+    )
+
+    override fun getRecentMistakes(): Flow<List<Answer>> = authRepository.currentUserFlow.flatMapLatest { userId ->
+        if (userId != null) {
             firestoreUserDao.getRecentMistakes(userId).map { list ->
                 list.map { it.toDomain() }
             }
@@ -46,8 +58,8 @@ class AnswerRepositoryImpl @Inject constructor(
         }
     }
 
-    fun getAll(): Flow<List<Answer>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override fun getAll(): Flow<List<Answer>> = authRepository.currentUserFlow.flatMapLatest { userId ->
+        if (userId != null) {
             firestoreUserDao.getAnswers(userId).map { list ->
                 list.map { it.toDomain() }
             }
@@ -58,15 +70,12 @@ class AnswerRepositoryImpl @Inject constructor(
         }
     }
 
-    suspend fun markAsCorrected(questionText: String) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
-            firestoreUserDao.markAnswerAsCorrected(userId, questionText)
-        } else {
-            answerDao.markAsCorrected(questionText)
-        }
-    }
+    override suspend fun markAsCorrected(questionText: String) = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.markAnswerAsCorrected(userId, questionText) },
+        actionLocal = { answerDao.markAsCorrected(questionText) }
+    )
 
-    suspend fun clear() = withContext(Dispatchers.IO) {
+    override suspend fun clear() = withContext(Dispatchers.IO) {
         answerDao.clear()
     }
 }

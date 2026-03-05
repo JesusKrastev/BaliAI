@@ -1,4 +1,4 @@
-package com.jesuskrastev.bali.ui.screens.home
+﻿package com.jesuskrastev.bali.ui.screens.home
 
 import android.content.Context
 import android.util.Log
@@ -6,9 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
-import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
@@ -16,10 +16,11 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
+import com.jesuskrastev.bali.domain.usecase.ResetStreakUseCase
+import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.LessonNode
-import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
@@ -30,9 +31,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val testResultRepository: TestResultRepositoryImpl,
-    private val answerRepository: AnswerRepositoryImpl,
+    private val userRepository: UserRepository,
+    private val testResultRepository: TestResultRepository,
+    private val answerRepository: AnswerRepository,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
     private val pathRepository: PathRepository,
@@ -40,10 +41,11 @@ class HomeViewModel @Inject constructor(
     private val generateInitialPathUseCase: GenerateInitialPathUseCase,
     private val analyticsTracker: FirebaseAnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
+    private val resetStreakUseCase: ResetStreakUseCase,
+    private val restoreEnergyUseCase: RestoreEnergyUseCase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val auth = FirebaseAuth.getInstance()
     private val _isPathLoading = MutableStateFlow(false)
     private val _pathError = MutableStateFlow<String?>(null)
 
@@ -51,15 +53,22 @@ class HomeViewModel @Inject constructor(
     private val _showNoCoinsDialog = MutableStateFlow(false)
     private val _dailyTip = MutableStateFlow("")
 
+    private val _pathNodes: StateFlow<List<LessonNode>?> = authRepository.currentUserFlow
+        .flatMapLatest { userId -> 
+             pathRepository.getPathNodes(userId ?: "") 
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
+        refreshUserState()
     }
 
     private fun observeAndAutoGeneratePath() {
         viewModelScope.launch {
-            authRepository.isLoggedIn
-                .flatMapLatest { pathRepository.getPathNodes(auth.currentUser?.uid ?: "") }
+            _pathNodes
+                .filterNotNull()
                 .distinctUntilChanged { old, new -> old.isNotEmpty() == new.isNotEmpty() }
                 .collect { nodes ->
                     if (nodes.isEmpty() && !_isPathLoading.value) {
@@ -91,7 +100,27 @@ class HomeViewModel @Inject constructor(
                 _dailyTip.value = tips.random()
             }
         } catch (e: Exception) {
-            _dailyTip.value = "Conduce con precaución y respeta las señales."
+            _dailyTip.value = "Conduce con precauciÃ³n y respeta las seÃ±ales."
+        }
+    }
+
+    private fun refreshUserState() {
+        viewModelScope.launch {
+            // Espera a que haya un estado de login definido antes de ejecutar
+            authRepository.isLoggedIn.first()
+
+            try {
+                val freezersUsed = resetStreakUseCase()
+                if (freezersUsed > 0) analyticsTracker.streakFreezerUsed(freezersUsed)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
+            try {
+                restoreEnergyUseCase()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -104,22 +133,27 @@ class HomeViewModel @Inject constructor(
         _showNoCoinsDialog,
         _dailyTip,
         authRepository.isLoggedIn,
-        authRepository.isLoggedIn.flatMapLatest { pathRepository.getPathNodes(auth.currentUser?.uid ?: "") },
+        _pathNodes,
         _isPathLoading,
         _pathError
     ) { flows ->
-        val user = flows[0] as? User
+        val user = flows[0] as User?
         val totalTests = flows[1] as Int
         val mistakes = flows[2] as List<*>
-        val avgScore = flows[3] as? Double ?: 0.0
+        val avgScore = flows[3] as Double? ?: 0.0
         val showEnergyDialog = flows[4] as Boolean
         val showNoCoinsDialog = flows[5] as Boolean
         val dailyTip = flows[6] as String
         val isLoggedIn = flows[7] as Boolean
-        @Suppress("UNCHECKED_CAST")
-        val pathNodes = flows[8] as List<LessonNode>
+        val pathNodes = flows[8] as List<*>?
         val isPathLoading = flows[9] as Boolean
-        val pathError = flows[10] as? String
+        val pathError = flows[10] as String?
+
+        @Suppress("UNCHECKED_CAST")
+        val typedMistakes = mistakes as List<Answer>
+        
+        @Suppress("UNCHECKED_CAST")
+        val typedPathNodes = (pathNodes ?: emptyList<LessonNode>()) as List<LessonNode>
 
         val profilePictureUrl = authRepository.currentUserPhotoUrl()
         val userEmail = authRepository.currentUserEmail()
@@ -143,7 +177,7 @@ class HomeViewModel @Inject constructor(
                 xpLevel = user.level,
                 energyCount = user.energy,
                 lastEnergyUpdateTimestamp = user.lastEnergyUpdateTimestamp,
-                mistakesCount = mistakes.size,
+                mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
                 highestStreak = user.highestStreak,
@@ -153,7 +187,7 @@ class HomeViewModel @Inject constructor(
                 isLoggedIn = isLoggedIn,
                 weeklyStreak = generateWeeklyStreak(user.currentStreak, user.streakFreezes, user.practiceDays),
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
-                pathNodes = pathNodes,
+                pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
                 pathError = pathError
             )

@@ -1,4 +1,4 @@
-package com.jesuskrastev.bali
+﻿package com.jesuskrastev.bali
 
 import android.app.Activity
 import android.os.Bundle
@@ -28,21 +28,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
-import com.jesuskrastev.bali.domain.usecase.AppInitializationUseCase
+import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
-import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
-import com.jesuskrastev.bali.domain.usecase.ResetStreakUseCase
 import com.jesuskrastev.bali.ui.navigation.AppNavigation
 import com.jesuskrastev.bali.ui.navigation.GreetingsRoute
 import com.jesuskrastev.bali.ui.navigation.HomeRoute
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import dagger.hilt.android.AndroidEntryPoint
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.GlobalScope
+import com.jesuskrastev.bali.ui.screens.main.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -51,84 +48,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-@HiltViewModel
-class MainViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val authRepository: AuthRepository,
-    private val appInitializationUseCase: AppInitializationUseCase,
-    private val inAppUpdateManager: InAppUpdateManager
-) : ViewModel() {
-
-    val isOnboardingCompleted: StateFlow<Boolean?> = 
-        combine(userRepository.hasCompletedOnboarding(), authRepository.isLoggedIn) { hasCompletedOnboarding, loggedIn ->
-            hasCompletedOnboarding || loggedIn
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
-
-    val updateState: StateFlow<UpdateState> = inAppUpdateManager.updateState
-
-    private val _isMigrating = kotlinx.coroutines.flow.MutableStateFlow(true)
-    val isMigrating: StateFlow<Boolean> = _isMigrating.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
-
-    private val _migrationError = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
-    val migrationError: StateFlow<String?> = _migrationError.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
-
-    init {
-        viewModelScope.launch {
-            val currentUserUid = authRepository.currentUser()
-            if (currentUserUid != null) {
-                _migrationError.value = null
-                _isMigrating.value = true
-                try {
-                    appInitializationUseCase(currentUserUid)
-                } catch (e: Exception) {
-                    _migrationError.value = e.message ?: "Error desconocido durante la inicialización de la base de datos."
-                    e.printStackTrace()
-                } finally {
-                    _isMigrating.value = false
-                }
-            } else {
-                // Not logged in: nothing to migrate or initialize, allow visual entry.
-                _isMigrating.value = false
-                _migrationError.value = null
-            }
-        }
-        inAppUpdateManager.checkForUpdate()
-    }
-
-    fun startFlexibleUpdate(activity: Activity) {
-        inAppUpdateManager.startFlexibleUpdate(activity)
-    }
-
-    fun startImmediateUpdate(activity: Activity) {
-        inAppUpdateManager.startImmediateUpdate(activity)
-    }
-
-    fun completeUpdate() {
-        inAppUpdateManager.completeUpdate()
-    }
-
-    fun checkForDownloadedUpdate() {
-        inAppUpdateManager.checkForDownloadedUpdate()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        inAppUpdateManager.unregisterListener()
-    }
-}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -169,7 +88,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(updateState) {
                     if (updateState is UpdateState.Downloaded) {
                         val result = snackbarHostState.showSnackbar(
-                            message = "Actualización descargada. Reinicia para aplicar.",
+                            message = "ActualizaciÃ³n descargada. Reinicia para aplicar.",
                             actionLabel = "Reiniciar",
                             duration = SnackbarDuration.Indefinite
                         )
@@ -184,7 +103,7 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     when {
                         migrationError != null -> {
-                            // Pantalla de Error en Base de Datos (Única UI bloqueante ahora)
+                            // Pantalla de Error en Base de Datos (Ãšnica UI bloqueante ahora)
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -198,7 +117,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         isOnboardingCompleted != null && !isMigrating -> {
-                            // Navegación Normal (Aparece cuando el SplashScreen se oculta y no hay error)
+                            // NavegaciÃ³n Normal (Aparece cuando el SplashScreen se oculta y no hay error)
                             val startDestination = if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute
                             AppNavigation(
                                 startDestination = startDestination

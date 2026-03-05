@@ -1,12 +1,12 @@
-package com.jesuskrastev.bali.ui.screens.test
+﻿package com.jesuskrastev.bali.ui.screens.test
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
-import com.jesuskrastev.bali.data.repository.AnswerRepositoryImpl
-import com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
-import com.jesuskrastev.bali.data.repository.UserRepositoryImpl
+import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.TestResultRepository
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
@@ -17,6 +17,7 @@ import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,13 +34,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
 import javax.inject.Inject
 
-data class QuestionUiState(
-    val text: String,
-    val options: List<String>,
-    val correctAnswerIndex: Int,
-    val explanation: String,
-    val imageUrl: String? = null
-)
 
 data class TestUiState(
     val category: String = "",
@@ -68,9 +62,9 @@ data class TestSummary(
 
 @HiltViewModel
 class TestViewModel @Inject constructor(
-    private val userRepository: UserRepositoryImpl,
-    private val testResultRepository: TestResultRepositoryImpl,
-    private val answerRepository: AnswerRepositoryImpl,
+    private val userRepository: UserRepository,
+    private val testResultRepository: TestResultRepository,
+    private val answerRepository: AnswerRepository,
     private val gemini: GenerativeModel,
     private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
@@ -133,7 +127,7 @@ class TestViewModel @Inject constructor(
         val staticQuestions = LessonQuestionBank.getQuestionsForNode(nodeId)
 
         if (staticQuestions.isEmpty()) {
-            // No static questions for this node → fall back to Gemini
+            // No static questions for this node â†’ fall back to Gemini
             generateGeminiTest()
             return
         }
@@ -151,7 +145,7 @@ class TestViewModel @Inject constructor(
         startTime = System.currentTimeMillis()
         _uiState.update {
             it.copy(
-                category = aiNodeTitle ?: "Lección",
+                category = aiNodeTitle ?: "LecciÃ³n",
                 questions = questionUiStates,
                 isLoading = false,
                 error = null
@@ -206,7 +200,7 @@ class TestViewModel @Inject constructor(
                 val totalTests = testResultRepository.count()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
                 val difficultTopics =
-                    user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
+                    user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno especÃ­fico"
                 val studentLevel = user?.level ?: 1
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val historyContext = if (lastTests.isNotEmpty()) {
@@ -222,57 +216,57 @@ class TestViewModel @Inject constructor(
 
                 val topicInstruction = when {
                     aiNodeTitle != null && (aiNodeType == "REVIEW" || aiNodeType == "EXAM") -> """
-                        Tu misión es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÓN" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
+                        Tu misiÃ³n es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÃ“N" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
                         $sectionFailuresContext
-                        INSTRUCCIÓN CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado más.
-                        El 40% restante cubre el resto de la sección para una revisión completa.
+                        INSTRUCCIÃ“N CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado mÃ¡s.
+                        El 40% restante cubre el resto de la secciÃ³n para una revisiÃ³n completa.
                     """.trimIndent()
-                    aiNodeTitle != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
-                    currentTopic != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
-                    else -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
+                    aiNodeTitle != null -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. DescripciÃ³n: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
+                    currentTopic != null -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
+                    else -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categorÃ­a de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que mÃ¡s le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, MecÃ¡nica, DocumentaciÃ³n, Usuarios de la vÃ­a, SeÃ±ales, Marcas viales."
                 }
 
                 val prompt = """
-                    Eres un Profesor Experto de la DGT (Dirección General de Tráfico) en España.
+                    Eres un Profesor Experto de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a.
                     $topicInstruction
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos y sutiles).
-                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones más didácticas paso a paso).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos y sutiles).
+                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones mÃ¡s didÃ¡cticas paso a paso).
                     - Experiencia previa: $experience.
                     
                     REGLAS DE LA PREGUNTA:
-                    - Estilo DGT oficial: Preguntas directas, a veces con situaciones hipotéticas.
+                    - Estilo DGT oficial: Preguntas directas, a veces con situaciones hipotÃ©ticas.
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta. Solo una es correcta.
-                    - Las respuestas incorrectas deben ser creíbles.
-                    - EXPLICACIÓN: Máximo 20 palabras. Debe ser clara y lógica. Intenta darle un toque pedagógico adaptado a su nivel.
+                    - Las respuestas incorrectas deben ser creÃ­bles.
+                    - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara y lÃ³gica. Intenta darle un toque pedagÃ³gico adaptado a su nivel.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡ESTRICTAMENTE OBLIGATORIO!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 10 preguntas. ESTÁ PROHIBIDO repetir la misma posición correcta más de 2 veces seguidas. 
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triángulos ya no son obligatorios en autopista/autovía), límites de velocidad a 30 km/h en vías urbanas de un único carril, nuevas normativas de VMP (patinetes eléctricos) y las señales de tráfico de nueva creación. Cero información obsoleta.
-                    - TRAMPAS TÍPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sólo", o "como norma general" para poner a prueba la atención del alumno.
+                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
+                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 10 preguntas. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas. 
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triÃ¡ngulos ya no son obligatorios en autopista/autovÃ­a), lÃ­mites de velocidad a 30 km/h en vÃ­as urbanas de un Ãºnico carril, nuevas normativas de VMP (patinetes elÃ©ctricos) y las seÃ±ales de trÃ¡fico de nueva creaciÃ³n. Cero informaciÃ³n obsoleta.
+                    - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sÃ³lo", o "como norma general" para poner a prueba la atenciÃ³n del alumno.
                     
-                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
-                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física.
+                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
+                    - Usa imÃ¡genes SOLO si la pregunta describe una situaciÃ³n visual o una seÃ±al fÃ­sica.
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
                     - Codigos ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teórica (ej: tasa de alcohol), usa null.
+                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol), usa null.
                     
                     FORMATO DE RESPUESTA (JSON PURO):
                     {
-                      "selectedCategory": "Nombre exacto de la categoría elegida o $currentTopic o $aiNodeTitle",
+                      "selectedCategory": "Nombre exacto de la categorÃ­a elegida o $currentTopic o $aiNodeTitle",
                       "questions": [
                         {
-                          "text": "¿Pregunta?",
-                          "options": ["Opción 1", "Opción 2", "Opción 3"],
+                          "text": "Â¿Pregunta?",
+                          "options": ["OpciÃ³n 1", "OpciÃ³n 2", "OpciÃ³n 3"],
                           "correctAnswerIndex": 0,
-                          "explanation": "Breve explicación lógica...",
+                          "explanation": "Breve explicaciÃ³n lÃ³gica...",
                           "imageUrl": "URL_O_NULL"
                         }
                       ]
                     }
-                    Responde SOLO el JSON. Asegúrate de cerrar bien las llaves.
+                    Responde SOLO el JSON. AsegÃºrate de cerrar bien las llaves.
                     """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
@@ -285,27 +279,15 @@ class TestViewModel @Inject constructor(
 
                 val jsonStartIndex = rawText.indexOf('{')
                 val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato inválido")
+                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato invÃ¡lido")
 
                 val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
                 val root = jsonContent.parseToJsonElement(jsonString).jsonObject
 
                 val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic
-                ?: "Práctica General"
-                val questionUiStates = root["questions"]?.jsonArray?.map { element ->
-                    val obj = element.jsonObject
-                    QuestionUiState(
-                        text = obj["text"]?.jsonPrimitive?.content ?: "",
-                        options = obj["options"]?.jsonArray?.map { it.jsonPrimitive.content }
-                            ?: emptyList(),
-                        correctAnswerIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toInt()
-                            ?: 0,
-                        explanation = obj["explanation"]?.jsonPrimitive?.content ?: "",
-                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content.takeIf {
-                            it != "null" && it != null && it.startsWith("http")
-                        }
-                    )
-                } ?: emptyList()
+                ?: "PrÃ¡ctica General"
+                
+                val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
                 analyticsTracker.testStarted("PRACTICE")
@@ -335,7 +317,7 @@ class TestViewModel @Inject constructor(
                 .sortedByDescending { it.value.size }
                 .take(5)
                 .joinToString("\n") { (questionText, answers) ->
-                    "- Falló ${answers.size} veces en: '${questionText.take(80)}'"
+                    "- FallÃ³ ${answers.size} veces en: '${questionText.take(80)}'"
                 }
 
             """

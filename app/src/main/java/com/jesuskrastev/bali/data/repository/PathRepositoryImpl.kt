@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.data.repository
 
-import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
@@ -23,11 +22,9 @@ class PathRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository
 ) : PathRepository {
 
-    private val auth = FirebaseAuth.getInstance()
-    private val userId: String get() = auth.currentUser?.uid ?: ""
-
-    override fun getPathNodes(userId: String): Flow<List<LessonNode>> = authRepository.isLoggedIn.flatMapLatest { loggedIn ->
-        if (loggedIn) {
+    override fun getPathNodes(userId: String): Flow<List<LessonNode>> = authRepository.currentUserFlow.flatMapLatest { loggedInUserId ->
+        // Si hay usuario logueado, y es el mismo userId, cargamos de remote
+        if (loggedInUserId != null && loggedInUserId == userId) {
             remoteDao.getPathNodes(userId).map { list -> list.map { it.toDomain() } }
         } else {
             localDao.getAllNodes().map { list -> list.map { it.toDomain() } }
@@ -35,7 +32,8 @@ class PathRepositoryImpl @Inject constructor(
     }
 
     override suspend fun saveGeneratedNodes(userId: String, nodes: List<LessonNode>) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
+        val loggedInUserId = authRepository.currentUser()
+        if (loggedInUserId != null && loggedInUserId == userId) {
             remoteDao.insertNodes(userId, nodes.map { it.toFirestore() })
         } else {
             localDao.insertNodes(nodes.map { it.toEntity() })
@@ -43,7 +41,8 @@ class PathRepositoryImpl @Inject constructor(
     }
 
     override suspend fun updateNodeStatus(userId: String, nodeId: String, status: String, scorePercentage: Int?) = withContext(Dispatchers.IO) {
-        if (authRepository.isLoggedIn.first()) {
+        val loggedInUserId = authRepository.currentUser()
+        if (loggedInUserId != null && loggedInUserId == userId) {
             remoteDao.updateNodeStatus(userId, nodeId, status, scorePercentage)
         } else {
             if (scorePercentage != null) {
