@@ -10,7 +10,7 @@ import javax.inject.Inject
  * Migración v2 → v3
  *
  * Cambios:
- * - Reinicia a 0 el exp del usuario
+ * - Reinicia a 0 el xp del usuario
  * - Reinicia a 0 el level del usuario
  * - Elimina la subcolección test_results
  * - Elimina la subcolección answers
@@ -20,7 +20,7 @@ class MigrationV2ToV3 @Inject constructor(
 ) : FirestoreMigration {
 
     override val targetVersion: Int = 3
-    override val description: String = "Reiniciar exp/level y eliminar test_results/answers"
+    override val description: String = "Reiniciar xp/level y eliminar test_results/answers"
 
     override suspend fun migrate(userId: String) {
         val userRef = firestore.collection("env")
@@ -28,13 +28,13 @@ class MigrationV2ToV3 @Inject constructor(
             .collection("users")
             .document(userId)
 
-        // 1. Reset exp and level
+        // 1. Reset xp and level
         val updates = hashMapOf<String, Any>(
-            "exp" to 0,
+            "xp" to 0,
             "level" to 0
         )
         userRef.update(updates).await()
-        println("Migration V3: Reset 'exp' and 'level' to 0 for user $userId")
+        println("Migration V3: Reset 'xp' and 'level' to 0 for user $userId")
 
         // 2. Delete test_results subcollection
         val testResultsRef = userRef.collection("test_results")
