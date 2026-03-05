@@ -2,7 +2,7 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,7 +34,7 @@ data class ShopUiState(
 class ShopViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
-    private val analyticsTracker: FirebaseAnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)

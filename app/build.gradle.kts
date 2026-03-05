@@ -30,6 +30,7 @@ android {
         properties.load(FileInputStream(rootProject.file("local.properties")))
         buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"")
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
+        buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
     }
 
     buildTypes {
@@ -123,4 +124,7 @@ dependencies {
     // In-App updates
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
+
+    // Mixpanel
+    implementation("com.mixpanel.android:mixpanel-android:7.3.3")
 }

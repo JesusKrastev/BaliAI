@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
 import coil.util.DebugLogger
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
+import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
 import dagger.hilt.android.HiltAndroidApp
@@ -37,6 +38,6 @@ class BaliApplication : Application(), ImageLoaderFactory {
         // Replace with your 36-character App ID from Dashboard > Settings > Keys & IDs
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
 
-
+        MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
     }
 }

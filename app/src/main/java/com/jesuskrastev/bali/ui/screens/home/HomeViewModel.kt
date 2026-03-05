@@ -5,7 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.R
-import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -39,7 +39,7 @@ class HomeViewModel @Inject constructor(
     private val pathRepository: PathRepository,
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
     private val generateInitialPathUseCase: GenerateInitialPathUseCase,
-    private val analyticsTracker: FirebaseAnalyticsTracker,
+    private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val resetStreakUseCase: ResetStreakUseCase,
     private val restoreEnergyUseCase: RestoreEnergyUseCase,
@@ -202,6 +202,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.signOut(context)
             analyticsTracker.logout()
+            analyticsTracker.resetUser()
         }
     }
 

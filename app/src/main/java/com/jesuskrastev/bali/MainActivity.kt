@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState

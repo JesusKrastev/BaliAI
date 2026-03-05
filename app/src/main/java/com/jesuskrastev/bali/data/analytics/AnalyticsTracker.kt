@@ -2,16 +2,49 @@ package com.jesuskrastev.bali.data.analytics
 
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.mixpanel.android.mpmetrics.MixpanelAPI
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FirebaseAnalyticsTracker @Inject constructor(
-    private val analytics: FirebaseAnalytics
+class AnalyticsTracker @Inject constructor(
+    private val firebase: FirebaseAnalytics,
+    private val mixpanel: MixpanelAPI
 ) {
 
     private fun log(event: String, params: Bundle.() -> Unit = {}) {
-        analytics.logEvent(event, Bundle().apply(params))
+        val bundle = Bundle().apply(params)
+        firebase.logEvent(event, bundle)
+        mixpanel.track(event, bundleToJson(bundle))
+    }
+
+    private fun bundleToJson(bundle: Bundle): JSONObject {
+        val json = JSONObject()
+        for (key in bundle.keySet()) {
+            val value = bundle.get(key)
+            if (value != null) {
+                try {
+                    json.put(key, value)
+                } catch (e: Exception) {
+                    // Ignore JSON exception for this property
+                }
+            }
+        }
+        return json
+    }
+
+    // ── USERS ───────────────────────────────────────────────────────────────
+
+    fun identifyUser(userId: String, email: String) {
+        firebase.setUserId(userId)
+        mixpanel.identify(userId)
+        mixpanel.people.set("\$email", email)
+    }
+
+    fun resetUser() {
+        firebase.setUserId(null)
+        mixpanel.reset()
     }
 
     // ── ONBOARDING ──────────────────────────────────────────────────────────

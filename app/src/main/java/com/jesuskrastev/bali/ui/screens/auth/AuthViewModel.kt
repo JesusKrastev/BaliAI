@@ -3,7 +3,7 @@
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -26,7 +26,7 @@ class AuthViewModel @Inject constructor(
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
     private val authRepository: AuthRepository,
-    private val analyticsTracker: FirebaseAnalyticsTracker,
+    private val analyticsTracker: AnalyticsTracker,
     private val executeFirestoreMigrationsUseCase: ExecuteFirestoreMigrationsUseCase
 ) : ViewModel() {
 
@@ -81,8 +81,10 @@ class AuthViewModel @Inject constructor(
                             localTestResults,
                             localAnswers
                         )
+                        analyticsTracker.identifyUser(userId ?: "", email)
                         analyticsTracker.signUp()
                     } else {
+                        analyticsTracker.identifyUser(userId ?: "", email)
                         analyticsTracker.login()
                         // One-shot inicializaciÃ³n (Rachas, energÃ­a, migraciones) post-login
                         userId?.let {

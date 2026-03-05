@@ -3,7 +3,7 @@
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
-import com.jesuskrastev.bali.data.analytics.FirebaseAnalyticsTracker
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -58,7 +58,7 @@ class ExamViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val analyticsTracker: FirebaseAnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExamUiState())
