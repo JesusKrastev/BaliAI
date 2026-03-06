@@ -48,86 +48,85 @@ fun LessonStreakScreen(
     )
     val colorPrimary = MaterialTheme.colorScheme.primary
     
-    Scaffold(
-        bottomBar = {
-            Box(modifier = Modifier.padding(24.dp).navigationBarsPadding()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                    )
+                )
+            )
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!uiState.isLoading) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(48.dp))
+                
+                Text(
+                    text = if (newStreak == 1) "¡RACHA INICIADA!" else "¡RACHA MANTENIDA!",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    color = colorPrimary,
+                    textAlign = TextAlign.Center,
+                    letterSpacing = 2.sp
+                )
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                Box(contentAlignment = Alignment.Center) {
+                    // Resplandor
+                    Box(
+                        modifier = Modifier
+                            .size(260.dp)
+                            .scale(scale)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(colorPrimary.copy(alpha = 0.4f), Color.Transparent)
+                                ),
+                                shape = CircleShape
+                            )
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.streak),
+                        contentDescription = "Llama de Racha",
+                        modifier = Modifier.size(200.dp).scale(scale)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text(
+                    text = "$newStreak Días",
+                    style = MaterialTheme.typography.displayLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                
+                Spacer(modifier = Modifier.height(48.dp))
+                
+                StreakTracker(weeklyStreak = uiState.weeklyStreak)
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
                 Button(
                     onClick = onContinueClick,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                        .padding(bottom = 8.dp),
+                    shape = RoundedCornerShape(20.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = colorPrimary)
                 ) {
-                    Text("CONTINUAR", fontWeight = FontWeight.Bold, color = Color.White)
-                }
-            }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(MaterialTheme.colorScheme.background),
-            contentAlignment = Alignment.Center
-        ) {
-            if (!uiState.isLoading) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    
-                    Text(
-                        text = if (newStreak == 1) "¡RACHA INICIADA!" else "¡RACHA MANTENIDA!",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black,
-                        color = colorPrimary,
-                        textAlign = TextAlign.Center,
-                        letterSpacing = 1.sp
-                    )
-                    
-                    Spacer(modifier = Modifier.height(48.dp))
-                    
-                    Box(contentAlignment = Alignment.Center) {
-                        // Resplandor
-                        Box(
-                            modifier = Modifier
-                                .size(180.dp)
-                                .scale(scale)
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(colorPrimary.copy(alpha = 0.3f), Color.Transparent)
-                                    ),
-                                    shape = CircleShape
-                                )
-                        )
-                        Image(
-                            painter = painterResource(id = R.drawable.streak),
-                            contentDescription = "Racha",
-                            modifier = Modifier.size(140.dp).scale(scale)
-                        )
-                        // Añadiendo el número de días dentro
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.offset(y = 20.dp)) {
-                            Text(
-                                text = newStreak.toString(),
-                                style = MaterialTheme.typography.displayLarge,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Text(
-                        text = "$newStreak ${if (newStreak == 1) "día" else "días"} de racha",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Spacer(modifier = Modifier.height(48.dp))
-                    
-                    StreakTracker(weeklyStreak = uiState.weeklyStreak)
+                    Text("CONTINUAR", fontWeight = FontWeight.Black, color = Color.White, fontSize = 18.sp)
                 }
             }
         }
@@ -135,14 +134,16 @@ fun LessonStreakScreen(
 }
 
 @Composable
-fun StreakTracker(weeklyStreak: List<DailyStreakState>) {
+private fun StreakTracker(weeklyStreak: List<DailyStreakState>) {
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp, horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp, horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -154,8 +155,11 @@ fun StreakTracker(weeklyStreak: List<DailyStreakState>) {
 }
 
 @Composable
-fun StreakDayItem(state: DailyStreakState) {
-    val circleColor = when (state.status) {
+private fun StreakDayItem(state: DailyStreakState) {
+    val isCompleted = state.status == StreakStatus.COMPLETED
+    val isToday = state.isToday
+    
+    val baseColor = when (state.status) {
         StreakStatus.COMPLETED -> MaterialTheme.colorScheme.primary
         StreakStatus.FROZEN -> Color(0xFF2196F3)
         StreakStatus.TODAY -> MaterialTheme.colorScheme.surfaceVariant
@@ -164,33 +168,40 @@ fun StreakDayItem(state: DailyStreakState) {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(
             text = state.dayOfWeek,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = if (isToday) FontWeight.Black else FontWeight.Bold,
+            color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
         )
         
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(circleColor)
+                .background(baseColor)
                 .then(
-                    if (state.isToday && state.status != StreakStatus.COMPLETED) {
-                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                    if (isToday && !isCompleted) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), CircleShape)
                     } else Modifier
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (state.status == StreakStatus.COMPLETED) {
+            if (isCompleted) {
                 Icon(
                     imageVector = Icons.Rounded.Check,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
+                )
+            } else if (state.status == StreakStatus.TODAY) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }

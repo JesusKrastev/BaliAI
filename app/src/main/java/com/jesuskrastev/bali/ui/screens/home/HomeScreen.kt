@@ -78,13 +78,13 @@ fun HomeScreen(
     onExamClick: () -> Unit = {},
     onShopClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
-    onAuthClick: () -> Unit = {}
+    onAuthClick: () -> Unit = {},
+    onStreakClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLevelLockedDialog by remember { mutableStateOf(false) }
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
     var showEnergyBottomSheet by remember { mutableStateOf(false) }
-    var showMonthlyStreakCalendar by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -428,14 +428,7 @@ fun HomeScreen(
             )
         }
 
-        if (showMonthlyStreakCalendar) {
-            StreakSpeedometerDialog(
-                currentStreak = uiState.streak,
-                freezersAvailable = uiState.streakFreezes,
-                practiceDays = uiState.practiceDays,
-                onDismiss = { showMonthlyStreakCalendar = false }
-            )
-        }
+
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -464,7 +457,7 @@ fun HomeScreen(
                             onMenuClick = {
                                 scope.launch { drawerState.open() }
                             },
-                            onStreakClick = { showMonthlyStreakCalendar = true }
+                            onStreakClick = { onStreakClick() }
                         )
                     }
                 }
@@ -1393,370 +1386,6 @@ fun StreakDayItem(day: DailyStreakState) {
     }
 }
 
-@Composable
-fun StreakSpeedometerDialog(
-    currentStreak: Int,
-    freezersAvailable: Int,
-    practiceDays: List<Long>,
-    onDismiss: () -> Unit
-) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.fillMaxWidth().wrapContentHeight()
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Tu racha",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // ── Velocímetro ──────────────────────────────────────────────
-                StreakSpeedometer(
-                    currentStreak = currentStreak,
-                    maxStreak = 30,
-                    freezersAvailable = freezersAvailable
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Racha actual en texto
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(text = "\uD83D\uDD25", fontSize = 20.sp)
-                    Text(
-                        text = "$currentStreak días",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-
-                if (freezersAvailable > 0) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(text = "\u2744\uFE0F", fontSize = 14.sp)
-                        Text(
-                            text = "$freezersAvailable congelador${if (freezersAvailable != 1) "es" else ""} disponible${if (freezersAvailable != 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF60A5FA)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // ── Calendario mensual ───────────────────────────────────────
-                StreakCalendarSection(practiceDays = practiceDays)
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("CERRAR", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}
-
-// ── El velocímetro dibujado con Canvas ────────────────────────────────────────
-
-@Composable
-fun StreakSpeedometer(
-    currentStreak: Int,
-    maxStreak: Int = 30,
-    freezersAvailable: Int = 0
-) {
-    // Anima la aguja de 0 a la posición actual
-    val clampedStreak = currentStreak.coerceIn(0, maxStreak)
-    val targetFraction = clampedStreak.toFloat() / maxStreak.toFloat()
-
-    val animatedFraction by animateFloatAsState(
-        targetValue = targetFraction,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "needle"
-    )
-
-    // Color de la zona según nivel de racha
-    val needleColor = when {
-        clampedStreak >= 20 -> Color(0xFFEF4444)  // rojo — racha alta
-        clampedStreak >= 10 -> Color(0xFFFACC15)  // amarillo
-        else                -> Color(0xFF22C55E)  // verde — comenzando
-    }
-
-    Box(
-        modifier = Modifier.size(220.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val cx = size.width / 2f
-            val cy = size.height * 0.72f
-            val radius = size.width * 0.42f
-            val strokeWidth = size.width * 0.055f
-
-            // Arco de fondo (gris)
-            drawArc(
-                color = Color.Gray.copy(alpha = 0.18f),
-                startAngle = 180f,
-                sweepAngle = 180f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(cx - radius, cy - radius),
-                size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-            )
-
-            // Arco relleno según racha
-            if (animatedFraction > 0f) {
-                drawArc(
-                    color = needleColor,
-                    startAngle = 180f,
-                    sweepAngle = 180f * animatedFraction,
-                    useCenter = false,
-                    topLeft = androidx.compose.ui.geometry.Offset(cx - radius, cy - radius),
-                    size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
-
-            // Marcas de ticks (cada 5 días = 30°)
-            val tickCount = 7  // 0, 5, 10, 15, 20, 25, 30
-            for (i in 0 until tickCount) {
-                val angle = Math.toRadians((180.0 + i * 30.0)).toFloat()
-                val innerR = radius - strokeWidth * 0.9f
-                val outerR = radius + strokeWidth * 0.3f
-                val startX = cx + innerR * kotlin.math.cos(angle)
-                val startY = cy + innerR * kotlin.math.sin(angle)
-                val endX = cx + outerR * kotlin.math.cos(angle)
-                val endY = cy + outerR * kotlin.math.sin(angle)
-                drawLine(
-                    color = Color.Gray.copy(alpha = 0.35f),
-                    start = androidx.compose.ui.geometry.Offset(startX, startY),
-                    end = androidx.compose.ui.geometry.Offset(endX, endY),
-                    strokeWidth = 2.dp.toPx()
-                )
-            }
-
-            // Aguja
-            val needleAngle = Math.toRadians((180.0 + 180.0 * animatedFraction)).toFloat()
-            val needleLength = radius * 0.78f
-            val needleTipX = cx + needleLength * kotlin.math.cos(needleAngle)
-            val needleTipY = cy + needleLength * kotlin.math.sin(needleAngle)
-            drawLine(
-                color = needleColor,
-                start = androidx.compose.ui.geometry.Offset(cx, cy),
-                end = androidx.compose.ui.geometry.Offset(needleTipX, needleTipY),
-                strokeWidth = 4.dp.toPx(),
-                cap = StrokeCap.Round
-            )
-
-            // Punto central de la aguja
-            drawCircle(
-                color = needleColor,
-                radius = 8.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(cx, cy)
-            )
-            drawCircle(
-                color = Color.White,
-                radius = 4.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(cx, cy)
-            )
-        }
-
-        // Etiquetas 0 y 30 en los extremos del arco
-        Box(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = "0",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 4.dp)
-            )
-            Text(
-                text = "30",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 4.dp)
-            )
-        }
-
-        // Badge de congeladores si tiene disponibles
-        if (freezersAvailable > 0) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF60A5FA).copy(alpha = 0.15f),
-                border = BorderStroke(1.dp, Color(0xFF60A5FA).copy(alpha = 0.4f)),
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 8.dp, end = 8.dp)
-            ) {
-                Text(
-                    text = "\u2744\uFE0F \u00D7$freezersAvailable",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF60A5FA),
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
-    }
-}
-
-// ── Calendario extraído como función separada ─────────────────────────────────
-
-@Composable
-fun StreakCalendarSection(practiceDays: List<Long>) {
-    var displayMonth by remember { mutableStateOf(java.util.Calendar.getInstance()) }
-    val today = java.util.Calendar.getInstance()
-
-    val daysInMonth = displayMonth.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
-    val firstDayOfMonth = displayMonth.clone() as java.util.Calendar
-    firstDayOfMonth.set(java.util.Calendar.DAY_OF_MONTH, 1)
-
-    var firstDayOfWeek = firstDayOfMonth.get(java.util.Calendar.DAY_OF_WEEK) - 2
-    if (firstDayOfWeek < 0) firstDayOfWeek += 7
-
-    val monthName = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale("es", "ES"))
-        .format(displayMonth.time).replaceFirstChar { it.uppercase() }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Navegación de mes
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = {
-                displayMonth = (displayMonth.clone() as java.util.Calendar).apply {
-                    add(java.util.Calendar.MONTH, -1)
-                }
-            }) {
-                Icon(Icons.Rounded.ChevronLeft, contentDescription = "Mes anterior")
-            }
-            Text(text = monthName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            IconButton(onClick = {
-                displayMonth = (displayMonth.clone() as java.util.Calendar).apply {
-                    add(java.util.Calendar.MONTH, 1)
-                }
-            }) {
-                Icon(Icons.Rounded.ChevronRight, contentDescription = "Mes siguiente")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Cabecera L M X J V S D
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            listOf("L", "M", "X", "J", "V", "S", "D").forEach { d ->
-                Text(
-                    text = d,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Grid de días
-        val totalCells = firstDayOfWeek + daysInMonth
-        val rows = kotlin.math.ceil(totalCells / 7.0).toInt()
-        val dateHelper = com.jesuskrastev.bali.domain.util.DateTimeHelper()
-
-        for (r in 0 until rows) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                for (c in 0..6) {
-                    val cellIndex = r * 7 + c
-                    val dayNumber = cellIndex - firstDayOfWeek + 1
-
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        if (dayNumber in 1..daysInMonth) {
-                            val cal = displayMonth.clone() as java.util.Calendar
-                            cal.set(java.util.Calendar.DAY_OF_MONTH, dayNumber)
-
-                            val isToday = dateHelper.isSameDay(cal.timeInMillis, today.timeInMillis)
-                            val isFuture = cal.after(today) && !isToday
-                            val hasPracticed = practiceDays.contains(cal.timeInMillis)
-
-                            val status = when {
-                                isFuture -> StreakStatus.FUTURE
-                                isToday && hasPracticed -> StreakStatus.COMPLETED
-                                isToday -> StreakStatus.TODAY
-                                hasPracticed -> StreakStatus.COMPLETED
-                                else -> StreakStatus.FAILED
-                            }
-
-                            val bg = when (status) {
-                                StreakStatus.COMPLETED -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                StreakStatus.FROZEN    -> Color(0xFF60A5FA).copy(alpha = 0.12f)
-                                else                  -> Color.Transparent
-                            }
-
-                            Surface(
-                                shape = CircleShape,
-                                color = bg,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .alpha(if (status == StreakStatus.FUTURE || status == StreakStatus.FAILED) 0.35f else 1f),
-                                border = if (isToday) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    when (status) {
-                                        StreakStatus.COMPLETED -> Icon(
-                                            imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        StreakStatus.FROZEN -> Icon(
-                                            imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = Color(0xFF60A5FA),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        else -> Text(
-                                            text = dayNumber.toString(),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isToday) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LearningPathGraph(
@@ -2162,3 +1791,6 @@ fun PathLoadingState() {
         )
     }
 }
+
+
+

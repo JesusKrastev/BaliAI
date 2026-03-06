@@ -17,7 +17,9 @@ import javax.inject.Inject
 data class StreakUiState(
     val isLoading: Boolean = true,
     val weeklyStreak: List<DailyStreakState> = emptyList(),
-    val streakFreezes: Int = 0
+    val streakFreezes: Int = 0,
+    val currentStreak: Int = 0,
+    val highestStreak: Int = 0
 )
 
 @HiltViewModel
@@ -39,7 +41,9 @@ class LessonStreakViewModel @Inject constructor(
                     _uiState.value = StreakUiState(
                         isLoading = false,
                         weeklyStreak = generateWeeklyStreak(user.practiceDays),
-                        streakFreezes = user.streakFreezes
+                        streakFreezes = user.streakFreezes,
+                        currentStreak = user.currentStreak,
+                        highestStreak = user.highestStreak
                     )
                 }
             }

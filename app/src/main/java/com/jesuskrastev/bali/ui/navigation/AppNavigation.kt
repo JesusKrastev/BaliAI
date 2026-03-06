@@ -4,6 +4,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -75,6 +76,9 @@ data class CoinsGainedRoute(val coins: Int, val newStreak: Int)
 
 @Serializable
 data class StreakRoute(val newStreak: Int)
+
+@Serializable
+object HomeStreakRoute
 
 @Serializable
 data class TestResultRoute(
@@ -154,6 +158,9 @@ fun AppNavigation(
                     },
                     onAuthClick = {
                         navController.navigate(AuthRoute(restrictNewAccounts = false))
+                    },
+                    onStreakClick = {
+                        navController.navigate(HomeStreakRoute)
                     }
                 )
             }
@@ -353,6 +360,17 @@ fun AppNavigation(
                         navController.navigate(HomeRoute) {
                             popUpTo(HomeRoute) { inclusive = true }
                         }
+                    }
+                )
+            }
+
+            composable<HomeStreakRoute> {
+                val viewModel: com.jesuskrastev.bali.ui.screens.streak.HomeStreakViewModel = hiltViewModel()
+                
+                com.jesuskrastev.bali.ui.screens.streak.HomeStreakScreen(
+                    viewModel = viewModel,
+                    onBackClick = {
+                        navController.popBackStack()
                     }
                 )
             }
