@@ -10,9 +10,11 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -48,11 +50,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -61,6 +69,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.foundation.lazy.rememberLazyListState
 import coil.compose.AsyncImage
 import com.jesuskrastev.bali.R
 import kotlinx.coroutines.launch
@@ -1415,11 +1427,23 @@ fun LearningPathGraph(
     }
 
     var selectedNodeId by remember { mutableStateOf<String?>(null) }
+    val nodeCoordsMap = remember { mutableStateMapOf<String, LayoutCoordinates>() }
+    var containerCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
-    LazyColumn(
-        modifier = modifier,
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
-    ) {
+    val listState = rememberLazyListState()
+
+    // Close popup on scroll
+    LaunchedEffect(listState.firstVisibleItemScrollOffset) {
+        if (selectedNodeId != null) {
+            selectedNodeId = null
+        }
+    }
+
+    Box(modifier = modifier.onGloballyPositioned { containerCoords = it }) {
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
+        ) {
         sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
             val sectionNodes = nodesBySection[sectionKey].orEmpty()
             if (sectionNodes.isEmpty()) return@forEachIndexed
@@ -1466,17 +1490,9 @@ fun LearningPathGraph(
                     isSelected = selectedNodeId == node.id,
                     onSelect = {
                         selectedNodeId = if (selectedNodeId == node.id) null else node.id
-                    }
-                )
-
-                // Callout bubble below the node
-                PathNodeCallout(
-                    node = node,
-                    isVisible = selectedNodeId == node.id,
-                    offset = xOffset,
-                    onActionClick = {
-                        selectedNodeId = null
-                        onNodeClick(node)
+                    },
+                    onPositioned = { coords ->
+                        nodeCoordsMap[node.id] = coords
                     }
                 )
             }
@@ -1497,6 +1513,26 @@ fun LearningPathGraph(
                     }
                 }
             }
+        }
+        }
+
+        // Floating popup overlay
+        val selectedNode = pathNodes.find { it.id == selectedNodeId }
+        val selectedNodeCoord = if (selectedNodeId != null) nodeCoordsMap[selectedNodeId!!] else null
+        
+        if (selectedNode != null && selectedNodeCoord != null && containerCoords != null) {
+            FloatingNodePopup(
+                node = selectedNode,
+                nodeCoords = selectedNodeCoord,
+                containerCoords = containerCoords!!,
+                onActionClick = {
+                    selectedNodeId = null
+                    onNodeClick(selectedNode)
+                },
+                onDismiss = {
+                    selectedNodeId = null
+                }
+            )
         }
     }
 }
@@ -1559,7 +1595,8 @@ fun PathNodeItem(
     node: com.jesuskrastev.bali.domain.model.LessonNode,
     offset: androidx.compose.ui.unit.Dp,
     isSelected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    onPositioned: (LayoutCoordinates) -> Unit = {}
 ) {
     val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
     val isUnlocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.UNLOCKED
@@ -1620,6 +1657,7 @@ fun PathNodeItem(
             Surface(
                 modifier = Modifier
                     .size(80.dp)
+                    .onGloballyPositioned { coords -> onPositioned(coords) }
                     .then(
                         if (!isLocked) Modifier.clickable { onSelect() } else Modifier
                     ),
@@ -1658,58 +1696,90 @@ fun PathNodeItem(
     }
 }
 
-// ─── Path Node Callout (Bubble) ─────────────────────────────────────────────
+// ─── Floating Node Popup ───────────────────────────────────────────────────
 
 @Composable
-fun PathNodeCallout(
+private fun FloatingNodePopup(
     node: com.jesuskrastev.bali.domain.model.LessonNode,
-    isVisible: Boolean,
-    offset: androidx.compose.ui.unit.Dp = 0.dp,
-    onActionClick: () -> Unit
+    nodeCoords: LayoutCoordinates,
+    containerCoords: LayoutCoordinates,
+    onActionClick: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
-    if (isLocked) return
-
     val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
-    val capturedBubbleColor = bubbleColor
+    val density = LocalDensity.current
 
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
-        exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+    // Animación de entrada
+    val visibleState = remember { MutableTransitionState(false).apply { targetState = true } }
+    val transition = rememberTransition(visibleState, label = "popup_animation")
+    
+    val scale by transition.animateFloat(
+        transitionSpec = { spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow) },
+        label = "scale"
+    ) { if (it) 1f else 0.8f }
+    
+    val alpha by transition.animateFloat(
+        transitionSpec = { tween(durationMillis = 200) },
+        label = "alpha"
+    ) { if (it) 1f else 0f }
+
+    // Calcula la posición relativa al contenedor (Box)
+    val containerPos = containerCoords.positionInRoot()
+    val nodePos = nodeCoords.positionInRoot()
+    val nodeSize = nodeCoords.size
+
+    val relativeNodeX = nodePos.x - containerPos.x
+    val relativeNodeY = nodePos.y - containerPos.y
+
+    // Popup dimensions in px (aprox)
+    val popupWidthPx = with(density) { 260.dp.toPx() }
+    val popupHeightPx = with(density) { 160.dp.toPx() } // Estimado para el offset inicial
+    val triangleHeightPx = with(density) { 12.dp.toPx() }
+    val spacingPx = with(density) { 8.dp.toPx() }
+
+    // Centrar sobre el nodo
+    val nodeCenterX = relativeNodeX + nodeSize.width / 2f
+    val popupStartX = nodeCenterX - popupWidthPx / 2f
+
+    // Posicionar DEBAJO del nodo
+    val popupStartY = relativeNodeY + nodeSize.height + spacingPx
+
+    Popup(
+        alignment = Alignment.TopStart,
+        offset = IntOffset(popupStartX.toInt(), popupStartY.toInt()),
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = false, dismissOnBackPress = true)
     ) {
+        // Contenido del bocadillo
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.85f)
+                .width(260.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                    transformOrigin = TransformOrigin(0.5f, 0f) // Escala desde el centro superior (donde está el triángulo)
+                }
                 .padding(top = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Triangle arrow pointing up, offset to follow node position
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .size(width = 24.dp, height = 12.dp)
-                        .offset(x = offset * 0.85f)
-                ) {
-                    val path = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(size.width / 2f, 0f)
-                        lineTo(size.width, size.height)
-                        lineTo(0f, size.height)
-                        close()
-                    }
-                    drawPath(path, color = capturedBubbleColor)
+            // Triángulo apuntando HACIA ARRIBA (señalando el nodo desde abajo)
+            Canvas(modifier = Modifier.size(width = 24.dp, height = 12.dp)) {
+                val path = Path().apply {
+                    moveTo(size.width / 2f, 0f)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
                 }
+                drawPath(path, color = bubbleColor)
             }
 
-            // Bubble card
+            // Tarjeta del bocadillo
             Surface(
-                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                color = capturedBubbleColor
+                color = bubbleColor,
+                shadowElevation = 8.dp
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -1747,6 +1817,7 @@ fun PathNodeCallout(
         }
     }
 }
+
 
 // ─── Loading State ──────────────────────────────────────────────────────────
 
