@@ -57,7 +57,8 @@ data class TestSummary(
     val bonusFast: Int?,
     val bonusStreak: Int?,
     val leveledUp: Boolean,
-    val coinsGained: Int
+    val coinsGained: Int,
+    val newStreak: Int
 )
 
 @HiltViewModel
@@ -370,6 +371,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
+        var newStreak = -1
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
@@ -418,8 +420,10 @@ class TestViewModel @Inject constructor(
                 analyticsTracker.energyConsumed(newEnergy)
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
             }
-            incrementStreakUseCase().also { streak ->
-                if (streak > 0) analyticsTracker.streakRecorded(streak)
+            val incrementedStreak = incrementStreakUseCase()
+            newStreak = incrementedStreak
+            if (incrementedStreak > 0) {
+                analyticsTracker.streakRecorded(incrementedStreak)
             }
 
             // 4. Update path ONLY if coming from a path node and score >= 70%
@@ -467,7 +471,8 @@ class TestViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
-            coinsGained = coinsGained
+            coinsGained = coinsGained,
+            newStreak = newStreak
         )
     }
 

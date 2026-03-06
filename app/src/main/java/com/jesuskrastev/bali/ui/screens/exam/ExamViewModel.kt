@@ -278,6 +278,7 @@ class ExamViewModel @Inject constructor(
 
         // Un examen de la DGT de 30 preguntas se aprueba con 3 fallos o menos (27 correctas)
         val isPassed = correct >= 27
+        var newStreak = -1
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -319,8 +320,10 @@ class ExamViewModel @Inject constructor(
                 analyticsTracker.energyConsumed(newEnergy)
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
             }
-            incrementStreakUseCase().also { streak ->
-                if (streak > 0) analyticsTracker.streakRecorded(streak)
+            val incrementedStreak = incrementStreakUseCase()
+            newStreak = incrementedStreak
+            if (incrementedStreak > 0) {
+                analyticsTracker.streakRecorded(incrementedStreak)
             }
         }
 
@@ -335,7 +338,8 @@ class ExamViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
-            coinsGained = coinsGained
+            coinsGained = coinsGained,
+            newStreak = newStreak
         )
     }
 

@@ -30,6 +30,8 @@ import com.jesuskrastev.bali.ui.screens.test.TestViewModel
 import com.jesuskrastev.bali.ui.screens.topics.TopicsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
+import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
+import com.jesuskrastev.bali.ui.screens.streak.LessonStreakViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -69,7 +71,10 @@ object SuggestionsRoute
 data class AuthRoute(val restrictNewAccounts: Boolean = false)
 
 @Serializable
-data class CoinsGainedRoute(val coins: Int)
+data class CoinsGainedRoute(val coins: Int, val newStreak: Int)
+
+@Serializable
+data class StreakRoute(val newStreak: Int)
 
 @Serializable
 data class TestResultRoute(
@@ -83,7 +88,8 @@ data class TestResultRoute(
     val bonusFast: Int? = null,
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
-    val coinsGained: Int = 0
+    val coinsGained: Int = 0,
+    val newStreak: Int = -1
 )
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -205,20 +211,21 @@ fun AppNavigation(
                     onBackClick = {
                         navController.popBackStack()
                     },
-                    onFinishTest = { score, total, xp, duration, accuracy, baseXp, bPerfection, bFast, bStreak, leveledUp, coins ->
+                    onFinishTest = { result ->
                         navController.navigate(
                             TestResultRoute(
-                                score = score,
-                                total = total,
-                                xpGained = xp,
-                                durationSeconds = duration,
-                                accuracy = accuracy,
-                                baseXp = baseXp,
-                                bonusPerfection = bPerfection,
-                                bonusFast = bFast,
-                                bonusStreak = bStreak,
-                                leveledUp = leveledUp,
-                                coinsGained = coins
+                                score = result.score,
+                                total = result.total,
+                                xpGained = result.xpGained,
+                                durationSeconds = result.durationSeconds,
+                                accuracy = result.accuracy,
+                                baseXp = result.baseXp,
+                                bonusPerfection = result.bonusPerfection,
+                                bonusFast = result.bonusFast,
+                                bonusStreak = result.bonusStreak,
+                                leveledUp = result.leveledUp,
+                                coinsGained = result.coinsGained,
+                                newStreak = result.newStreak
                             )
                         ) {
                             popUpTo(MistakesRoute) { inclusive = true }
@@ -244,20 +251,21 @@ fun AppNavigation(
                     onBackClick = {
                         navController.popBackStack()
                     },
-                    onFinishTest = { score, total, xp, duration, accuracy, baseXp, bPerfection, bFast, bStreak, leveledUp, coins ->
+                    onFinishTest = { result ->
                         navController.navigate(
                             TestResultRoute(
-                                score = score,
-                                total = total,
-                                xpGained = xp,
-                                durationSeconds = duration,
-                                accuracy = accuracy,
-                                baseXp = baseXp,
-                                bonusPerfection = bPerfection,
-                                bonusFast = bFast,
-                                bonusStreak = bStreak,
-                                leveledUp = leveledUp,
-                                coinsGained = coins
+                                score = result.score,
+                                total = result.total,
+                                xpGained = result.xpGained,
+                                durationSeconds = result.durationSeconds,
+                                accuracy = result.accuracy,
+                                baseXp = result.baseXp,
+                                bonusPerfection = result.bonusPerfection,
+                                bonusFast = result.bonusFast,
+                                bonusStreak = result.bonusStreak,
+                                leveledUp = result.leveledUp,
+                                coinsGained = result.coinsGained,
+                                newStreak = result.newStreak
                             )
                         ) {
                             popUpTo(TestRoute(null)) { inclusive = true }
@@ -273,20 +281,21 @@ fun AppNavigation(
                     onBackClick = {
                         navController.popBackStack()
                     },
-                    onFinishExam = { score, total, xp, duration, accuracy, baseXp, bPerfection, bFast, bStreak, leveledUp, coins ->
+                    onFinishExam = { result ->
                         navController.navigate(
                             TestResultRoute(
-                                score = score,
-                                total = total,
-                                xpGained = xp,
-                                durationSeconds = duration,
-                                accuracy = accuracy,
-                                baseXp = baseXp,
-                                bonusPerfection = bPerfection,
-                                bonusFast = bFast,
-                                bonusStreak = bStreak,
-                                leveledUp = leveledUp,
-                                coinsGained = coins
+                                score = result.score,
+                                total = result.total,
+                                xpGained = result.xpGained,
+                                durationSeconds = result.durationSeconds,
+                                accuracy = result.accuracy,
+                                baseXp = result.baseXp,
+                                bonusPerfection = result.bonusPerfection,
+                                bonusFast = result.bonusFast,
+                                bonusStreak = result.bonusStreak,
+                                leveledUp = result.leveledUp,
+                                coinsGained = result.coinsGained,
+                                newStreak = result.newStreak
                             )
                         ) {
                             popUpTo(ExamRoute) { inclusive = true }
@@ -308,7 +317,7 @@ fun AppNavigation(
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
                     onContinueClick = {
-                        navController.navigate(CoinsGainedRoute(route.coinsGained)) {
+                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreak)) {
                             popUpTo(HomeRoute) { inclusive = false }
                         }
                     }
@@ -319,6 +328,27 @@ fun AppNavigation(
                 val route: CoinsGainedRoute = backStackEntry.toRoute()
                 CoinsGainedScreen(
                     coinsGained = route.coins,
+                    onContinueClick = {
+                        if (route.newStreak > 0) {
+                            navController.navigate(StreakRoute(route.newStreak)) {
+                                popUpTo(HomeRoute) { inclusive = false }
+                            }
+                        } else {
+                            navController.navigate(HomeRoute) {
+                                popUpTo(HomeRoute) { inclusive = true }
+                            }
+                        }
+                    }
+                )
+            }
+
+            composable<StreakRoute> { backStackEntry ->
+                val route: StreakRoute = backStackEntry.toRoute()
+                val viewModel: LessonStreakViewModel = hiltViewModel()
+                
+                LessonStreakScreen(
+                    viewModel = viewModel,
+                    newStreak = route.newStreak,
                     onContinueClick = {
                         navController.navigate(HomeRoute) {
                             popUpTo(HomeRoute) { inclusive = true }

@@ -36,12 +36,13 @@ import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.OptionCard
+import com.jesuskrastev.bali.ui.screens.test.TestSummary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExamScreen(
     onBackClick: () -> Unit,
-    onFinishExam: (Int, Int, Int, Int, Int, Int, Int?, Int?, Int?, Boolean, Int) -> Unit,
+    onFinishExam: (TestSummary) -> Unit,
     viewModel: ExamViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -118,19 +119,7 @@ fun ExamScreen(
                     onNext = { viewModel.onEvent(ExamEvent.NextQuestion) },
                     onFinish = {
                         viewModel.onEvent(ExamEvent.FinishExam { result ->
-                            onFinishExam(
-                                result.score,
-                                result.total,
-                                result.xpGained,
-                                result.durationSeconds,
-                                result.accuracy,
-                                result.baseXp,
-                                result.bonusPerfection,
-                                result.bonusFast,
-                                result.bonusStreak,
-                                result.leveledUp,
-                                result.coinsGained
-                            )
+                            onFinishExam(result)
                         })
                     }
                 )

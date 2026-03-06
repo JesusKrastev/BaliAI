@@ -224,6 +224,7 @@ class MistakesViewModel @Inject constructor(
         }
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy = if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
+        var newStreak = -1
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
@@ -250,8 +251,10 @@ class MistakesViewModel @Inject constructor(
                 analyticsTracker.energyConsumed(newEnergy)
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
             }
-            incrementStreakUseCase().also { streak ->
-                if (streak > 0) analyticsTracker.streakRecorded(streak)
+            val incrementedStreak = incrementStreakUseCase()
+            newStreak = incrementedStreak
+            if (incrementedStreak > 0) {
+                analyticsTracker.streakRecorded(incrementedStreak)
             }
         }
 
@@ -266,7 +269,8 @@ class MistakesViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
-            coinsGained = coinsGained
+            coinsGained = coinsGained,
+            newStreak = newStreak
         )
     }
 }

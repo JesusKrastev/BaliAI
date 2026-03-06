@@ -44,7 +44,7 @@ import com.jesuskrastev.bali.R
 @Composable
 fun TestScreen(
     onBackClick: () -> Unit,
-    onFinishTest: (Int, Int, Int, Int, Int, Int, Int?, Int?, Int?, Boolean, Int) -> Unit,
+    onFinishTest: (TestSummary) -> Unit,
     viewModel: TestViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -113,19 +113,7 @@ fun TestScreen(
                         onNextClick = {
                             if (uiState.currentQuestionIndex == uiState.questions.size - 1) {
                                 viewModel.onEvent(TestEvent.FinishTest { result ->
-                                    onFinishTest(
-                                        result.score,
-                                        result.total,
-                                        result.xpGained,
-                                        result.durationSeconds,
-                                        result.accuracy,
-                                        result.baseXp,
-                                        result.bonusPerfection,
-                                        result.bonusFast,
-                                        result.bonusStreak,
-                                        result.leveledUp,
-                                        result.coinsGained
-                                    )
+                                    onFinishTest(result)
                                 })
                             } else {
                                 viewModel.onEvent(TestEvent.NextQuestion)

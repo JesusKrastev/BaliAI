@@ -25,12 +25,13 @@ import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.TestContentView
 import com.jesuskrastev.bali.ui.screens.test.TestUiState
+import com.jesuskrastev.bali.ui.screens.test.TestSummary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MistakesScreen(
     onBackClick: () -> Unit,
-    onFinishTest: (Int, Int, Int, Int, Int, Int, Int?, Int?, Int?, Boolean, Int) -> Unit,
+    onFinishTest: (TestSummary) -> Unit,
     viewModel: MistakesViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -108,19 +109,7 @@ fun MistakesScreen(
                         onNextClick = {
                             if (uiState.currentQuestionIndex == uiState.questions.size - 1) {
                                 viewModel.onEvent(MistakesEvent.FinishReview { result ->
-                                    onFinishTest(
-                                        result.score,
-                                        result.total,
-                                        result.xpGained,
-                                        result.durationSeconds,
-                                        result.accuracy,
-                                        result.baseXp,
-                                        result.bonusPerfection,
-                                        result.bonusFast,
-                                        result.bonusStreak,
-                                        result.leveledUp,
-                                        result.coinsGained
-                                    )
+                                    onFinishTest(result)
                                 })
                             } else {
                                 viewModel.onEvent(MistakesEvent.NextQuestion)
