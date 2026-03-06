@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
 import com.jesuskrastev.bali.ui.screens.home.StreakStatus
+import com.jesuskrastev.bali.ui.components.WeeklyStreakProgress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,12 +98,11 @@ fun HomeStreakScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    
-                    // Gauge Segment
-                StreakGauge(
-                    current = uiState.currentStreak,
-                    total = 7,
-                    color = colorPrimary
+                
+                WeeklyStreakProgress(
+                    testsCompletedThisWeek = uiState.weeklyStreak.count { it.status == StreakStatus.COMPLETED },
+                    weeklyGoal = 4,
+                    macroStreakWeeks = uiState.currentStreak
                 )
 
                 Spacer(modifier = Modifier.height(48.dp))
@@ -147,137 +147,6 @@ fun HomeStreakScreen(
     }
 }
 
-@Composable
-fun StreakGauge(current: Int, total: Int, color: Color) {
-    val animatedProgress by animateFloatAsState(
-        targetValue = current.toFloat() / total.toFloat(),
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "gauge"
-    )
-
-    Box(
-        modifier = Modifier.size(280.dp, 145.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            val cx = size.width / 2f
-            val cy = size.height
-            val radius = size.width * 0.45f
-            val strokeWidth = 24.dp.toPx()
-
-            // Arch background
-            drawArc(
-                color = Color.White.copy(alpha = 0.05f),
-                startAngle = 180f,
-                sweepAngle = 180f,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(cx - radius, cy - radius),
-                size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            )
-
-            // Progress Arch with Glow
-            val sweepAngle = 180f * animatedProgress
-            
-            // Glow effect using native canvas
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    this.color = color.toArgb()
-                    this.strokeWidth = strokeWidth
-                    this.style = android.graphics.Paint.Style.STROKE
-                    this.strokeCap = android.graphics.Paint.Cap.ROUND
-                    this.maskFilter = android.graphics.BlurMaskFilter(20.dp.toPx(), android.graphics.BlurMaskFilter.Blur.NORMAL)
-                    this.alpha = (255 * 0.4f).toInt()
-                }
-                
-                drawArc(
-                    cx - radius, cy - radius, cx + radius, cy + radius,
-                    180f, sweepAngle,
-                    false,
-                    paint
-                )
-            }
-
-            // Foreground Progress Arch
-            drawArc(
-                brush = Brush.horizontalGradient(
-                    listOf(color.copy(alpha = 0.8f), color)
-                ),
-                startAngle = 180f,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = androidx.compose.ui.geometry.Offset(cx - radius, cy - radius),
-                size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = strokeWidth, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            )
-            
-            // End Indicator Dot (White circle at progress tip)
-            val angle = 180f + sweepAngle
-            val rad = Math.toRadians(angle.toDouble())
-            val dotX = cx + radius * Math.cos(rad).toFloat()
-            val dotY = cy + radius * Math.sin(rad).toFloat()
-            
-            // Subtle glow for the dot
-            drawCircle(
-                color = Color.White.copy(alpha = 0.3f),
-                radius = 12.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(dotX, dotY)
-            )
-            
-            drawCircle(
-                color = Color.White,
-                radius = 6.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(dotX, dotY)
-            )
-            
-            // Needle Indicator
-            val needleLength = radius * 0.8f
-            val tipX = cx + needleLength * Math.cos(rad).toFloat()
-            val tipY = cy + needleLength * Math.sin(rad).toFloat()
-            
-            // Needle line
-            drawLine(
-                color = Color.White.copy(alpha = 0.8f),
-                start = androidx.compose.ui.geometry.Offset(cx, cy),
-                end = androidx.compose.ui.geometry.Offset(tipX, tipY),
-                strokeWidth = 3.dp.toPx(),
-                cap = androidx.compose.ui.graphics.StrokeCap.Round
-            )
-            
-            // Needle base pivot
-            drawCircle(
-                color = Color(0xFF1E1E1E),
-                radius = 8.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(cx, cy)
-            )
-            
-            drawCircle(
-                color = color,
-                radius = 4.dp.toPx(),
-                center = androidx.compose.ui.geometry.Offset(cx, cy)
-            )
-        }
-        
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp)
-        ) {
-            Text(
-                text = current.toString(),
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Black,
-                color = Color.White
-            )
-            Text(
-                text = "DÍAS",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = color.copy(alpha = 0.7f),
-                letterSpacing = 1.sp
-            )
-        }
-    }
-}
 
 @Composable
 fun ProgressCard(uiState: HomeStreakUiState, color: Color) {
