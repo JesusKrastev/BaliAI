@@ -22,6 +22,7 @@ interface UserRepository {
     suspend fun insert(user: User)
     suspend fun resetStreak()
     suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>)
+    suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, lastPracticeTimestamp: Long, practiceDays: List<Long>)
     suspend fun updateXp(xp: Int, level: Int)
     suspend fun updateEnergy(energy: Int)
     suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long)

@@ -25,5 +25,8 @@ data class UserFirestore(
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
     val practiceDays: List<Long> = emptyList(),
+    val weeklyGoal: Int = 3,
+    val weekSessions: Int = 0,
+    val currentWeekStart: Long = 0L,
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap()
 )

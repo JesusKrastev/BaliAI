@@ -58,7 +58,7 @@ data class TestSummary(
     val bonusStreak: Int?,
     val leveledUp: Boolean,
     val coinsGained: Int,
-    val newStreak: Int
+    val newWeekSessions: Int
 )
 
 @HiltViewModel
@@ -371,7 +371,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newStreak = -1
+        var newWeekSessions = -1
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
@@ -421,7 +421,7 @@ class TestViewModel @Inject constructor(
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
             }
             val incrementedStreak = incrementStreakUseCase()
-            newStreak = incrementedStreak
+            newWeekSessions = incrementedStreak
             if (incrementedStreak > 0) {
                 analyticsTracker.streakRecorded(incrementedStreak)
             }
@@ -472,7 +472,7 @@ class TestViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             coinsGained = coinsGained,
-            newStreak = newStreak
+            newWeekSessions = newWeekSessions
         )
     }
 

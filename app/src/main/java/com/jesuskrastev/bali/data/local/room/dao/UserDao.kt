@@ -18,6 +18,9 @@ interface UserDao {
     @Query("UPDATE users SET currentStreak = :streak, lastPracticeTimestamp = :timestamp, practiceDays = :practiceDaysStr")
     suspend fun updateStreak(streak: Int, timestamp: Long, practiceDaysStr: String)
 
+    @Query("UPDATE users SET weekSessions = :weekSessions, currentWeekStart = :currentWeekStart, lastPracticeTimestamp = :timestamp, practiceDays = :practiceDaysStr")
+    suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, timestamp: Long, practiceDaysStr: String)
+
     @Query("UPDATE users SET xp = :xp, level = :level")
     suspend fun updateXp(xp: Int, level: Int)
 

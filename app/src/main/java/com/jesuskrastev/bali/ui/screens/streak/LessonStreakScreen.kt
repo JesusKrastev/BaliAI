@@ -31,7 +31,7 @@ import com.jesuskrastev.bali.ui.screens.home.StreakStatus
 @Composable
 fun LessonStreakScreen(
     viewModel: LessonStreakViewModel,
-    newStreak: Int,
+    newWeekSessions: Int,
     onContinueClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -72,7 +72,7 @@ fun LessonStreakScreen(
                 Spacer(modifier = Modifier.height(48.dp))
                 
                 Text(
-                    text = if (newStreak == 1) "¡RACHA INICIADA!" else "¡RACHA MANTENIDA!",
+                    text = if (newWeekSessions == 1) "¡PRIMERA SESIÓN!" else "¡SESIÓN COMPLETADA!",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Black,
                     color = colorPrimary,
@@ -104,16 +104,45 @@ fun LessonStreakScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                Text(
-                    text = "$newStreak Días",
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "$newWeekSessions / ${uiState.weeklyGoal}",
+                        style = MaterialTheme.typography.displayLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "sesiones esta semana",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                    )
+                }
                 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(32.dp))
                 
                 StreakTracker(weeklyStreak = uiState.weeklyStreak)
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                val motivationalText = when {
+                    newWeekSessions >= uiState.weeklyGoal -> "¡Semana completada! Tu racha de ${uiState.currentStreak} semanas sigue en pie 🔥"
+                    newWeekSessions == uiState.weeklyGoal - 1 -> "¡A una sesión de completar la semana!"
+                    else -> "Llevas $newWeekSessions de ${uiState.weeklyGoal} sesiones esta semana"
+                }
+                
+                val textColor = when {
+                    newWeekSessions >= uiState.weeklyGoal -> colorPrimary
+                    newWeekSessions == uiState.weeklyGoal - 1 -> Color.White.copy(alpha = 0.7f)
+                    else -> Color.White.copy(alpha = 0.5f)
+                }
+                
+                Text(
+                    text = motivationalText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = textColor,
+                    textAlign = TextAlign.Center
+                )
                 
                 Spacer(modifier = Modifier.weight(1f))
                 

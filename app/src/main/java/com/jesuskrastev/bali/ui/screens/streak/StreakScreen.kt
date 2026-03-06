@@ -1,43 +1,56 @@
 package com.jesuskrastev.bali.ui.screens.streak
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.EmojiEvents
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.jesuskrastev.bali.ui.components.WeeklyStreakProgress
 import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
 import com.jesuskrastev.bali.ui.screens.home.StreakStatus
-import com.jesuskrastev.bali.ui.components.WeeklyStreakProgress
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeStreakScreen(
-    viewModel: HomeStreakViewModel,
+fun StreakScreen(
+    viewModel: StreakViewModel,
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -48,12 +61,12 @@ fun HomeStreakScreen(
         containerColor = Color(0xFF0D0905),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Text(
                         text = "TU RACHA",
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.sp
-                    ) 
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
@@ -97,50 +110,53 @@ fun HomeStreakScreen(
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                
-                WeeklyStreakProgress(
-                    testsCompletedThisWeek = uiState.weeklyStreak.count { it.status == StreakStatus.COMPLETED },
-                    weeklyGoal = 4,
-                    macroStreakWeeks = uiState.currentStreak
-                )
-
-                Spacer(modifier = Modifier.height(48.dp))
-
-                // Weekly Progress Card
-                ProgressCard(uiState = uiState, color = colorPrimary)
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Stats Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Rounded.LocalFireDepartment,
-                        label = "RACHA ACTUAL",
-                        value = uiState.currentStreak.toString(),
-                        subLabel = "Días consecutivos",
-                        color = colorPrimary
+                    val completedDaysThisWeek =
+                        uiState.weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+                    WeeklyStreakProgress(
+                        testsCompletedThisWeek = completedDaysThisWeek,
+                        weeklyGoal = uiState.weeklyGoal,
+                        macroStreakWeeks = uiState.currentStreak
                     )
-                    StatCard(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Rounded.EmojiEvents,
-                        label = "MEJOR RACHA",
-                        value = uiState.highestStreak.toString(),
-                        subLabel = "Récord personal",
-                        color = colorPrimary
-                    )
-                }
 
-                Spacer(modifier = Modifier.height(48.dp))
+                    // Weekly Progress Card
+                    ProgressCard(uiState = uiState, color = colorPrimary)
 
-                // Footer Section
-                FooterSection(message = uiState.encouragingMessage, color = colorPrimary)
-                
-                Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Shields Section
+                    ShieldsCard(freezes = uiState.streakFreezes, color = colorPrimary)
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Stats Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        StatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.LocalFireDepartment,
+                            label = "SEMANAS SEGUIDAS",
+                            value = uiState.currentStreak.toString(),
+                            subLabel = "Racha actual",
+                            color = colorPrimary
+                        )
+                        StatCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.EmojiEvents,
+                            label = "MEJOR RACHA",
+                            value = uiState.highestStreak.toString(),
+                            subLabel = "Semanas récord",
+                            color = colorPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(48.dp))
+
+                    // Footer Section
+                    FooterSection(message = uiState.encouragingMessage, color = colorPrimary)
+
+                    Spacer(modifier = Modifier.height(48.dp))
                 }
             }
         }
@@ -149,7 +165,50 @@ fun HomeStreakScreen(
 
 
 @Composable
-fun ProgressCard(uiState: HomeStreakUiState, color: Color) {
+fun ShieldsCard(freezes: Int, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White.copy(alpha = 0.03f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Protecciones de Racha",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Salva tu racha si no cumples el objetivo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.4f),
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(2) { index ->
+                    val isActive = index < freezes
+                    Icon(
+                        imageVector = Icons.Rounded.Shield,
+                        contentDescription = "Escudo",
+                        tint = if (isActive) color else Color.White.copy(alpha = 0.15f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProgressCard(uiState: MainStreakUiState, color: Color) {
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = Color.White.copy(alpha = 0.03f),
@@ -163,9 +222,9 @@ fun ProgressCard(uiState: HomeStreakUiState, color: Color) {
                 color = Color.White.copy(alpha = 0.6f),
                 fontWeight = FontWeight.Medium
             )
-            
+
             Spacer(modifier = Modifier.height(20.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -183,8 +242,11 @@ fun ProgressCard(uiState: HomeStreakUiState, color: Color) {
 fun DayIndicator(day: DailyStreakState, color: Color) {
     val isCompleted = day.status == StreakStatus.COMPLETED
     val isToday = day.isToday
-    
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Box(
             modifier = Modifier
                 .size(34.dp)
@@ -210,7 +272,7 @@ fun DayIndicator(day: DailyStreakState, color: Color) {
                 fontWeight = FontWeight.Bold,
                 color = if (isCompleted) Color.Black else Color.White.copy(alpha = 0.4f)
             )
-            
+
             if (isCompleted) {
                 // Glow effect simulation
                 Box(
@@ -247,7 +309,10 @@ fun StatCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
@@ -255,24 +320,24 @@ fun StatCard(
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
-                    text = label, 
-                    style = MaterialTheme.typography.labelMedium, 
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.5f),
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
                 )
             }
-            
+
             Text(
-                text = value, 
-                style = MaterialTheme.typography.displayMedium, 
-                fontWeight = FontWeight.Black, 
+                text = value,
+                style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.Black,
                 color = Color.White
             )
-            
+
             Text(
-                text = subLabel, 
-                style = MaterialTheme.typography.labelSmall, 
+                text = subLabel,
+                style = MaterialTheme.typography.labelSmall,
                 color = Color.White.copy(alpha = 0.3f),
                 fontWeight = FontWeight.Medium
             )
@@ -285,7 +350,9 @@ fun FooterSection(message: String, color: Color) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp)
     ) {
         Box(
             modifier = Modifier
@@ -301,7 +368,7 @@ fun FooterSection(message: String, color: Color) {
                 modifier = Modifier.size(28.dp)
             )
         }
-        
+
         Text(
             text = "¡Sigue así, Campeón!",
             style = MaterialTheme.typography.headlineSmall,
@@ -309,7 +376,7 @@ fun FooterSection(message: String, color: Color) {
             color = Color.White,
             textAlign = TextAlign.Center
         )
-        
+
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,

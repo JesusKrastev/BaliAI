@@ -16,23 +16,25 @@ import kotlinx.coroutines.launch
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import javax.inject.Inject
 
-data class StreakUiState(
+data class MainStreakUiState(
     val isLoading: Boolean = true,
     val weeklyStreak: List<DailyStreakState> = emptyList(),
     val streakFreezes: Int = 0,
     val currentStreak: Int = 0,
     val highestStreak: Int = 0,
+    val completionPercentage: Int = 0,
+    val encouragingMessage: String = "",
     val weekSessions: Int = 0,
     val weeklyGoal: Int = 3
 )
 
 @HiltViewModel
-class LessonStreakViewModel @Inject constructor(
+class StreakViewModel @Inject constructor(
     private val userRepository: UserRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(StreakUiState())
-    val uiState: StateFlow<StreakUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(MainStreakUiState())
+    val uiState: StateFlow<MainStreakUiState> = _uiState.asStateFlow()
 
     init {
         loadData()
@@ -45,17 +47,33 @@ class LessonStreakViewModel @Inject constructor(
                     val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
                     // Calculate actual sessions from weeklyStreak instead of relying on weekSessions DB field
                     val actualSessionsThisWeek = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-                    _uiState.value = StreakUiState(
+                    _uiState.value = MainStreakUiState(
                         isLoading = false,
                         weeklyStreak = weeklyStreak,
                         streakFreezes = user.streakFreezes,
                         currentStreak = user.currentStreak,
                         highestStreak = user.highestStreak,
+                        completionPercentage = calculateCompletionPercentage(weeklyStreak),
+                        encouragingMessage = generateEncouragingMessage(user.currentStreak, user.highestStreak),
                         weekSessions = actualSessionsThisWeek,
                         weeklyGoal = user.weeklyGoal
                     )
                 }
             }
+        }
+    }
+
+    private fun calculateCompletionPercentage(weeklyStreak: List<DailyStreakState>): Int {
+        val completedDays = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+        return (completedDays * 100) / 7
+    }
+
+    private fun generateEncouragingMessage(currentStreak: Int, highestStreak: Int): String {
+        return if (currentStreak >= highestStreak) {
+            "¡Increíble! Estás estableciendo un nuevo récord personal."
+        } else {
+            val remaining = highestStreak - currentStreak
+            "Estás a solo $remaining días de batir tu récord personal de $highestStreak días."
         }
     }
 }

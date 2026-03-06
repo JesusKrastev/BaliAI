@@ -91,6 +91,24 @@ class UserRepositoryImpl @Inject constructor(
         }
     )
 
+    override suspend fun updateWeeklyProgress(
+        weekSessions: Int,
+        currentWeekStart: Long,
+        lastPracticeTimestamp: Long,
+        practiceDays: List<Long>
+    ) = updateField(
+        fields = mapOf(
+            "weekSessions" to weekSessions,
+            "currentWeekStart" to currentWeekStart,
+            "lastPracticeTimestamp" to lastPracticeTimestamp,
+            "practiceDays" to practiceDays
+        ),
+        localAction = {
+            val practiceDaysStr = Converters().fromLongList(practiceDays)
+            userDao.updateWeeklyProgress(weekSessions, currentWeekStart, lastPracticeTimestamp, practiceDaysStr)
+        }
+    )
+
     override suspend fun updateXp(xp: Int, level: Int) = updateField(
         fields = mapOf("xp" to xp, "level" to level),
         localAction = { userDao.updateXp(xp, level) }

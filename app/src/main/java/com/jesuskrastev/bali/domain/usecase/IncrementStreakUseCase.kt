@@ -13,28 +13,51 @@ class IncrementStreakUseCase @Inject constructor(
         val user = userRepository.get().first() ?: return -1
         val currentTimestamp = System.currentTimeMillis()
 
-        val hasAlreadyPracticedToday = dateTimeHelper.isSameDay(
-            timestamp1 = user.lastPracticeTimestamp,
-            timestamp2 = currentTimestamp
-        )
+        // 2. Calcular el timestamp del inicio de la semana actual (lunes 00:00)
+        val actualWeekStart = dateTimeHelper.getStartOfWeek(currentTimestamp)
 
+        // 3. Manejar paso de semana (el usuario está en una semana nueva pero la app/Cloud Function no se ha actualizado)
+        var currentWeekSessions = user.weekSessions
+        var userWeekStart = user.currentWeekStart
+        var practiceDays = user.practiceDays
+
+        if (userWeekStart != actualWeekStart) {
+            // Week has changed - reset sessions and filter out old practice days
+            currentWeekSessions = 0
+            userWeekStart = actualWeekStart
+            // Remove practice days from previous weeks
+            practiceDays = practiceDays.filter { day ->
+                dateTimeHelper.getStartOfWeek(day) == actualWeekStart
+            }
+        }
+
+        // 3b. Validate that weekSessions matches the actual count of practice days this week
+        val actualSessionsThisWeek = practiceDays.size
+        if (currentWeekSessions != actualSessionsThisWeek) {
+            // Sync weekSessions with actual practice day count
+            currentWeekSessions = actualSessionsThisWeek
+        }
+
+        // 4. Calcular el inicio del día actual (para ver si ya practicó hoy)
+        val startOfToday = dateTimeHelper.getStartOfDay(currentTimestamp)
+
+        // 5. Si ya practicó hoy, retorna -1
+        val hasAlreadyPracticedToday = practiceDays.contains(startOfToday)
         if (hasAlreadyPracticedToday) return -1
 
-        val updatedStreak = user.currentStreak + 1
-        
-        val startOfToday = dateTimeHelper.getStartOfDay(currentTimestamp)
-        val updatedPracticeDays = user.practiceDays + startOfToday
+        // 6. Si no practicó hoy, incrementa weekSessions y añade a practiceDays
+        currentWeekSessions += 1
+        val updatedPracticeDays = practiceDays + startOfToday
 
-        userRepository.updateStreak(
-            streak = updatedStreak,
-            timestamp = currentTimestamp,
+        // 7. Actualizar repositorio
+        userRepository.updateWeeklyProgress(
+            weekSessions = currentWeekSessions,
+            currentWeekStart = userWeekStart,
+            lastPracticeTimestamp = currentTimestamp,
             practiceDays = updatedPracticeDays
         )
 
-        // Update highestStreak if new record
-        if (updatedStreak > user.highestStreak) {
-            userRepository.updateHighestStreak(updatedStreak)
-        }
-        return updatedStreak
+        // 8 y 9. Retorna el nuevo weekSessions (el currentStreak se maneja en Cloud Function)
+        return currentWeekSessions
     }
 }

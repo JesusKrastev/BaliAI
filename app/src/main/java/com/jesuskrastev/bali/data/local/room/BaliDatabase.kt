@@ -16,7 +16,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 
 @Database(
     entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, LessonNodeEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -27,6 +27,14 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun lessonNodeDao(): LessonNodeDao
 
     companion object {
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN weeklyGoal INTEGER NOT NULL DEFAULT 3")
+                database.execSQL("ALTER TABLE users ADD COLUMN weekSessions INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN currentWeekStart INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE users ADD COLUMN highestStreak INTEGER NOT NULL DEFAULT 0")

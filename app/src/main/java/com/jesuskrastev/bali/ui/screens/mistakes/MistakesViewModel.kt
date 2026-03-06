@@ -224,7 +224,7 @@ class MistakesViewModel @Inject constructor(
         }
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy = if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newStreak = -1
+        var newWeekSessions = -1
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
@@ -252,7 +252,7 @@ class MistakesViewModel @Inject constructor(
                 if (newEnergy == 0) analyticsTracker.energyDepleted()
             }
             val incrementedStreak = incrementStreakUseCase()
-            newStreak = incrementedStreak
+            newWeekSessions = incrementedStreak
             if (incrementedStreak > 0) {
                 analyticsTracker.streakRecorded(incrementedStreak)
             }
@@ -270,7 +270,7 @@ class MistakesViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             coinsGained = coinsGained,
-            newStreak = newStreak
+            newWeekSessions = newWeekSessions
         )
     }
 }

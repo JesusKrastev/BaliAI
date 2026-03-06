@@ -72,13 +72,13 @@ object SuggestionsRoute
 data class AuthRoute(val restrictNewAccounts: Boolean = false)
 
 @Serializable
-data class CoinsGainedRoute(val coins: Int, val newStreak: Int)
+data class CoinsGainedRoute(val coins: Int, val newWeekSessions: Int)
 
 @Serializable
-data class StreakRoute(val newStreak: Int)
+data class StreakRoute(val newWeekSessions: Int)
 
 @Serializable
-object HomeStreakRoute
+object MainStreakRoute
 
 @Serializable
 data class TestResultRoute(
@@ -93,7 +93,7 @@ data class TestResultRoute(
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
     val coinsGained: Int = 0,
-    val newStreak: Int = -1
+    val newWeekSessions: Int = -1
 )
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -160,7 +160,7 @@ fun AppNavigation(
                         navController.navigate(AuthRoute(restrictNewAccounts = false))
                     },
                     onStreakClick = {
-                        navController.navigate(HomeStreakRoute)
+                        navController.navigate(MainStreakRoute)
                     }
                 )
             }
@@ -232,7 +232,7 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newStreak = result.newStreak
+                                newWeekSessions = result.newWeekSessions
                             )
                         ) {
                             popUpTo(MistakesRoute) { inclusive = true }
@@ -272,7 +272,7 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newStreak = result.newStreak
+                                newWeekSessions = result.newWeekSessions
                             )
                         ) {
                             popUpTo(TestRoute(null)) { inclusive = true }
@@ -302,7 +302,7 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newStreak = result.newStreak
+                                newWeekSessions = result.newWeekSessions
                             )
                         ) {
                             popUpTo(ExamRoute) { inclusive = true }
@@ -324,7 +324,7 @@ fun AppNavigation(
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
                     onContinueClick = {
-                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreak)) {
+                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newWeekSessions)) {
                             popUpTo(HomeRoute) { inclusive = false }
                         }
                     }
@@ -336,8 +336,8 @@ fun AppNavigation(
                 CoinsGainedScreen(
                     coinsGained = route.coins,
                     onContinueClick = {
-                        if (route.newStreak > 0) {
-                            navController.navigate(StreakRoute(route.newStreak)) {
+                        if (route.newWeekSessions > 0) {
+                            navController.navigate(StreakRoute(route.newWeekSessions)) {
                                 popUpTo(HomeRoute) { inclusive = false }
                             }
                         } else {
@@ -355,7 +355,7 @@ fun AppNavigation(
                 
                 LessonStreakScreen(
                     viewModel = viewModel,
-                    newStreak = route.newStreak,
+                    newWeekSessions = route.newWeekSessions,
                     onContinueClick = {
                         navController.navigate(HomeRoute) {
                             popUpTo(HomeRoute) { inclusive = true }
@@ -364,10 +364,10 @@ fun AppNavigation(
                 )
             }
 
-            composable<HomeStreakRoute> {
-                val viewModel: com.jesuskrastev.bali.ui.screens.streak.HomeStreakViewModel = hiltViewModel()
+            composable<MainStreakRoute> {
+                val viewModel: com.jesuskrastev.bali.ui.screens.streak.StreakViewModel = hiltViewModel()
                 
-                com.jesuskrastev.bali.ui.screens.streak.HomeStreakScreen(
+                com.jesuskrastev.bali.ui.screens.streak.StreakScreen(
                     viewModel = viewModel,
                     onBackClick = {
                         navController.popBackStack()
