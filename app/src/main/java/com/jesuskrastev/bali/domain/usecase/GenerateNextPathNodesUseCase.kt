@@ -20,14 +20,14 @@ import javax.inject.Inject
  * It analyzes the user's current level and reported difficulties to create
  * a personalized curriculum of lesson nodes, which are then saved via [PathRepository].
  */
-class GenerateNextPathNodesUseCase @Inject constructor(
+open class GenerateNextPathNodesUseCase @Inject constructor(
     private val gemini: GenerativeModel,
     private val userRepository: UserRepository,
     private val pathRepository: PathRepository,
 ) {
     private val jsonContent = Json { ignoreUnknownKeys = true }
 
-    suspend operator fun invoke(count: Int = 5): List<LessonNode> {
+    open suspend operator fun invoke(count: Int = 5): List<LessonNode> {
         val user = userRepository.get().first() ?: throw Exception("Usuario no encontrado")
         val userId = user.id
 

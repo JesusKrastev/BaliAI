@@ -14,7 +14,7 @@ import com.jesuskrastev.bali.domain.util.LevelCalculator
  * base XP and various bonuses. It also checks if the accumulated XP results in a level-up,
  * updating the user's progress in the repository.
  */
-class IncrementXpUseCase @Inject constructor(
+open class IncrementXpUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
 
@@ -70,7 +70,7 @@ class IncrementXpUseCase @Inject constructor(
         return if (accuracy == 100 && totalQuestions >= 5) 15 else null
     }
 
-    suspend operator fun invoke(
+    open suspend operator fun invoke(
         mode: TestMode,
         correctAnswers: Int,
         totalQuestions: Int,

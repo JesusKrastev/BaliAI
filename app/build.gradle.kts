@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.com.google.dagger)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.roborazzi)
 }
 
 android {
@@ -25,7 +26,7 @@ android {
         versionCode = 20260301
         versionName = "1.0.4"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
         properties.load(FileInputStream(rootProject.file("local.properties")))
         buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"")
@@ -54,6 +55,18 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    if (name.contains("Release", ignoreCase = true)) {
+        exclude("**/*ScreenshotTest*")
     }
 }
 
@@ -127,4 +140,34 @@ dependencies {
 
     // Mixpanel
     implementation("com.mixpanel.android:mixpanel-android:7.3.3")
+
+    // Testing - Unit Tests
+    testImplementation(libs.truth)
+    testImplementation(libs.mockito.kotlin)
+    testImplementation(libs.mockito.inline)
+    testImplementation(libs.junit4)
+
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+
+    // Testing - Hilt
+    testImplementation(libs.hilt.android.testing)
+    androidTestImplementation(libs.hilt.android.testing)
+    kspTest(libs.dagger.hilt.android.compiler)
+    kspAndroidTest(libs.dagger.hilt.android.compiler)
+
+    // Testing - Compose UI Tests
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.truth)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Testing - Screenshot Tests (Roborazzi)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+
+    // Testing - Instrumented Tests
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.espresso.core)
 }

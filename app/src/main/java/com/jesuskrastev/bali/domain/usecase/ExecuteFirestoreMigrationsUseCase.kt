@@ -7,10 +7,10 @@ import javax.inject.Inject
  * Use case para ejecutar las migraciones de Firestore al iniciar la app.
  * Puede fallar silenciosamente (log) o ser más estricto según la configuración.
  */
-class ExecuteFirestoreMigrationsUseCase @Inject constructor(
+open class ExecuteFirestoreMigrationsUseCase @Inject constructor(
     private val migrationManager: FirestoreMigrationManager
 ) {
-    suspend operator fun invoke(userId: String) {
+    open suspend operator fun invoke(userId: String) {
         try {
             migrationManager.executePendingMigrations(userId)
         } catch (e: Exception) {

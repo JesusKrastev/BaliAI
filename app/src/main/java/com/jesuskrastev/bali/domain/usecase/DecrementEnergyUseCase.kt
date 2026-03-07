@@ -4,10 +4,10 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class DecrementEnergyUseCase @Inject constructor(
+open class DecrementEnergyUseCase @Inject constructor(
     private val userRepository: UserRepository,
 ) {
-    suspend operator fun invoke(): Int {
+    open suspend operator fun invoke(): Int {
         val user = userRepository.get().first() ?: return -1
         if (user.energy > 0) {
             val newEnergy = user.energy - 1

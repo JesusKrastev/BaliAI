@@ -5,11 +5,11 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class IncrementStreakUseCase @Inject constructor(
+open class IncrementStreakUseCase @Inject constructor(
     private val userRepository: UserRepository,
     private val dateTimeHelper: DateTimeHelper
 ) {
-    suspend operator fun invoke(): Int {
+    open suspend operator fun invoke(): Int {
         val user = userRepository.get().first() ?: return -1
         val currentTimestamp = System.currentTimeMillis()
 

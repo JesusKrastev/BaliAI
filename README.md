@@ -77,6 +77,27 @@ Pasos para compilar y ejecutar el proyecto en tu máquina local:
 5. **Compilación:**
    Selecciona un emulador (nivel de API 24 o superior) o conecta un dispositivo físico mediante ADB y ejecuta.
 
+## 🧪 Pruebas (Testing)
+
+El proyecto incluye una suite de pruebas automatizadas para garantizar la estabilidad de las funcionalidades principales.
+
+### Ejecución de Tests:
+
+*   **Unit Tests & Screenshot Tests (Robolectric + Roborazzi):**
+    Ejecutan en tu máquina local sin necesidad de un emulador.
+    ```bash
+    ./gradlew test
+    ```
+    *Nota: Los screenshot tests se ejecutan solo en variantes de depuración (`debug`).*
+
+*   **Instrumentation Tests (Room DAOs, Integración):**
+    Requieren un emulador o dispositivo físico conectado.
+    ```bash
+    ./gradlew connectedAndroidTest
+    ```
+
+Tras la ejecución, los resultados se pueden consultar en `app/build/reports/`.
+
 ## 📄 Licencia
 
 Todos los derechos reservados.

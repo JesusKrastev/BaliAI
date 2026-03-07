@@ -12,11 +12,11 @@ import javax.inject.Inject
  * It uses the predefined layout from [DgtLearningPathTemplate] and saves
  * the resulting nodes to the user's data source via [PathRepository].
  */
-class GenerateInitialPathUseCase @Inject constructor(
+open class GenerateInitialPathUseCase @Inject constructor(
     private val pathRepository: PathRepository,
     private val userRepository: UserRepository
 ) {
-    suspend operator fun invoke() {
+    open suspend operator fun invoke() {
         val user = userRepository.get().first() ?: return
         val nodes = DgtLearningPathTemplate.buildInitialPath()
         pathRepository.saveGeneratedNodes(user.id, nodes)

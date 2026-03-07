@@ -82,10 +82,10 @@ class AuthViewModel @Inject constructor(
                             localAnswers
                         )
                         analyticsTracker.identifyUser(userId ?: "", email)
-                        analyticsTracker.signUp()
+                        analyticsTracker.signUp("google")
                     } else {
                         analyticsTracker.identifyUser(userId ?: "", email)
-                        analyticsTracker.login()
+                        analyticsTracker.login("google")
                         // One-shot inicializaciÃ³n (Rachas, energÃ­a, migraciones) post-login
                         userId?.let {
                             executeFirestoreMigrationsUseCase(it)

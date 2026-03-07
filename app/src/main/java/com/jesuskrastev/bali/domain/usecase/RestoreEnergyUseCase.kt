@@ -4,7 +4,7 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class RestoreEnergyUseCase @Inject constructor(
+open class RestoreEnergyUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
     companion object {

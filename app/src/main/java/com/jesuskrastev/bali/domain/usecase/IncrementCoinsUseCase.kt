@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import kotlin.random.Random
 
-class IncrementCoinsUseCase @Inject constructor(
+open class IncrementCoinsUseCase @Inject constructor(
     private val userRepository: UserRepository
 ) {
     suspend operator fun invoke(accuracy: Int = 50): Int {
