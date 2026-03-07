@@ -75,6 +75,7 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" }
 firebase-messaging-ktx = { module = "com.google.firebase:firebase-messaging-ktx" }
+firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx" }
 
 # Auth (Credential Manager)
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }

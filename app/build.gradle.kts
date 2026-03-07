@@ -26,8 +26,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260301
-        versionName = "1.0.4"
+        versionCode = 20260307
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -127,6 +127,7 @@ dependencies {
     implementation(libs.firebase.auth.ktx)
     implementation(libs.firebase.firestore.ktx)
     implementation(libs.firebase.messaging.ktx)
+    implementation(libs.firebase.config.ktx)
     implementation(libs.firebase.crashlytics)
 
     // Auth (Credential Manager)

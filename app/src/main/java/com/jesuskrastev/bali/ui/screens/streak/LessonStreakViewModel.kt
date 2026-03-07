@@ -11,9 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
+import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import javax.inject.Inject
 
 data class StreakUiState(
@@ -23,12 +22,13 @@ data class StreakUiState(
     val currentStreak: Int = 0,
     val highestStreak: Int = 0,
     val weekSessions: Int = 0,
-    val weeklyGoal: Int = 3
+    val weeklyGoal: Int = 5
 )
 
 @HiltViewModel
 class LessonStreakViewModel @Inject constructor(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val remoteConfigProvider: RemoteConfigProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StreakUiState())
@@ -52,7 +52,7 @@ class LessonStreakViewModel @Inject constructor(
                         currentStreak = user.currentStreak,
                         highestStreak = user.highestStreak,
                         weekSessions = actualSessionsThisWeek,
-                        weeklyGoal = user.weeklyGoal
+                        weeklyGoal = remoteConfigProvider.getWeeklyGoal()
                     )
                 }
             }

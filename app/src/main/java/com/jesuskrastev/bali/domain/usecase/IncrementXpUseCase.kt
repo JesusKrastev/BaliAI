@@ -21,25 +21,25 @@ open class IncrementXpUseCase @Inject constructor(
     fun calculateBaseXp(mode: TestMode, accuracy: Int): Int {
         return when (mode) {
             TestMode.PRACTICE -> when {
-                accuracy >= 95 -> 15
-                accuracy >= 90 -> 12
-                accuracy >= 80 -> 8
-                accuracy >= 70 -> 5
-                else -> 3
+                accuracy >= 95 -> 20
+                accuracy >= 90 -> 16
+                accuracy >= 80 -> 12
+                accuracy >= 70 -> 8
+                else -> 4
             }
             TestMode.CHALLENGE -> when {
-                accuracy >= 95 -> 25
-                accuracy >= 90 -> 20
-                accuracy >= 80 -> 15
+                accuracy >= 95 -> 22
+                accuracy >= 90 -> 18
+                accuracy >= 80 -> 14
                 accuracy >= 70 -> 10
                 else -> 5
             }
             TestMode.EXAM -> when {
-                accuracy >= 95 -> 40
-                accuracy >= 90 -> 35
-                accuracy >= 80 -> 25
-                accuracy >= 70 -> 15
-                else -> 8
+                accuracy >= 95 -> 30
+                accuracy >= 90 -> 25
+                accuracy >= 80 -> 18
+                accuracy >= 70 -> 12
+                else -> 6
             }
         }
     }
@@ -49,25 +49,25 @@ open class IncrementXpUseCase @Inject constructor(
 
         val avgTime = durationSeconds / totalQuestions
         return when {
-            avgTime <= 15 -> 10
-            avgTime <= 20 -> 5
-            avgTime <= 30 -> 3
+            avgTime <= 15 -> 5
+            avgTime <= 20 -> 3
+            avgTime <= 30 -> 1
             else -> null
         }
     }
 
     fun calculateStreakBonus(streakDays: Int): Int? {
         return when {
-            streakDays >= 30 -> 20
-            streakDays >= 14 -> 10
-            streakDays >= 7 -> 5
-            streakDays >= 3 -> 2
+            streakDays >= 30 -> 10
+            streakDays >= 14 -> 5
+            streakDays >= 7 -> 3
+            streakDays >= 5 -> 1
             else -> null
         }
     }
 
     fun calculatePerfectionBonus(accuracy: Int, totalQuestions: Int): Int? {
-        return if (accuracy == 100 && totalQuestions >= 5) 15 else null
+        return if (accuracy == 100 && totalQuestions >= 5) 5 else null
     }
 
     open suspend operator fun invoke(

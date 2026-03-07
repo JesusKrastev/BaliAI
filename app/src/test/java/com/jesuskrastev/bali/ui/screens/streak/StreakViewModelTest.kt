@@ -7,6 +7,9 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
+import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 class StreakViewModelTest {
 
@@ -14,11 +17,13 @@ class StreakViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val fakeUserRepository = FakeUserRepository()
+    private val remoteConfigProvider: RemoteConfigProvider = mock()
     private lateinit var viewModel: StreakViewModel
 
     @Before
     fun setup() {
-        viewModel = StreakViewModel(fakeUserRepository)
+        whenever(remoteConfigProvider.getWeeklyGoal()).thenReturn(5)
+        viewModel = StreakViewModel(fakeUserRepository, remoteConfigProvider)
     }
 
     @Test
@@ -40,11 +45,13 @@ class LessonStreakViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val fakeUserRepository = FakeUserRepository()
+    private val remoteConfigProvider: RemoteConfigProvider = mock()
     private lateinit var viewModel: LessonStreakViewModel
 
     @Before
     fun setup() {
-        viewModel = LessonStreakViewModel(fakeUserRepository)
+        whenever(remoteConfigProvider.getWeeklyGoal()).thenReturn(5)
+        viewModel = LessonStreakViewModel(fakeUserRepository, remoteConfigProvider)
     }
 
     @Test

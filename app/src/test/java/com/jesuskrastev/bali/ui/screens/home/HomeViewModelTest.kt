@@ -14,11 +14,13 @@ import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
+import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
+import org.mockito.kotlin.whenever
 import org.junit.Rule
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
@@ -48,11 +50,13 @@ class HomeViewModelTest {
     private val fakeRestoreEnergyUseCase = RestoreEnergyUseCase(fakeUserRepository)
     private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeUserRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
+    private val remoteConfigProvider: RemoteConfigProvider = mock()
 
     private lateinit var viewModel: HomeViewModel
 
     @Before
     fun setup() {
+        whenever(remoteConfigProvider.getWeeklyGoal()).thenReturn(5)
         viewModel = HomeViewModel(
             userRepository = fakeUserRepository,
             testResultRepository = fakeTestResultRepository,
@@ -65,6 +69,7 @@ class HomeViewModelTest {
             analyticsTracker = fakeAnalyticsTracker,
             dateTimeHelper = dateTimeHelper,
             restoreEnergyUseCase = fakeRestoreEnergyUseCase,
+            remoteConfigProvider = remoteConfigProvider,
             context = context
         )
     }

@@ -21,6 +21,7 @@ import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
+import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -41,6 +42,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val restoreEnergyUseCase: RestoreEnergyUseCase,
+    private val remoteConfigProvider: RemoteConfigProvider,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -61,6 +63,9 @@ class HomeViewModel @Inject constructor(
         loadDailyTip()
         observeAndAutoGeneratePath()
         refreshUserState()
+        viewModelScope.launch {
+            remoteConfigProvider.fetchAndActivate()
+        }
     }
 
     private fun observeAndAutoGeneratePath() {
@@ -163,8 +168,8 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail,
                 streak = user.currentStreak,
                 weekSessions = user.weekSessions,
-                weeklyGoal = user.weeklyGoal,
-                weekProgressPercent = ((user.weekSessions.toFloat() / user.weeklyGoal.coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100),
+                weeklyGoal = remoteConfigProvider.getWeeklyGoal(),
+                weekProgressPercent = ((user.weekSessions.toFloat() / remoteConfigProvider.getWeeklyGoal().coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,

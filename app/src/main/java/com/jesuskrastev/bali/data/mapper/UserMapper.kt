@@ -5,6 +5,7 @@ import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
 import com.jesuskrastev.bali.domain.model.User
 
 fun UserEntity.toDomain(): User = User(
+    id = id,
     name = name,
     licenseType = licenseType,
     experience = experience,
@@ -25,12 +26,12 @@ fun UserEntity.toDomain(): User = User(
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
     practiceDays = practiceDays,
-    weeklyGoal = weeklyGoal,
     weekSessions = weekSessions,
     currentWeekStart = currentWeekStart
 )
 
 fun User.toEntity(): UserEntity = UserEntity(
+    id = id,
     name = name,
     licenseType = licenseType,
     experience = experience,
@@ -51,7 +52,6 @@ fun User.toEntity(): UserEntity = UserEntity(
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
     practiceDays = practiceDays,
-    weeklyGoal = weeklyGoal,
     weekSessions = weekSessions,
     currentWeekStart = currentWeekStart
 )
@@ -78,7 +78,6 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
     practiceDays = practiceDays,
-    weeklyGoal = weeklyGoal,
     weekSessions = weekSessions,
     currentWeekStart = currentWeekStart
 )
@@ -105,7 +104,6 @@ fun UserFirestore.toDomain(): User = User(
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
     practiceDays = practiceDays,
-    weeklyGoal = weeklyGoal,
     weekSessions = weekSessions,
     currentWeekStart = currentWeekStart
 )

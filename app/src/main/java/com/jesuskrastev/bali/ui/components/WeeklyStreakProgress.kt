@@ -38,7 +38,7 @@ import kotlin.math.PI
 @Composable
 fun WeeklyStreakProgress(
     testsCompletedThisWeek: Int,
-    weeklyGoal: Int = 3,
+    weeklyGoal: Int = 5,
     macroStreakWeeks: Int,
     modifier: Modifier = Modifier,
     primaryColor: Color = MaterialTheme.colorScheme.primary, // Use app primary color

@@ -31,7 +31,8 @@ class MigrationV2ToV3 @Inject constructor(
         // 1. Reset xp and level
         val updates = hashMapOf<String, Any>(
             "xp" to 0,
-            "level" to 0
+            "level" to 0,
+            "currentStreak" to 0
         )
         userRef.update(updates).await()
         println("Migration V3: Reset 'xp' and 'level' to 0 for user $userId")
