@@ -98,6 +98,13 @@ El proyecto incluye una suite de pruebas automatizadas para garantizar la estabi
 
 Tras la ejecución, los resultados se pueden consultar en `app/build/reports/`.
 
+### Reporte de Cobertura (Coverage):
+Para generar un reporte detallado de qué parte del código está siendo probada:
+```bash
+./gradlew testDebugUnitTestCoverage
+```
+El reporte HTML se generará en `app/build/reports/jacoco/testDebugUnitTestCoverage/html/index.html`.
+
 ## 📄 Licencia
 
 Todos los derechos reservados.

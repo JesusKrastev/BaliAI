@@ -11,7 +11,10 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.roborazzi)
+    id("jacoco")
 }
+
+apply(from = "jacoco.gradle.kts")
 
 android {
     namespace = "com.jesuskrastev.bali"
