@@ -4,8 +4,12 @@ import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FirebaseFirestore
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * Implementación del manager de migraciones de Firestore.
@@ -18,16 +22,20 @@ import javax.inject.Inject
  *   release/
  *     schemaVersion: 1 (actualizable según sea necesario)
  */
+@Singleton
 class FirestoreMigrationManagerImpl @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val migrations: Set<@JvmSuppressWildcards FirestoreMigration>
 ) : FirestoreMigrationManager {
 
+    private val migrationMutex = Mutex()
+
     private val collection =
         firestore.collection("env").document(BuildConfig.BUILD_TYPE).collection("users")
 
     override suspend fun executePendingMigrations(userId: String) {
-        val currentVersion = getCurrentSchemaVersion(userId)
+        migrationMutex.withLock {
+            val currentVersion = getCurrentSchemaVersion(userId)
         val targetVersion = getTargetSchemaVersion()
 
         if (currentVersion >= targetVersion) {
@@ -58,6 +66,7 @@ class FirestoreMigrationManagerImpl @Inject constructor(
                 println("Migración completada: ${migration.description}")
 
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 println("Error en migración ${migration.description}: ${e.message}")
                 throw MigrationException(
                     "Falló la migración a v${migration.targetVersion}: ${e.message}",
@@ -67,6 +76,7 @@ class FirestoreMigrationManagerImpl @Inject constructor(
         }
 
         println("Todas las migraciones completadas. Versión final: $targetVersion")
+        }
     }
 
     override suspend fun getCurrentSchemaVersion(userId: String): Int {
@@ -99,6 +109,7 @@ class FirestoreMigrationManagerImpl @Inject constructor(
             // Usamos merge(true) o update para no sobreescribir el document entero si falta algo en la app vieja, aunque Update es mas seguro si el doc ya existe
             userDocRef.update("schemaVersion", version).await()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             throw MigrationException(
                 "No se pudo actualizar schemaVersion a $version en el usuario $userId: ${e.message}",
                 e

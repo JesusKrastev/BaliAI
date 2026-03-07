@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -14,6 +15,7 @@ open class ExecuteFirestoreMigrationsUseCase @Inject constructor(
         try {
             migrationManager.executePendingMigrations(userId)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             // Log la excepción pero no crasha la app
             // Lanzamos la excepción para el ViewModel maneje el error
             println("Error durante migraciones de Firestore: ${e.message}")
