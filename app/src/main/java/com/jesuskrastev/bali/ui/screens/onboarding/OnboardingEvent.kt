@@ -15,4 +15,5 @@ sealed class OnboardingEvent {
     // Navigation Events
     data object GoToNextStep : OnboardingEvent()
     data object GoToPreviousStep : OnboardingEvent()
+    data object CompleteOnboarding : OnboardingEvent()
 }

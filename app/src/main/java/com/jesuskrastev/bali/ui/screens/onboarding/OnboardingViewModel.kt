@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.ui.screens.onboarding
+package com.jesuskrastev.bali.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -42,6 +42,7 @@ sealed class OnboardingStep {
     data object Processing : OnboardingStep()
     data object Comparison : OnboardingStep()
     data object Pact : OnboardingStep()
+    data object PaywallPending : OnboardingStep()
     data object Completed : OnboardingStep()
 }
 
@@ -64,6 +65,8 @@ class OnboardingViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
     val uiState: StateFlow<OnboardingUiState> = _uiState.asStateFlow()
+
+    private val reducer = OnboardingReducer()
 
     private val stepsOrder = listOf(
         OnboardingStep.Name, OnboardingStep.License, OnboardingStep.Experience, OnboardingStep.DialogueExperience,
@@ -93,6 +96,7 @@ class OnboardingViewModel @Inject constructor(
             is OnboardingEvent.SelectStudyTime -> selectStepItem { it.copy(studyTime = event.time) }
             OnboardingEvent.GoToNextStep -> goToNextStep()
             OnboardingEvent.GoToPreviousStep -> goToPreviousStep()
+            OnboardingEvent.CompleteOnboarding -> completeOnboarding()
         }
     }
 
@@ -131,7 +135,7 @@ class OnboardingViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         currentStep = nextStep,
-                        progress = calculateProgress(currentIndex + 1)
+                        progress = reducer.calculateProgress(currentIndex + 1, stepsOrder.size)
                     )
                 }
                 updateMascotMessage()
@@ -160,9 +164,13 @@ class OnboardingViewModel @Inject constructor(
                 currentStreak = 0
             )
             userRepository.insert(preferences)
-            analyticsTracker.onboardingCompleted()
-            _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
+            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
         }
+    }
+
+    private fun completeOnboarding() {
+        analyticsTracker.onboardingCompleted()
+        _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
     }
 
     private fun goToPreviousStep() {
@@ -172,15 +180,13 @@ class OnboardingViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     currentStep = prevStep,
-                    progress = calculateProgress(currentIndex - 1)
+                    progress = reducer.calculateProgress(currentIndex - 1, stepsOrder.size)
                 )
             }
             updateMascotMessage()
             updateNavigationState()
         }
     }
-
-    private fun calculateProgress(index: Int): Float = index.toFloat() / (stepsOrder.size - 1)
 
     private fun startProcessing() {
         _uiState.update {
@@ -207,19 +213,7 @@ class OnboardingViewModel @Inject constructor(
 
     private fun updateNavigationState() {
         val state = _uiState.value
-        val canGoNext = when (state.currentStep) {
-            OnboardingStep.Name -> {
-                val name = state.data.name ?: ""
-                name.isNotBlank() && name.all { it.isLetter() || it.isWhitespace() }
-            }
-            OnboardingStep.Reasons -> state.data.reasons.isNotEmpty()
-            OnboardingStep.DifficultTopics -> state.data.difficultTopics.isNotEmpty()
-            is OnboardingStep.DialogueExperience,
-            is OnboardingStep.DialogueDifficultTopics,
-            OnboardingStep.Notifications,
-            OnboardingStep.Comparison -> true
-            else -> false
-        }
+        val canGoNext = reducer.shouldEnableNextButton(state.currentStep, state.data)
         _uiState.update {
             it.copy(
                 canGoNext = canGoNext,
@@ -230,45 +224,16 @@ class OnboardingViewModel @Inject constructor(
 
     private fun updateMascotMessage() {
         val state = _uiState.value
-        val message = when (state.currentStep) {
-            OnboardingStep.Name -> "Â¿CÃ³mo te llamas?"
-            OnboardingStep.License -> "Genial, ${state.data.name ?: ""}. Â¿QuÃ© carnet quieres sacarte?"
-            OnboardingStep.Experience -> "Â¿En quÃ© punto estÃ¡s ahora mismo?"
-            OnboardingStep.DialogueExperience -> getExperienceReaction(OnboardingConfig.experiences.indexOf(state.data.experience))
-            OnboardingStep.Reasons -> getReasonReaction(state.data.reasons)
-            OnboardingStep.ExamDate -> "Â¿Ya tienes fecha de examen?"
-            OnboardingStep.DailyGoal -> "Â¿CuÃ¡nto tiempo puedes dedicarme al dÃ­a?"
-            OnboardingStep.LearningPreference -> "Â¿CÃ³mo prefieres aprender?"
-            OnboardingStep.DifficultTopics -> "Â¿QuÃ© temas se te atragantan mÃ¡s?"
-            OnboardingStep.DialogueDifficultTopics -> "Entendido. Vamos a machacarlo juntos ðŸ’ª"
-            OnboardingStep.Concern -> "Â¿QuÃ© es lo que mÃ¡s miedo te da?"
-            OnboardingStep.StudyTime -> "Â¿CuÃ¡ndo te cunde mÃ¡s estudiar?"
-            OnboardingStep.Notifications -> "Activa las notis. Yo cuido tu racha ðŸ”¥"
-            OnboardingStep.Processing -> "Analizando tus datos... Â¡Esto promete! ðŸ¤–"
-            OnboardingStep.Comparison -> "Mira cÃ³mo vas a estudiar conmigo ðŸ‘‡"
-            OnboardingStep.Pact -> "Casi listo, ${state.data.name ?: ""}. Solo falta tu compromiso..."
-            else -> ""
-        }
+        val message = reducer.updateMascotMessage(state.currentStep, state.data)
         _uiState.update { it.copy(mascotMessage = message) }
     }
 
     private fun getExperienceReaction(index: Int?) = when (index) {
-        0 -> "Perfecto. Vamos a construirlo desde cero ðŸ—ï¸"
-        1 -> "Bien. Aceleramos el ritmo entonces ðŸš€"
-        2 -> "Esta vez lo clavamos. Te lo prometo ðŸ’ª"
-        3 -> "Â¡Un experto! Esto serÃ¡ fÃ¡cil para ti ðŸ˜Ž"
+        0 -> "Perfecto. Vamos a construirlo desde cero"
+        1 -> "Bien. Aceleramos el ritmo entonces"
+        2 -> "Esta vez lo clavamos. Te lo prometo"
+        3 -> "Un experto! Esto será fácil para ti"
         else -> ""
-    }
-
-    private fun getReasonReaction(reasons: Set<String>) = when {
-        reasons.size > 1 -> "Varias razones. Me gusta tu motivaciÃ³n ðŸ”¥"
-        reasons.contains("ðŸ’¼ Trabajo") -> "Â¡A por ese trabajo! ðŸ’¼"
-        reasons.contains("ðŸ  Independencia") -> "Se acabÃ³ depender de los demÃ¡s ðŸ—ï¸"
-        reasons.contains("âœˆï¸ Viajes") -> "Carreteras esperÃ¡ndote ðŸ—ºï¸"
-        reasons.contains("ðŸ‘¨â€ðŸ‘©â€ðŸ‘§â€ðŸ‘¦ Familia") -> "El chÃ³fer oficial en camino ðŸš—"
-        reasons.contains("ðŸ› ï¸ Oportunidad acadÃ©mica") -> "Invirtiendo en tu futuro ðŸ“š"
-        reasons.contains("ðŸŽï¸ Disfrute personal") -> "Â¡Pura pasiÃ³n por conducir! ðŸŽï¸"
-        else -> "Â¿Por quÃ© quieres el carnet?"
     }
 
     override fun onCleared() {
