@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali
+package com.jesuskrastev.bali
 
 import android.app.Activity
 import android.os.Bundle
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
                         }
                         isOnboardingCompleted != null && !isMigrating -> {
                             // NavegaciÃ³n Normal (Aparece cuando el SplashScreen se oculta y no hay error)
-                            val startDestination = if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute
+                            val startDestination = remember { if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute }
                             AppNavigation(
                                 startDestination = startDestination
                             )

@@ -28,6 +28,7 @@ googleid = "1.1.1"
 kotlinxCoroutines = "1.9.0"
 roborazzi = "1.6.0"
 robolectric = "4.14.1"
+animationCore = "1.10.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -98,6 +99,7 @@ hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testi
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core", version.ref = "animationCore" }
 
 [plugins]
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

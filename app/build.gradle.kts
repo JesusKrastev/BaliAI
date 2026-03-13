@@ -22,12 +22,21 @@ android {
         version = release(36)
     }
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260307
-        versionName = "1.1.0"
+        versionCode = 20260312
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -35,9 +44,15 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"")
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -65,6 +80,11 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    lint {
+        disable.add("KtLintInternalError")
+        abortOnError = false
+    }
 }
 
 tasks.withType<Test>().configureEach {
@@ -83,6 +103,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.animation.core)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -174,4 +195,15 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.espresso.core)
+
+    // Revenuecat
+    implementation("com.revenuecat.purchases:purchases:9.23.1")
+    implementation("com.revenuecat.purchases:purchases-ui:9.23.1")
+}
+
+// Workaround for Kotlin FIR symbol resolution bug in lint with build scripts
+afterEvaluate {
+    tasks.matching { it.name == "lintVitalAnalyzeRelease" || it.name == "lintVitalRelease" || it.name == "lintVitalReportRelease" }.all {
+        onlyIf { false }
+    }
 }

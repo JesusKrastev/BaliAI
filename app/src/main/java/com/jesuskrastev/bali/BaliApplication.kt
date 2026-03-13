@@ -8,7 +8,10 @@ import coil.util.DebugLogger
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
-import com.onesignal.debug.LogLevel
+import com.revenuecat.purchases.LogLevel
+import com.revenuecat.purchases.Purchases
+import com.revenuecat.purchases.PurchasesAreCompletedBy
+import com.revenuecat.purchases.PurchasesConfiguration
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 
@@ -37,13 +40,17 @@ class BaliApplication : Application(), ImageLoaderFactory {
             return
         }
 
-        // Enable verbose logging to debug issues (remove in production)
-        OneSignal.Debug.logLevel = LogLevel.VERBOSE
-
-        // Replace with your 36-character App ID from Dashboard > Settings > Keys & IDs
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
-
         MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
+        Purchases.logLevel = LogLevel.DEBUG
+        val builder = PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY)
+        Purchases.configure(
+            builder
+                .purchasesAreCompletedBy(PurchasesAreCompletedBy.REVENUECAT)
+                .appUserID(null)
+                .diagnosticsEnabled(true)
+                .build(),
+        )
     }
 
     private fun isRobolectric(): Boolean {
