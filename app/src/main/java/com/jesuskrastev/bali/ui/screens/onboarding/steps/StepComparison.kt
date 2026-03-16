@@ -55,8 +55,8 @@ fun StepComparison(data: OnboardingData) {
     val baliGreen = Color(0xFF4CAF50)
 
     // Valores para las barras
-    val redValue = 0.47f // 47%
-    val greenValue = 0.89f // 89%
+    val baliValue = 0.89f // 89%
+    val avgValue = 0.47f // 47%
     
     // Animación de altura: 0f a 1f en 800ms
     val animationProgress by animateFloatAsState(
@@ -121,7 +121,6 @@ fun StepComparison(data: OnboardingData) {
                     fontWeight = FontWeight.ExtraBold,
                     color = onCardColor,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(vertical = 16.dp)
                 )
 
                 // Gráfico de Barras con Canvas
@@ -129,7 +128,6 @@ fun StepComparison(data: OnboardingData) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(280.dp)
-                        .padding(vertical = 16.dp)
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val canvasWidth = size.width
@@ -139,39 +137,30 @@ fun StepComparison(data: OnboardingData) {
                         val spacing = 80.dp.toPx()
                         
                         // Centrar las barras
-                        val redBarX = (canvasWidth / 2) - barWidth - (spacing / 2)
-                        val greenBarX = (canvasWidth / 2) + (spacing / 2)
+                        val baliBarX = (canvasWidth / 2) - barWidth - (spacing / 2)
+                        val avgBarX = (canvasWidth / 2) + (spacing / 2)
 
-                        // Alturas visuales (Ironía visual: roja es más alta para representar "fallos/riesgo")
-                        // Siguiendo la instrucción: roja alta ( ~85% del canvas), verde más baja
-                        val redFullHeight = canvasHeight * 0.85f
-                        val greenFullHeight = canvasHeight * 0.45f
+                        // Alturas visuales: Bali es más alta (89%), Promedio más baja (47%)
+                        val baliFullHeight = canvasHeight * 0.85f
+                        val avgFullHeight = canvasHeight * 0.45f
 
-                        val redCurrentHeight = redFullHeight * animationProgress
-                        val greenCurrentHeight = greenFullHeight * animationProgress
+                        val baliCurrentHeight = baliFullHeight * animationProgress
+                        val avgCurrentHeight = avgFullHeight * animationProgress
 
-                        // Dibujar barra roja (Izquierda)
+                        // Barra "Con Bali" (Izquierda) - Color de marca
                         drawRoundRect(
-                            color = errorColor,
-                            topLeft = Offset(redBarX, canvasHeight - redCurrentHeight),
-                            size = Size(barWidth, redCurrentHeight),
+                            color = primaryColor,
+                            topLeft = Offset(baliBarX, canvasHeight - baliCurrentHeight),
+                            size = Size(barWidth, baliCurrentHeight),
                             cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
                         )
 
-                        // Dibujar barra verde (Derecha)
+                        // Barra "Promedio" (Derecha) - Color gris neutro
                         drawRoundRect(
-                            color = baliGreen,
-                            topLeft = Offset(greenBarX, canvasHeight - greenCurrentHeight),
-                            size = Size(barWidth, greenCurrentHeight),
+                            color = Color(0xFF64748B),
+                            topLeft = Offset(avgBarX, canvasHeight - avgCurrentHeight),
+                            size = Size(barWidth, avgCurrentHeight),
                             cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-                        )
-
-                        // Dibujar Eje X (línea base)
-                        drawLine(
-                            color = onCardColor.copy(alpha = 0.2f),
-                            start = Offset(0f, canvasHeight),
-                            end = Offset(canvasWidth, canvasHeight),
-                            strokeWidth = 2.dp.toPx()
                         )
 
                         // Texto de porcentaje dentro de las barras (Usando nativeCanvas para precisión)
@@ -184,16 +173,16 @@ fun StepComparison(data: OnboardingData) {
                             }
 
                             drawContext.canvas.nativeCanvas.drawText(
-                                "47%",
-                                redBarX + (barWidth / 2),
-                                canvasHeight - redCurrentHeight + 28.dp.toPx(),
+                                "89%",
+                                baliBarX + (barWidth / 2),
+                                canvasHeight - baliCurrentHeight + 28.dp.toPx(),
                                 textPaint
                             )
 
                             drawContext.canvas.nativeCanvas.drawText(
-                                "89%",
-                                greenBarX + (barWidth / 2),
-                                canvasHeight - greenCurrentHeight + 28.dp.toPx(),
+                                "47%",
+                                avgBarX + (barWidth / 2),
+                                canvasHeight - avgCurrentHeight + 28.dp.toPx(),
                                 textPaint
                             )
                         }
@@ -202,44 +191,33 @@ fun StepComparison(data: OnboardingData) {
 
                 // Etiquetas debajo de las barras
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
+                    Box(
+                        modifier = Modifier.width(60.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Estudio\nManual",
+                            text = "Con Bali",
                             style = MaterialTheme.typography.labelSmall,
                             color = onCardColor.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
                     }
-                    Spacer(modifier = Modifier.width(40.dp))
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f)
+                    Spacer(modifier = Modifier.width(80.dp))
+                    Box(
+                        modifier = Modifier.width(60.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "Tu Nivel\ncon Bali",
+                            text = "Promedio",
                             style = MaterialTheme.typography.labelSmall,
                             color = onCardColor.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Estadística final
-                Text(
-                    text = "¡Multiplicas por 2 tus opciones de aprobar! 🏅",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = primaryColor,
-                    textAlign = TextAlign.Center
-                )
             }
         }
     }
