@@ -229,7 +229,7 @@ private fun GreetingsFooter(
         ) {
             Button(
                 onClick = onStartClick,
-                modifier = Modifier.height(56.dp),
+                modifier = Modifier.height(56.dp).fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Text(
