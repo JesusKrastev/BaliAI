@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "onboarding-cro": {
+      "source": "coreyhaines31/marketingskills",
+      "sourceType": "github",
+      "computedHash": "b051b45c234c59f97e0e1d365a81cae46adcb75baa95260299f617d80c1cb378"
+    }
+  }
+}
