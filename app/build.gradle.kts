@@ -47,6 +47,19 @@ android {
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
     }
 
+    flavorDimensions += "tier"
+
+    productFlavors {
+        create("free") {
+            dimension = "tier"
+        }
+        create("premium") {
+            dimension = "tier"
+            applicationIdSuffix = ".premium"
+            versionNameSuffix = "-premium"
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false

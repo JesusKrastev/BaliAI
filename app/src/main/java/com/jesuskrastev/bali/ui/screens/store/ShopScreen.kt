@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +31,7 @@ fun ShopScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sheetState = rememberModalBottomSheetState()
+    val isPremiumFlavor = LocalContext.current.resources.getBoolean(R.bool.is_premium_flavor)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -93,25 +95,27 @@ fun ShopScreen(
                 )
             }
 
-            // Energía Section
-            ShopSection(
-                title = "Energía",
-                countLabel = ""
-            ) {
-                val price = 35
-                val isEnergyFull = uiState.energyCount >= 5
-                val hasEnoughCoins = uiState.coinsCount >= price
-                
-                ShopItemCard(
-                    icon = Icons.Rounded.Bolt,
-                    iconColor = Color(0xFFFACC15),
-                    label = "+1 Energía",
-                    price = price,
-                    isEnabled = !isEnergyFull,
-                    hasEnoughCoins = hasEnoughCoins,
-                    priceLabel = if (isEnergyFull) "Lleno" else null,
-                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.EnergyRefill)) }
-                )
+            if (!isPremiumFlavor) {
+                // Energía Section
+                ShopSection(
+                    title = "Energía",
+                    countLabel = ""
+                ) {
+                    val price = 35
+                    val isEnergyFull = uiState.energyCount >= 5
+                    val hasEnoughCoins = uiState.coinsCount >= price
+
+                    ShopItemCard(
+                        icon = Icons.Rounded.Bolt,
+                        iconColor = Color(0xFFFACC15),
+                        label = "+1 Energía",
+                        price = price,
+                        isEnabled = !isEnergyFull,
+                        hasEnoughCoins = hasEnoughCoins,
+                        priceLabel = if (isEnergyFull) "Lleno" else null,
+                        onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.EnergyRefill)) }
+                    )
+                }
             }
         }
 
