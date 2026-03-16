@@ -160,11 +160,11 @@ dependencies {
     implementation(libs.onesignal)
 
     // In-App updates
-    implementation("com.google.android.play:app-update:2.1.0")
-    implementation("com.google.android.play:app-update-ktx:2.1.0")
+    implementation(libs.app.update)
+    implementation(libs.app.update.ktx)
 
     // Mixpanel
-    implementation("com.mixpanel.android:mixpanel-android:7.3.3")
+    implementation(libs.mixpanel.android)
 
     // Testing - Unit Tests
     testImplementation(libs.truth)
@@ -197,8 +197,11 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
 
     // Revenuecat
-    implementation("com.revenuecat.purchases:purchases:9.23.1")
-    implementation("com.revenuecat.purchases:purchases-ui:9.23.1")
+    implementation(libs.purchases)
+    implementation(libs.purchases.ui)
+
+    // Compose charts
+    implementation (libs.compose.charts)
 }
 
 // Workaround for Kotlin FIR symbol resolution bug in lint with build scripts

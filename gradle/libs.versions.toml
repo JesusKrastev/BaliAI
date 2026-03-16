@@ -1,5 +1,6 @@
 [versions]
 agp = "8.13.2"
+appUpdate = "2.1.0"
 coilSvg = "2.6.0"
 kotlin = "2.0.21"
 coreKtx = "1.17.0"
@@ -14,7 +15,10 @@ kotlinxSerializationJson = "1.7.3"
 ksp = "2.0.21-1.0.27"
 hiltNavigationCompose = "1.2.0"
 hilt = "2.52"
+mixpanelAndroid = "7.3.3"
 onesignal = "[5.6.1, 5.6.99]"
+purchases = "9.23.1"
+purchasesUi = "9.23.1"
 room = "2.6.1"
 datastore = "1.1.2"
 generativeai = "0.9.0"
@@ -29,9 +33,12 @@ kotlinxCoroutines = "1.9.0"
 roborazzi = "1.6.0"
 robolectric = "4.14.1"
 animationCore = "1.10.5"
+chartsVersion = "0.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+app-update = { module = "com.google.android.play:app-update", version.ref = "appUpdate" }
+app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "appUpdate" }
 coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coilSvg" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
@@ -82,11 +89,14 @@ firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx" }
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
 androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+mixpanel-android = { module = "com.mixpanel.android:mixpanel-android", version.ref = "mixpanelAndroid" }
 onesignal = { module = "com.onesignal:OneSignal", version.ref = "onesignal" }
 
 # Testing
 mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version = "5.4.0" }
 mockito-inline = { module = "org.mockito:mockito-inline", version = "5.2.0" }
+purchases = { module = "com.revenuecat.purchases:purchases", version.ref = "purchases" }
+purchases-ui = { module = "com.revenuecat.purchases:purchases-ui", version.ref = "purchasesUi" }
 truth = { group = "com.google.truth", name = "truth", version = "1.4.4" }
 
 junit4 = { module = "junit:junit", version = "4.13.2" }
@@ -100,6 +110,7 @@ robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
 androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core", version.ref = "animationCore" }
+compose-charts = { module = "io.github.ehsannarmani:compose-charts", version.ref = "chartsVersion" }
 
 [plugins]
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

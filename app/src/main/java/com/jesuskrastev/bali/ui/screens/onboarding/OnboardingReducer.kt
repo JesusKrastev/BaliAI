@@ -1,7 +1,5 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
-import androidx.compose.material3.MaterialTheme
-
 /**
  * OnboardingReducer handles the business logic for the onboarding flow.
  * This keeps the ViewModel focused on orchestration while business logic is testable and reusable.
@@ -19,49 +17,55 @@ class OnboardingReducer {
         OnboardingStep.DifficultTopics -> data.difficultTopics.isNotEmpty()
         is OnboardingStep.DialogueExperience,
         is OnboardingStep.DialogueDifficultTopics,
+        OnboardingStep.MethodComparison,
         OnboardingStep.Notifications,
-        OnboardingStep.Comparison -> true
+        OnboardingStep.SocialProof,
+        OnboardingStep.Comparison,
+        OnboardingStep.LossAversion -> true
         else -> false
     }
 
     fun updateMascotMessage(step: OnboardingStep, data: OnboardingData): String {
         return when (step) {
-            OnboardingStep.Name -> "¿Cómo te llamas?"
-            OnboardingStep.License -> "Genial, ${data.name ?: ""}. ¿Qué carnet quieres sacarte?"
-            OnboardingStep.Experience -> "¿En qué punto estás ahora mismo?"
+            OnboardingStep.Name -> "¡Hola! Soy |Bali| 👋 Tu |copiloto| para aprobar. ¿Cómo te llamas?"
+            OnboardingStep.License -> "|${data.name ?: ""}|, ¿qué carnet vas a por ello?"
+            OnboardingStep.Experience -> "¿De dónde partimos? Así |clavo el plan| 🎯"
             OnboardingStep.DialogueExperience -> getExperienceReaction(data.experience)
-            OnboardingStep.Reasons -> getReasonReaction(data.reasons)
-            OnboardingStep.ExamDate -> "¿Ya tienes fecha de examen?"
-            OnboardingStep.DailyGoal -> "¿Cuánto tiempo puedes dedicarme al día?"
-            OnboardingStep.LearningPreference -> "¿Cómo prefieres aprender?"
-            OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan más?"
-            OnboardingStep.DialogueDifficultTopics -> "Entendido. Vamos a machacarlo juntos 💪"
-            OnboardingStep.Concern -> "¿Qué es lo que más miedo te da?"
-            OnboardingStep.StudyTime -> "¿Cuándo te cunde más estudiar?"
-            OnboardingStep.Notifications -> "Activa las notis. Yo cuido tu racha 🔥"
-            OnboardingStep.Processing -> "Analizando tus datos... ¡Esto promete! 🤖"
-            OnboardingStep.Comparison -> "Mira cómo vas a estudiar conmigo 👇"
-            OnboardingStep.Pact -> "Casi listo, ${data.name ?: ""}. Solo falta tu compromiso..."
+            OnboardingStep.Reasons -> "¿Por qué quieres el carnet? Esto es |tu motor| 🔥"
+            OnboardingStep.ExamDate -> "¿Cuándo es el examen? Sin fecha no hay |plan de ataque| 📅"
+            OnboardingStep.MethodComparison -> "Con |Bali| aprendes |toda| la teórica. Sin nosotros |olvidas la mitad| 🤯"
+            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Poco y constante |bate| a mucho y esporádico ⚡"
+            OnboardingStep.LearningPreference -> "¿Cómo aprendes mejor? Tu |método favorito| manda 🧠"
+            OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan? Los |atacamos primero| 💪"
+            OnboardingStep.DialogueDifficultTopics -> "Listo. Estos temas |no te van a coger de sorpresa| 🎯"
+            OnboardingStep.Concern -> "¿Qué te da más miedo del examen? Lo |domamos juntos| 😤"
+            OnboardingStep.StudyTime -> "¿Cuándo tienes la mente más fresca? Ponemos las clases |difíciles ahí| 🌟"
+            OnboardingStep.Notifications -> "¿Te aviso para que |no pierdas el ritmo|? Solo 1 push al día 🔔"
+            OnboardingStep.SocialProof -> "|9.000 personas| ya aprobaron. |Tú eres el siguiente| 💯"
+            OnboardingStep.Processing -> "Analizando tu perfil... tu |plan personalizado| ya viene 🚀"
+            OnboardingStep.Comparison -> "Los datos de tu perfil confirman que con |Bali| tu éxito es |cuestión de semanas| 🚀"
+            OnboardingStep.LossAversion -> "|${data.name ?: ""}|, esto es |solo tuyo|. No lo desperdicies ⚡"
+            OnboardingStep.Pact -> "Último paso, |${data.name ?: ""}|. Hagamos |un trato| ✊"
             else -> ""
         }
     }
 
     private fun getExperienceReaction(experience: String?): String = when (experience) {
-        "🎓 Empiezo de cero absoluto" -> "Perfecto. Vamos a construirlo desde cero 🗽"
-        "📖 Ya tengo algunas nociones básicas" -> "Bien. Aceleramos el ritmo entonces 🚀"
-        "🔁 He suspendido y quiero repetirlo" -> "Esta vez lo clavamos. Te lo prometo 💪"
-        "🧇 Ya tengo otro carnet" -> "¡Un experto! Esto será fácil para ti 😎"
+        "\uD83C\uDF93 Empiezo de cero absoluto" -> "Perfecto. |Empezar de cero| es tu ventaja: sin malos hábitos 🚀"
+        "\uD83D\uDCD6 Ya tengo algunas nociones básicas" -> "Genial, |saltamos| directamente a lo que importa ⚡"
+        "\uD83D\uDD01 He suspendido y quiero repetirlo" -> "Esta vez |es diferente|. Ya sabes dónde están las trampas 💪"
+        "\uD83E\uDEA7 Ya tengo otro carnet" -> "Con experiencia tienes |la mitad ganada|. A rematar 😎"
         else -> ""
     }
 
     private fun getReasonReaction(reasons: Set<String>): String = when {
-        reasons.size > 1 -> "Varias razones. Me gusta tu motivación 🔥"
-        reasons.contains("💼 Trabajo") -> "¡A por ese trabajo! 💼"
-        reasons.contains("🏠 Independencia") -> "Se acabó depender de los demás 🗽"
-        reasons.contains("✈️ Viajes") -> "Carreteras esperándote 🗺️"
-        reasons.contains("👨‍👩‍👧‍👦 Familia") -> "El chófer oficial en camino 🚗"
-        reasons.contains("🛠️ Oportunidad académica") -> "Invirtiendo en tu futuro 📚"
-        reasons.contains("🏎️ Disfrute personal") -> "¡Pura pasión por conducir! 🏎️"
+        reasons.size > 1 -> "Con |esa motivación| no hay examen que se resista 🔥"
+        reasons.contains("💼 Trabajo") -> "El carnet es tu |acceso a oportunidades| que ahora no ves 💼"
+        reasons.contains("🏠 Independencia") -> "Ir donde quieras, cuando quieras. Eso es |libertad real| 🗽"
+        reasons.contains("✈️ Viajes") -> "El mundo entero está para |descubrir| desde el volante 🗺️"
+        reasons.contains("👨‍👩‍👧‍👦 Familia") -> "|Tu familia| va a estar |orgullosa| 🚗"
+        reasons.contains("🛠️ Oportunidad académica") -> "Inviertes en ti mismo. |Decisión ganadora| 📚"
+        reasons.contains("🏎️ Disfrute personal") -> "|Pasión pura| por conducir. |Ese feeling| es el que nos lleva al éxito 🏎️"
         else -> "¿Por qué quieres el carnet?"
     }
 }

@@ -74,14 +74,14 @@ fun StepNotifications(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Permitir notificaciones",
+                    text = "No pierdas tu ritmo de estudio 🔥",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Impulsa tu aprobado con recordatorios inteligentes.",
+                    text = "Recordatorios inteligentes cuando más los necesitas.",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -102,7 +102,7 @@ fun StepNotifications(
                             .height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("Activar avisos", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("Activar ahora 🔔", fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     }
 
                     PointingFingerEmoji()
@@ -114,7 +114,7 @@ fun StepNotifications(
                     onClick = { viewModel.onEvent(OnboardingEvent.GoToNextStep) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Ahora no", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
+                    Text("Configurar después", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)
                 }
             }
         }

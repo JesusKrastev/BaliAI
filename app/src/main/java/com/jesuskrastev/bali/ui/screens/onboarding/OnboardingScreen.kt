@@ -94,7 +94,7 @@ private fun OnboardingBottomBar(
     notificationManager: NotificationManager = NotificationManager()
 ) {
     if (!shouldShowBottomButton(uiState.currentStep)) return
-    
+
     val scope = rememberCoroutineScope()
 
     Column(
@@ -195,6 +195,7 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.ExamDate -> StepExamDate(state.data.examDate, viewModel)
+            OnboardingStep.MethodComparison -> StepMethodComparison()
             OnboardingStep.DailyGoal -> {
                 StepSelectorList(OnboardingConfig.dailyGoals, viewModel) { goal, _ ->
                     viewModel.onEvent(OnboardingEvent.SelectDailyGoal(goal))
@@ -221,8 +222,10 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.Notifications -> StepNotifications(viewModel, notificationManager)
+            OnboardingStep.SocialProof -> StepSocialProof()
             OnboardingStep.Processing -> StepProcessing(progress = state.processingProgress)
-            OnboardingStep.Comparison -> StepComparison()
+            OnboardingStep.Comparison -> StepComparison(state.data)
+            OnboardingStep.LossAversion -> StepLossAversion(data = state.data)
             OnboardingStep.Pact -> StepPact { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
             is OnboardingStep.DialogueExperience, is OnboardingStep.DialogueDifficultTopics -> Box(Modifier.fillMaxSize())
             else -> Unit
@@ -234,12 +237,19 @@ private fun OnboardingStepContent(
 private fun shouldShowBottomButton(step: OnboardingStep): Boolean = when (step) {
     OnboardingStep.Name, OnboardingStep.DialogueExperience, OnboardingStep.Reasons,
     OnboardingStep.DifficultTopics, OnboardingStep.DialogueDifficultTopics,
-    OnboardingStep.Notifications, OnboardingStep.Comparison -> true
+    OnboardingStep.Notifications, OnboardingStep.SocialProof,
+    OnboardingStep.Comparison, OnboardingStep.LossAversion, OnboardingStep.MethodComparison -> true
     else -> false
 }
 
 private fun getButtonText(step: OnboardingStep): String = when (step) {
-    OnboardingStep.Comparison -> "Entendido"
-    OnboardingStep.Notifications -> "Activar recordatorios"
-    else -> "Continuar"
+    OnboardingStep.Name -> "Empezar mi plan 🚀"
+    OnboardingStep.Notifications -> "Activar recordatorios 🔔"
+    OnboardingStep.MethodComparison -> "Impresionante 🤯"
+    OnboardingStep.SocialProof -> "Yo también puedo →"
+    OnboardingStep.Comparison -> "Quiero este método 💪"
+    OnboardingStep.LossAversion -> "Ver mi plan ahora 🎯"
+    OnboardingStep.Reasons -> "Estos son mis motivos →"
+    OnboardingStep.DifficultTopics -> "Estos son mis retos →"
+    else -> "Continuar →"
 }

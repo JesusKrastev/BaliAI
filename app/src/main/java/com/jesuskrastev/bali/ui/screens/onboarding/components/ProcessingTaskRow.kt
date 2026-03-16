@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +39,7 @@ fun ProcessingTaskRow(
                 .size(28.dp)
                 .clip(CircleShape)
                 .background(
-                    if (isCompleted) MaterialTheme.colorScheme.primary
+                    if (isCompleted) Color(0xFF10B981) // Green success color
                     else MaterialTheme.colorScheme.surfaceVariant
                 ),
             contentAlignment = Alignment.Center
@@ -47,7 +48,7 @@ fun ProcessingTaskRow(
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
+                    tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
             } else if (isActive) {

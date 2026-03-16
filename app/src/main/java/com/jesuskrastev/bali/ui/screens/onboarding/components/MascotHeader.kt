@@ -74,9 +74,11 @@ fun MascotHeader(
         Surface(
             shape = SpeechBubbleShape(),
             color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(2.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+            shadowElevation = 2.dp,
             modifier = Modifier
                 .weight(1f)
+                .fillMaxWidth()
                 .padding(top = 8.dp)
         ) {
             Text(

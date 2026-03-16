@@ -32,6 +32,7 @@ sealed class OnboardingStep {
     data object DialogueExperience : OnboardingStep()
     data object Reasons : OnboardingStep()
     data object ExamDate : OnboardingStep()
+    data object MethodComparison : OnboardingStep()
     data object DailyGoal : OnboardingStep()
     data object LearningPreference : OnboardingStep()
     data object DifficultTopics : OnboardingStep()
@@ -39,8 +40,10 @@ sealed class OnboardingStep {
     data object Concern : OnboardingStep()
     data object StudyTime : OnboardingStep()
     data object Notifications : OnboardingStep()
+    data object SocialProof : OnboardingStep()
     data object Processing : OnboardingStep()
     data object Comparison : OnboardingStep()
+    data object LossAversion : OnboardingStep()
     data object Pact : OnboardingStep()
     data object PaywallPending : OnboardingStep()
     data object Completed : OnboardingStep()
@@ -69,12 +72,12 @@ class OnboardingViewModel @Inject constructor(
     private val reducer = OnboardingReducer()
 
     private val stepsOrder = listOf(
-        OnboardingStep.Name, OnboardingStep.License, OnboardingStep.Experience, OnboardingStep.DialogueExperience,
-        OnboardingStep.Reasons, OnboardingStep.ExamDate, OnboardingStep.DailyGoal,
-        OnboardingStep.LearningPreference, OnboardingStep.DifficultTopics,
+        OnboardingStep.Name, OnboardingStep.License, OnboardingStep.Experience,
+        OnboardingStep.DialogueExperience, OnboardingStep.Reasons, OnboardingStep.ExamDate,
+        OnboardingStep.MethodComparison, OnboardingStep.DailyGoal, OnboardingStep.LearningPreference, OnboardingStep.DifficultTopics,
         OnboardingStep.DialogueDifficultTopics, OnboardingStep.Concern, OnboardingStep.StudyTime,
-        OnboardingStep.Notifications, OnboardingStep.Processing, OnboardingStep.Comparison,
-        OnboardingStep.Pact
+        OnboardingStep.Notifications, OnboardingStep.SocialProof, OnboardingStep.Processing,
+        OnboardingStep.Comparison, OnboardingStep.LossAversion, OnboardingStep.Pact
     )
 
     init {
@@ -126,7 +129,7 @@ class OnboardingViewModel @Inject constructor(
     private fun goToNextStep() {
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
         analyticsTracker.onboardingStepCompleted(_uiState.value.currentStep.javaClass.simpleName)
-        
+
         if (currentIndex < stepsOrder.lastIndex) {
             val nextStep = stepsOrder[currentIndex + 1]
             if (nextStep == OnboardingStep.Processing) {
@@ -142,8 +145,13 @@ class OnboardingViewModel @Inject constructor(
                 updateNavigationState()
             }
         } else {
-            saveDataAndComplete()
+            // End of onboarding steps → show paywall
+            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
         }
+    }
+
+    private fun completeOnboarding() {
+        saveDataAndComplete()
     }
 
     private fun saveDataAndComplete() {
@@ -164,13 +172,9 @@ class OnboardingViewModel @Inject constructor(
                 currentStreak = 0
             )
             userRepository.insert(preferences)
-            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
+            analyticsTracker.onboardingCompleted()
+            _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
         }
-    }
-
-    private fun completeOnboarding() {
-        analyticsTracker.onboardingCompleted()
-        _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
     }
 
     private fun goToPreviousStep() {
@@ -197,7 +201,7 @@ class OnboardingViewModel @Inject constructor(
                 processingProgress = 0f
             )
         }
-        updateMascotMessage() // Actualizar mensaje al empezar el procesamiento
+        updateMascotMessage()
         viewModelScope.launch {
             val totalSteps = 100
             for (i in 1..totalSteps) {
@@ -226,14 +230,6 @@ class OnboardingViewModel @Inject constructor(
         val state = _uiState.value
         val message = reducer.updateMascotMessage(state.currentStep, state.data)
         _uiState.update { it.copy(mascotMessage = message) }
-    }
-
-    private fun getExperienceReaction(index: Int?) = when (index) {
-        0 -> "Perfecto. Vamos a construirlo desde cero"
-        1 -> "Bien. Aceleramos el ritmo entonces"
-        2 -> "Esta vez lo clavamos. Te lo prometo"
-        3 -> "Un experto! Esto será fácil para ti"
-        else -> ""
     }
 
     override fun onCleared() {

@@ -36,7 +36,7 @@ fun StepExamDate(
         )
         Spacer(modifier = Modifier.height(12.dp))
         TextButton(onClick = { viewModel.onEvent(OnboardingEvent.SelectExamDate(null)) }) {
-            Text("Todavía no tengo fecha", color = MaterialTheme.colorScheme.outline)
+            Text("No tengo fecha aún", color = MaterialTheme.colorScheme.outline)
         }
     }
 
@@ -50,9 +50,9 @@ fun StepExamDate(
                 TextButton(onClick = {
                     showDatePicker = false
                     viewModel.onEvent(OnboardingEvent.SelectExamDate(datePickerState.selectedDateMillis))
-                }) { Text("Aceptar") }
+                }) { Text("Perfecto") }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Atrás") } }
         ) { DatePicker(state = datePickerState) }
     }
 }

@@ -1,8 +1,7 @@
-package com.jesuskrastev.bali.ui.screens.onboarding.steps
+package com.jesuskrastev.bali.ui.screens.onboarding
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,11 +12,11 @@ import com.jesuskrastev.bali.ui.screens.onboarding.components.ProcessingTaskRow
 @Composable
 fun StepProcessing(progress: Float) {
     val processingTasks = listOf(
-        "Analizando tu perfil y experiencia previa...",
-        "Identificando patrones en tus temas difíciles...",
-        "Optimizando tu horario de estudio personalizado...",
-        "Generando estrategia inteligente para tu carnet...",
-        "Finalizando tu plan de estudio a medida..."
+        "Analizando tu nivel de partida...",
+        "Mapeando tus zonas de peligro...",
+        "Cuadrando tu agenda de estudio...",
+        "Diseñando tu estrategia anti-trampa...",
+        "Listo. Tu plan está siendo armado..."
     )
 
     Column(
@@ -27,6 +26,8 @@ fun StepProcessing(progress: Float) {
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Center
     ) {
+
+
         Text(
             text = "Construyendo tu plan...",
             style = MaterialTheme.typography.headlineMedium,
