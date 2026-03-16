@@ -1,18 +1,26 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
@@ -45,43 +53,59 @@ fun StepLossAversion(data: OnboardingData) {
             .fillMaxSize()
             .verticalScroll(scrollState)
             .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Hero header card
-        val primaryContainer = MaterialTheme.colorScheme.primaryContainer
-        val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
-        val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
-        
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth()
+            shape = RoundedCornerShape(28.dp),
+            modifier = Modifier.fillMaxWidth(),
+            color = Color.Transparent
         ) {
             Box(
                 modifier = Modifier
-                    .background(Brush.linearGradient(listOf(primaryContainer, secondaryContainer)))
-                    .padding(24.dp)
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                Color(0xFFE85A2A)
+                            )
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .padding(28.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "🎯 Tu plan está listo, ${data.name ?: "futuro conductor"}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = onPrimaryContainer,
+                        text = "Tu plan personalizado está listo",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White.copy(alpha = 0.82f),
                         textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = data.name ?: "futuro conductor",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     
                     if (weeksLeft != null && weeksLeft > 0L) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.errorContainer
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "⚡ Solo te quedan $weeksLeft semanas",
+                                text = "⚡ $weeksLeft semanas para el examen",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                             )
                         }
                     }
@@ -129,62 +153,53 @@ fun StepLossAversion(data: OnboardingData) {
         }
 
         // 3. Barra de progreso del plan
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Nivel de preparación de tu plan",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${(completionRatio * 100).toInt()}%",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = progressColor
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(50),
-                modifier = Modifier.fillMaxWidth().height(12.dp)
-            ) {
-                LinearProgressIndicator(
-                    progress = { completionRatio },
-                    modifier = Modifier.fillMaxSize(),
-                    color = progressColor,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-            }
-        }
-
-        // 4. Card de motivación/urgencia final
         Surface(
-            color = MaterialTheme.colorScheme.tertiaryContainer,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
             ) {
-                Text(
-                    text = "🏆 Estás listo para aprobar",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    textAlign = TextAlign.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Perfil completado",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${(completionRatio * 100).toInt()}%",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = progressColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                LinearProgressIndicator(
+                    progress = { completionRatio },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = progressColor,
+                    trackColor = Color(0xFFE2E8F0),
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Text(
-                    text = "Los alumnos con plan personalizado aprueban 3x más rápido. No lo pierdas.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center
+                    text = "Cuantos más datos, más preciso tu plan",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF64748B)
                 )
             }
         }
@@ -195,30 +210,44 @@ private data class SummaryItem(val icon: String, val label: String, val value: S
 
 @Composable
 private fun SummaryCard(item: SummaryItem, modifier: Modifier = Modifier) {
+    val isDark = isSystemInDarkTheme()
+    val containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)
+
     Surface(
         shape = RoundedCornerShape(20.dp),
-        shadowElevation = 4.dp,
-        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 0.dp,
+        color = containerColor,
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(18.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Text(text = item.icon, fontSize = 28.sp)
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = item.icon, fontSize = 22.sp)
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = item.label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold
+                color = Color(0xFF64748B),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = item.value,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.Bold
             )
         }
     }
