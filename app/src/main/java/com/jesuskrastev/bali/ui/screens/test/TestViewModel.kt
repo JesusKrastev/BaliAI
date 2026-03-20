@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.ui.screens.test
+package com.jesuskrastev.bali.ui.screens.test
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -427,7 +427,7 @@ class TestViewModel @Inject constructor(
             }
 
             // 4. Update path ONLY if coming from a path node and score >= 70%
-            if (aiNodeId != null && userId.isNotEmpty()) {
+            if (aiNodeId != null) {
 
                 // 4a. Mark current node as COMPLETED and WAIT for confirmation
                 pathRepository.updateNodeStatus(
