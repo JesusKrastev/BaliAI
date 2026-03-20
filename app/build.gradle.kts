@@ -1,5 +1,7 @@
 import java.io.FileInputStream
 import java.util.Properties
+import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 
 plugins {
     alias(libs.plugins.android.application)
@@ -14,7 +16,6 @@ plugins {
     id("jacoco")
 }
 
-apply(from = "jacoco.gradle.kts")
 
 android {
     namespace = "com.jesuskrastev.bali"
@@ -35,8 +36,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260312
-        versionName = "1.1.1"
+        versionCode = 20260316
+        versionName = "1.1.2"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -223,4 +224,56 @@ afterEvaluate {
     tasks.matching { it.name == "lintVitalAnalyzeRelease" || it.name == "lintVitalRelease" || it.name == "lintVitalReportRelease" }.all {
         onlyIf { false }
     }
+}
+
+// --- Merged from jacoco.gradle.kts ---
+
+val jacocoTestReportExcludes = listOf(
+    "**/R.class",
+    "**/R$*.class",
+    "**/BuildConfig.*",
+    "**/Manifest*.*",
+    "**/*Test*.*",
+    "android/**/*.*",
+    "**/*_HiltModules*.*",
+    "**/*_MembersInjector*.*",
+    "**/*_Factory*.*",
+    "**/*_ProvideField*.*",
+    "**/*_LifecycleAdapter*.*",
+    "**/Dagger*.*",
+    "**/Hilt*.*",
+    "**/*ScreenKt*.*", // Composable screens often have low meaningful coverage
+    "**/*ThemeKt*.*",
+    "**/*ComposableSingletons*.*"
+)
+
+tasks.register<JacocoReport>("testDebugUnitTestCoverage") {
+    dependsOn("testDebugUnitTest")
+    group = "Reporting"
+    description = "Generate Jacoco coverage reports for the debug build."
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+
+    val kotlinTree = fileTree("${project.layout.buildDirectory.get()}/tmp/kotlin-classes/debug") {
+        exclude(jacocoTestReportExcludes)
+    }
+    
+    val javaTree = fileTree("${project.layout.buildDirectory.get()}/intermediates/javac/debug/classes") {
+        exclude(jacocoTestReportExcludes)
+    }
+
+    classDirectories.setFrom(files(kotlinTree, javaTree))
+    
+    sourceDirectories.setFrom(files("${project.projectDir}/src/main/java"))
+    
+    executionData.setFrom(fileTree(project.layout.buildDirectory.get()) {
+        include("jacoco/testDebugUnitTest.exec")
+    })
+}
+
+configure<JacocoPluginExtension> {
+    toolVersion = "0.8.12"
 }
