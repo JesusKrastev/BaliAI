@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 __TRACKED_VAR__/compose.py --bg '#0F172A' --verb APRUEBA --desc 'A LA PRIMERA' --screenshot C:/Users/crazy/Desktop/Screenshoots/leccion_terminada.jpg --output C:/Users/crazy/Documents/Repositorios/BaliAI/screenshots/01-aprueba-a-la-primera/scaffold.png)",
+      "Bash(python3 __TRACKED_VAR__/compose.py --bg '#0F172A' --verb ENTIENDE --desc 'CADA ERROR CON IA' --screenshot C:/Users/crazy/Desktop/Screenshoots/explicacion_ia.jpg --output C:/Users/crazy/Documents/Repositorios/BaliAI/screenshots/02-entiende-cada-error-con-ia/scaffold.png)",
+      "Bash(python3 __TRACKED_VAR__/compose.py --bg '#0F172A' --verb PRACTICA --desc 'LO QUE MÁS TE CUESTA' --screenshot C:/Users/crazy/Desktop/Screenshoots/path.jpg --output C:/Users/crazy/Documents/Repositorios/BaliAI/screenshots/03-practica-lo-que-mas-te-cuesta/scaffold.png)",
+      "Bash(python3 __TRACKED_VAR__/compose.py --bg '#0F172A' --verb ESTUDIA --desc 'COMO SI FUERA UN JUEGO' --screenshot C:/Users/crazy/Desktop/Screenshoots/tokens.jpg --output C:/Users/crazy/Documents/Repositorios/BaliAI/screenshots/04-estudia-como-si-fuera-un-juego/scaffold.png)",
+      "Bash(python3 __TRACKED_VAR__/compose.py --bg '#0F172A' --verb SIMULA --desc 'EL EXAMEN OFICIAL DGT' --screenshot C:/Users/crazy/Desktop/Screenshoots/1000089551.jpg --output C:/Users/crazy/Documents/Repositorios/BaliAI/screenshots/05-simula-el-examen-oficial-dgt/scaffold.png)",
+      "mcp__gemini__edit_image",
+      "Skill(firebase-performance)"
+    ]
+  }
+}
