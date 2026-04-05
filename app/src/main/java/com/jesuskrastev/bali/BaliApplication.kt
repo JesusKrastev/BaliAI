@@ -1,6 +1,9 @@
 package com.jesuskrastev.bali
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
@@ -17,6 +20,11 @@ import okhttp3.OkHttpClient
 
 @HiltAndroidApp
 class BaliApplication : Application(), ImageLoaderFactory {
+
+    companion object {
+        const val NOTIFICATION_CHANNEL_ID = "reminders"
+    }
+
     override fun newImageLoader(): ImageLoader {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(UserAgentInterceptor())
@@ -40,6 +48,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
             return
         }
 
+        createNotificationChannel()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
         MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
         Purchases.logLevel = LogLevel.DEBUG
@@ -51,6 +60,19 @@ class BaliApplication : Application(), ImageLoaderFactory {
                 .diagnosticsEnabled(true)
                 .build(),
         )
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                "Bali AI",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Recordatorios de estudio y logros"
+            }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
     }
 
     private fun isRobolectric(): Boolean {
