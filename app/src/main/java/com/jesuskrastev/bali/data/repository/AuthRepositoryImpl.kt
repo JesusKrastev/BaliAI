@@ -15,6 +15,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.jesuskrastev.bali.R
+import com.onesignal.OneSignal
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -121,6 +122,7 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         return try {
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             auth.signInWithCredential(firebaseCredential).await()
+            auth.currentUser?.uid?.let { OneSignal.login(it) }
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("AuthRepository", "Error autenticando con Firebase", e)

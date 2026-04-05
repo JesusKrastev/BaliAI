@@ -30,6 +30,7 @@ interface UserRepository {
     suspend fun updateStreakFreezes(count: Int)
     suspend fun updateHighestStreak(highestStreak: Int)
     suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit>
+    suspend fun updateFcmToken(token: String)
     suspend fun clear()
     suspend fun getSchemaVersion(): Int
 }

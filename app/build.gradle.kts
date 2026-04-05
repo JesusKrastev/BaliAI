@@ -36,8 +36,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260316
-        versionName = "1.1.2"
+        versionCode = 20260320
+        versionName = "z"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()

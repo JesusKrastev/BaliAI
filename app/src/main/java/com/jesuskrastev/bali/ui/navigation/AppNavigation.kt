@@ -180,7 +180,8 @@ fun AppNavigation(
                         viewModel.signInWithGoogle(context, route.restrictNewAccounts) {
                             // On success, go directly to Home
                             navController.navigate(HomeRoute) {
-                                popUpTo(AuthRoute(route.restrictNewAccounts)) { inclusive = true }
+                                popUpTo(HomeRoute) { inclusive = true }
+                                launchSingleTop = true
                             }
                         }
                     },

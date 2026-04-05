@@ -1,9 +1,8 @@
-﻿package com.jesuskrastev.bali.domain.usecase
+package com.jesuskrastev.bali.domain.usecase
 
-import com.jesuskrastev.bali.domain.repository.UserRepository
+import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.path.DgtLearningPathTemplate
 import com.jesuskrastev.bali.domain.repository.PathRepository
-import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 /**
@@ -11,14 +10,17 @@ import javax.inject.Inject
  * 
  * It uses the predefined layout from [DgtLearningPathTemplate] and saves
  * the resulting nodes to the user's data source via [PathRepository].
+ * Works for both authenticated users (saves to Firestore) and guests (saves to local Room).
  */
 open class GenerateInitialPathUseCase @Inject constructor(
     private val pathRepository: PathRepository,
-    private val userRepository: UserRepository
+    private val authRepository: AuthRepository
 ) {
     open suspend operator fun invoke() {
-        val user = userRepository.get().first() ?: return
+        // Use the authenticated userId, or empty string for guest (local storage)
+        val userId = authRepository.currentUser() ?: ""
         val nodes = DgtLearningPathTemplate.buildInitialPath()
-        pathRepository.saveGeneratedNodes(user.id, nodes)
+        pathRepository.saveGeneratedNodes(userId, nodes)
     }
 }
+

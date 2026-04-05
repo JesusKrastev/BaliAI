@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,8 +32,6 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
-import com.google.firebase.auth.FirebaseAuth
-import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
 import com.jesuskrastev.bali.ui.navigation.AppNavigation
 import com.jesuskrastev.bali.ui.navigation.GreetingsRoute
 import com.jesuskrastev.bali.ui.navigation.HomeRoute
@@ -117,10 +116,10 @@ class MainActivity : ComponentActivity() {
                         }
                         isOnboardingCompleted != null && !isMigrating -> {
                             // NavegaciÃ³n Normal (Aparece cuando el SplashScreen se oculta y no hay error)
-                            val startDestination = remember { if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute }
-                            AppNavigation(
-                                startDestination = startDestination
-                            )
+                            val startDestination = if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute
+                            key(isOnboardingCompleted) {
+                                AppNavigation(startDestination = startDestination)
+                            }
                         }
                     }
                 }

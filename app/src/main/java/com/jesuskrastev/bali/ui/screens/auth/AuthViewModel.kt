@@ -11,7 +11,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
-import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
+import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +27,7 @@ class AuthViewModel @Inject constructor(
     private val answerRepository: AnswerRepository,
     private val authRepository: AuthRepository,
     private val analyticsTracker: AnalyticsTracker,
-    private val executeFirestoreMigrationsUseCase: ExecuteFirestoreMigrationsUseCase
+    private val migrationManager: FirestoreMigrationManager
 ) : ViewModel() {
 
     private val _isLoggingIn = MutableStateFlow(false)
@@ -86,10 +86,7 @@ class AuthViewModel @Inject constructor(
                     } else {
                         analyticsTracker.identifyUser(userId ?: "", email)
                         analyticsTracker.login("google")
-                        // One-shot inicializaciÃ³n (Rachas, energÃ­a, migraciones) post-login
-                        userId?.let {
-                            executeFirestoreMigrationsUseCase(it)
-                        }
+                        userId?.let { migrationManager.executePendingMigrations(it) }
                     }
                     // Navigate back
                     onSuccess()

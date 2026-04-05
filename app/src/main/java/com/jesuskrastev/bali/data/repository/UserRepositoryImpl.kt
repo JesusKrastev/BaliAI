@@ -167,6 +167,11 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun updateFcmToken(token: String) = withContext(Dispatchers.IO) {
+        val userId = authRepository.currentUser() ?: return@withContext
+        firestoreUserDao.updateFields(userId, mapOf("fcmToken" to token))
+    }
+
     override suspend fun clear() = withContext(Dispatchers.IO) {
         userDao.clear()
     }
