@@ -2,7 +2,6 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,14 +11,12 @@ import javax.inject.Inject
 
 sealed class ShopItem {
     data object StreakFreezer : ShopItem()
-    data object EnergyRefill : ShopItem()
 }
 
 sealed class ShopEvent {
     data class SelectItem(val item: ShopItem) : ShopEvent()
     data object DismissSelection : ShopEvent()
     data object PurchaseStreakFreezer : ShopEvent()
-    data object PurchaseEnergyRefill : ShopEvent()
 }
 
 data class ShopUiState(
@@ -33,8 +30,7 @@ data class ShopUiState(
 @HiltViewModel
 class ShopViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val decrementCoinsUseCase: DecrementCoinsUseCase,
-    private val analyticsTracker: AnalyticsTracker
+    private val decrementCoinsUseCase: DecrementCoinsUseCase
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
@@ -57,19 +53,13 @@ class ShopViewModel @Inject constructor(
         initialValue = ShopUiState()
     )
 
-    init {
-        analyticsTracker.storeOpened()
-    }
-
     fun onEvent(event: ShopEvent) {
         when (event) {
             is ShopEvent.SelectItem -> {
                 _selectedItem.value = event.item
-                analyticsTracker.storeItemViewed(event.item.javaClass.simpleName)
             }
             ShopEvent.DismissSelection -> _selectedItem.value = null
             ShopEvent.PurchaseStreakFreezer -> purchaseStreakFreezer()
-            ShopEvent.PurchaseEnergyRefill -> purchaseEnergyRefill()
         }
     }
 
@@ -81,23 +71,6 @@ class ShopViewModel @Inject constructor(
             val success = decrementCoinsUseCase(120)
             if (success) {
                 userRepository.updateStreakFreezes(user.streakFreezes + 1)
-                analyticsTracker.coinsSpent(120, "streak_freezer")
-                analyticsTracker.storeItemPurchased("StreakFreezer")
-                _selectedItem.value = null
-            }
-        }
-    }
-
-    private fun purchaseEnergyRefill() {
-        viewModelScope.launch {
-            val user = userRepository.get().first() ?: return@launch
-            if (user.energy >= 5) return@launch
-
-            val success = decrementCoinsUseCase(35)
-            if (success) {
-                userRepository.updateEnergy(user.energy + 1)
-                analyticsTracker.coinsSpent(35, "energy_refill")
-                analyticsTracker.storeItemPurchased("EnergyRefill")
                 _selectedItem.value = null
             }
         }

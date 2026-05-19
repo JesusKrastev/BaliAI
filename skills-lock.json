@@ -46,6 +46,12 @@
       "sourceType": "github",
       "computedHash": "76cf49efcd6e99d95031c78e56615dbaf641a756e852acf7e87f9197dfab43e0"
     },
+    "mixpanel": {
+      "source": "membranedev/application-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mixpanel/SKILL.md",
+      "computedHash": "c1afdc68e46522abb1b04ec09b7e3b505b0ac59f90fa27f18138976513822a2d"
+    },
     "onboarding-cro": {
       "source": "coreyhaines31/marketingskills",
       "sourceType": "github",

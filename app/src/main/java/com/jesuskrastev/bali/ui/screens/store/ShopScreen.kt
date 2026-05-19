@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,7 +14,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -31,7 +29,6 @@ fun ShopScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sheetState = rememberModalBottomSheetState()
-    val isPremiumFlavor = LocalContext.current.resources.getBoolean(R.bool.is_premium_flavor)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -95,28 +92,6 @@ fun ShopScreen(
                 )
             }
 
-            if (!isPremiumFlavor) {
-                // Energía Section
-                ShopSection(
-                    title = "Energía",
-                    countLabel = ""
-                ) {
-                    val price = 35
-                    val isEnergyFull = uiState.energyCount >= 5
-                    val hasEnoughCoins = uiState.coinsCount >= price
-
-                    ShopItemCard(
-                        icon = Icons.Rounded.Bolt,
-                        iconColor = Color(0xFFFACC15),
-                        label = "+1 Energía",
-                        price = price,
-                        isEnabled = !isEnergyFull,
-                        hasEnoughCoins = hasEnoughCoins,
-                        priceLabel = if (isEnergyFull) "Lleno" else null,
-                        onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.EnergyRefill)) }
-                    )
-                }
-            }
         }
 
         if (uiState.selectedItem != null) {
@@ -131,7 +106,6 @@ fun ShopScreen(
                     onConfirm = {
                         val event = when (uiState.selectedItem!!) {
                             ShopItem.StreakFreezer -> ShopEvent.PurchaseStreakFreezer
-                            ShopItem.EnergyRefill -> ShopEvent.PurchaseEnergyRefill
                         }
                         viewModel.onEvent(event)
                     }
@@ -168,14 +142,6 @@ fun PurchaseConfirmationContent(
                             modifier = Modifier.size(60.dp)
                         )
                     }
-                    ShopItem.EnergyRefill -> {
-                        Icon(
-                            imageVector = Icons.Rounded.Bolt,
-                            contentDescription = null,
-                            tint = Color(0xFFFACC15),
-                            modifier = Modifier.size(60.dp)
-                        )
-                    }
                 }
             }
         }
@@ -184,15 +150,12 @@ fun PurchaseConfirmationContent(
 
         val title = when (item) {
             ShopItem.StreakFreezer -> "Congelador de racha"
-            ShopItem.EnergyRefill -> "Recarga de energía"
         }
         val description = when (item) {
             ShopItem.StreakFreezer -> "Evita perder tu racha de días si un día no puedes practicar."
-            ShopItem.EnergyRefill -> "Añade +1 a tu energía al instante para seguir practicando."
         }
         val price = when (item) {
             ShopItem.StreakFreezer -> 120
-            ShopItem.EnergyRefill -> 35
         }
 
         Text(

@@ -3,7 +3,6 @@ package com.jesuskrastev.bali.ui.screens.test
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
-import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -71,7 +70,6 @@ class TestViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val analyticsTracker: AnalyticsTracker,
     private val pathRepository: PathRepository
 ) : ViewModel() {
 
@@ -164,7 +162,6 @@ class TestViewModel @Inject constructor(
                 viewModelScope.launch {
                     val result = calculateResult()
                     testFinished = true
-                    analyticsTracker.testCompleted("PRACTICE")
                     event.onResult(result)
                 }
             }
@@ -271,11 +268,6 @@ class TestViewModel @Inject constructor(
                     """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
-                analyticsTracker.geminiUsage(
-                    inputTokens = response.usageMetadata?.promptTokenCount ?: 0,
-                    outputTokens = response.usageMetadata?.candidatesTokenCount ?: 0,
-                    feature = "PRACTICE"
-                )
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val jsonStartIndex = rawText.indexOf('{')
@@ -291,7 +283,6 @@ class TestViewModel @Inject constructor(
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
-                analyticsTracker.testStarted("PRACTICE")
                 _uiState.update {
                     it.copy(
                         category = category,
@@ -346,7 +337,6 @@ class TestViewModel @Inject constructor(
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
-            analyticsTracker.questionAnswered(isCorrect)
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
         }
     }
@@ -381,9 +371,7 @@ class TestViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
-        analyticsTracker.coinsEarned(coinsGained)
 
-        // Sequential Firestore operations with withContext instead of detached CoroutineScope
         withContext(Dispatchers.IO) {
             val user = userRepository.get().first()
             val userId = user?.id ?: ""
@@ -416,15 +404,8 @@ class TestViewModel @Inject constructor(
             }
 
             // 3. Decrement energy and increment streak
-            decrementEnergyUseCase().also { newEnergy ->
-                analyticsTracker.energyConsumed(newEnergy)
-                if (newEnergy == 0) analyticsTracker.energyDepleted()
-            }
-            val incrementedStreak = incrementStreakUseCase()
-            newWeekSessions = incrementedStreak
-            if (incrementedStreak > 0) {
-                analyticsTracker.streakRecorded(incrementedStreak)
-            }
+            decrementEnergyUseCase()
+            newWeekSessions = incrementStreakUseCase()
 
             // 4. Update path ONLY if coming from a path node and score >= 70%
             if (aiNodeId != null) {
@@ -478,8 +459,5 @@ class TestViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        if (!testFinished && _uiState.value.questions.isNotEmpty()) {
-            analyticsTracker.testAbandoned("PRACTICE", _uiState.value.currentQuestionIndex + 1)
-        }
     }
 }

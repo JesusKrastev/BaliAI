@@ -126,9 +126,34 @@ class OnboardingViewModel @Inject constructor(
         updateData { it.copy(difficultTopics = newSet) }
     }
 
+    private fun trackStepCompleted(step: OnboardingStep) {
+        when (step) {
+            OnboardingStep.Name -> analyticsTracker.onboardingStepName()
+            OnboardingStep.License -> analyticsTracker.onboardingStepLicense()
+            OnboardingStep.Experience -> analyticsTracker.onboardingStepExperience()
+            OnboardingStep.DialogueExperience -> analyticsTracker.onboardingStepDialogueExperience()
+            OnboardingStep.Reasons -> analyticsTracker.onboardingStepReasons()
+            OnboardingStep.ExamDate -> analyticsTracker.onboardingStepExamDate()
+            OnboardingStep.MethodComparison -> analyticsTracker.onboardingStepMethodComparison()
+            OnboardingStep.DailyGoal -> analyticsTracker.onboardingStepDailyGoal()
+            OnboardingStep.LearningPreference -> analyticsTracker.onboardingStepLearningPreference()
+            OnboardingStep.DifficultTopics -> analyticsTracker.onboardingStepDifficultTopics()
+            OnboardingStep.DialogueDifficultTopics -> analyticsTracker.onboardingStepDialogueDifficultTopics()
+            OnboardingStep.Concern -> analyticsTracker.onboardingStepConcern()
+            OnboardingStep.StudyTime -> analyticsTracker.onboardingStepStudyTime()
+            OnboardingStep.Notifications -> analyticsTracker.onboardingStepNotifications()
+            OnboardingStep.SocialProof -> analyticsTracker.onboardingStepSocialProof()
+            OnboardingStep.Processing -> analyticsTracker.onboardingStepProcessing()
+            OnboardingStep.Comparison -> analyticsTracker.onboardingStepComparison()
+            OnboardingStep.LossAversion -> analyticsTracker.onboardingStepLossAversion()
+            OnboardingStep.Pact -> analyticsTracker.onboardingStepPact()
+            else -> Unit
+        }
+    }
+
     private fun goToNextStep() {
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
-        analyticsTracker.onboardingStepCompleted(_uiState.value.currentStep.javaClass.simpleName)
+        trackStepCompleted(_uiState.value.currentStep)
 
         if (currentIndex < stepsOrder.lastIndex) {
             val nextStep = stepsOrder[currentIndex + 1]
@@ -235,7 +260,8 @@ class OnboardingViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         if (_uiState.value.currentStep !is OnboardingStep.Completed) {
-            analyticsTracker.onboardingAbandoned(_uiState.value.currentStep.javaClass.simpleName)
+            val stepIndex = stepsOrder.indexOf(_uiState.value.currentStep)
+            analyticsTracker.onboardingAbandoned(_uiState.value.currentStep.javaClass.simpleName, stepIndex)
         }
     }
 }

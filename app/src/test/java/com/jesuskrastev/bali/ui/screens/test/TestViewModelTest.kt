@@ -1,12 +1,11 @@
 package com.jesuskrastev.bali.ui.screens.test
 
 import com.jesuskrastev.bali.util.MainDispatcherRule
-import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
+import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCaseImpl
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -35,10 +34,9 @@ class TestViewModelTest {
     private val fakeTestResultRepository = FakeTestResultRepository()
     private val fakeAnswerRepository = FakeAnswerRepository()
     private val fakePathRepository = FakePathRepository()
-    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
     private val mockGemini: GenerativeModel = mock()
-    
-    private val fakeDecrementEnergyUseCase = DecrementEnergyUseCase(fakeUserRepository)
+
+    private val fakeDecrementEnergyUseCase = DecrementEnergyUseCaseImpl(fakeUserRepository)
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
@@ -56,7 +54,6 @@ class TestViewModelTest {
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
-            analyticsTracker = fakeAnalyticsTracker,
             pathRepository = fakePathRepository
         )
     }

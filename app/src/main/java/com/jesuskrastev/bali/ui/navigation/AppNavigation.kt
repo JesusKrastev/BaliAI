@@ -137,7 +137,13 @@ fun AppNavigation(
                         navController.navigate(TestRoute())
                     },
                     onNodeTestClick = { title, desc, id, type ->
-                        navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
+                        if (type == "EXAM") {
+                            viewModel.startExam {
+                                navController.navigate(ExamRoute)
+                            }
+                        } else {
+                            navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
+                        }
                     },
                     onTopicsClick = {
                         navController.navigate(TopicsRoute)

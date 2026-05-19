@@ -26,9 +26,7 @@ open class AnalyticsTracker @Inject constructor(
             if (value != null) {
                 try {
                     json.put(key, value)
-                } catch (e: Exception) {
-                    // Ignore JSON exception for this property
-                }
+                } catch (_: Exception) {}
             }
         }
         return json
@@ -36,12 +34,15 @@ open class AnalyticsTracker @Inject constructor(
 
     // ── USERS ───────────────────────────────────────────────────────────────
 
+    /** Identifies the user in both Firebase and Mixpanel and opts them into tracking. */
     open fun identifyUser(userId: String, email: String? = null) {
-        firebase.setUserId(userId) // Keep Firebase setUserId as it's not removed in the instruction
+        firebase.setUserId(userId)
         mixpanel.identify(userId)
+        mixpanel.optInTracking()
         email?.let { mixpanel.people.set("\$email", it) }
     }
 
+    /** Resets analytics identity on sign-out. */
     open fun resetUser() {
         firebase.setUserId(null)
         mixpanel.reset()
@@ -49,124 +50,116 @@ open class AnalyticsTracker @Inject constructor(
 
     // ── AUTH ────────────────────────────────────────────────────────────────
 
-    open fun signUp(method: String) {
-        trackEvent("sign_up", mapOf("method" to method))
-    }
+    /** Tracks a new account creation with the given auth method. */
+    open fun signUp(method: String) = log("sign_up") { putString("method", method) }
 
-    open fun login(method: String) {
-        trackEvent("login", mapOf("method" to method))
-    }
+    /** Tracks a sign-in with the given auth method. */
+    open fun login(method: String) = log("login") { putString("method", method) }
 
+    /** Tracks a sign-out. */
     open fun logout() = log("logout")
-
-    open fun trackEvent(eventName: String, properties: Map<String, Any>? = null) {
-        // The instruction only provided the signature and opening brace.
-        // Assuming a default implementation that logs to Firebase and Mixpanel.
-        val bundle = Bundle()
-        properties?.forEach { (key, value) ->
-            when (value) {
-                is String -> bundle.putString(key, value)
-                is Int -> bundle.putInt(key, value)
-                is Boolean -> bundle.putBoolean(key, value)
-                is Double -> bundle.putDouble(key, value)
-                is Long -> bundle.putLong(key, value)
-                // Add other types as needed
-                else -> bundle.putString(key, value.toString())
-            }
-        }
-        firebase.logEvent(eventName, bundle)
-        mixpanel.track(eventName, bundleToJson(bundle))
-    }
 
     // ── ONBOARDING ──────────────────────────────────────────────────────────
 
+    /** Tracks that the user started the onboarding flow. */
     open fun onboardingStarted() = log("onboarding_started")
 
-    open fun onboardingStepCompleted(stepName: String) = log("onboarding_step_completed") {
-        putString("step_name", stepName)
+    /** Tracks completion of the Name step. */
+    open fun onboardingStepName() = log("name")
+
+    /** Tracks completion of the License step. */
+    open fun onboardingStepLicense() = log("license")
+
+    /** Tracks completion of the Experience step. */
+    open fun onboardingStepExperience() = log("experience")
+
+    /** Tracks completion of the DialogueExperience step. */
+    open fun onboardingStepDialogueExperience() = log("dialogue_experience")
+
+    /** Tracks completion of the Reasons step. */
+    open fun onboardingStepReasons() = log("reasons")
+
+    /** Tracks completion of the ExamDate step. */
+    open fun onboardingStepExamDate() = log("exam_date")
+
+    /** Tracks completion of the MethodComparison step. */
+    open fun onboardingStepMethodComparison() = log("method_comparison")
+
+    /** Tracks completion of the DailyGoal step. */
+    open fun onboardingStepDailyGoal() = log("daily_goal")
+
+    /** Tracks completion of the LearningPreference step. */
+    open fun onboardingStepLearningPreference() = log("learning_preference")
+
+    /** Tracks completion of the DifficultTopics step. */
+    open fun onboardingStepDifficultTopics() = log("difficult_topics")
+
+    /** Tracks completion of the DialogueDifficultTopics step. */
+    open fun onboardingStepDialogueDifficultTopics() = log("dialogue_difficult_topics")
+
+    /** Tracks completion of the Concern step. */
+    open fun onboardingStepConcern() = log("concern")
+
+    /** Tracks completion of the StudyTime step. */
+    open fun onboardingStepStudyTime() = log("study_time")
+
+    /** Tracks completion of the Notifications step. */
+    open fun onboardingStepNotifications() = log("notifications")
+
+    /** Tracks completion of the SocialProof step. */
+    open fun onboardingStepSocialProof() = log("social_proof")
+
+    /** Tracks completion of the Processing step. */
+    open fun onboardingStepProcessing() = log("processing")
+
+    /** Tracks completion of the Comparison step. */
+    open fun onboardingStepComparison() = log("comparison")
+
+    /** Tracks completion of the LossAversion step. */
+    open fun onboardingStepLossAversion() = log("loss_aversion")
+
+    /** Tracks completion of the Pact step. */
+    open fun onboardingStepPact() = log("pact")
+
+    /** Tracks that the user finished the full onboarding flow and flushes immediately. */
+    open fun onboardingCompleted() {
+        log("onboarding_completed")
+        mixpanel.flush()
     }
 
-    open fun onboardingCompleted() = log("onboarding_completed")
-
-    open fun onboardingAbandoned(lastStep: String) = log("onboarding_abandoned") {
+    /**
+     * Tracks that the user left the onboarding flow before completing it.
+     *
+     * @param lastStep simple class name of the [OnboardingStep] where the user stopped
+     * @param stepIndex zero-based position of that step
+     */
+    open fun onboardingAbandoned(lastStep: String, stepIndex: Int) = log("onboarding_abandoned") {
         putString("last_step", lastStep)
+        putInt("step_index", stepIndex)
     }
 
-    // ── TESTS ───────────────────────────────────────────────────────────────
+    // ── PAYWALL ─────────────────────────────────────────────────────────────
 
-    open fun testStarted(type: String) = log("test_started") {
-        putString("type", type)
+    /**
+     * Tracks that the paywall screen was displayed to the user.
+     *
+     * @param source entry point that triggered the paywall (e.g. "onboarding", "home")
+     */
+    open fun paywallShown(source: String = "onboarding") = log("paywall_shown") {
+        putString("source", source)
     }
 
-    open fun testCompleted(type: String) = log("test_completed") {
-        putString("type", type)
-    }
-
-    open fun testAbandoned(type: String, questionNumber: Int) = log("test_abandoned") {
-        putString("type", type)
-        putInt("question_number", questionNumber)
-    }
-
-    open fun questionAnswered(correct: Boolean) = log("question_answered") {
-        putBoolean("correct", correct)
-    }
-
-    // ── REPASO ──────────────────────────────────────────────────────────────
-
-    open fun reviewStarted() = log("review_started")
-
-    open fun reviewCompleted() = log("review_completed")
-
-    // ── TIENDA ──────────────────────────────────────────────────────────────
-
-    open fun storeOpened() = log("store_opened")
-
-    open fun storeItemViewed(item: String) = log("store_item_viewed") {
-        putString("item", item)
-    }
-
-    open fun storeItemPurchased(item: String) = log("store_item_purchased") {
-        putString("item", item)
-    }
-
-    // ── GEMINI ──────────────────────────────────────────────────────────────
-
-    open fun geminiUsage(
-        inputTokens: Int,
-        outputTokens: Int,
-        feature: String = "unknown"
-    ) {
-        log("gemini_usage") {
-            putInt("input_tokens", inputTokens)
-            putInt("output_tokens", outputTokens)
-            putString("feature", feature)
+    /**
+     * Tracks that the user dismissed the paywall and flushes immediately.
+     *
+     * @param purchased true if the user completed a purchase before dismissing
+     * @param source entry point that triggered the paywall
+     */
+    open fun paywallDismissed(purchased: Boolean, source: String = "onboarding") {
+        log("paywall_dismissed") {
+            putBoolean("purchased", purchased)
+            putString("source", source)
         }
+        mixpanel.flush()
     }
-
-    // ── ECONOMÍA ─────────────────────────────────────────────────────
-
-    open fun energyConsumed(remaining: Int) = log("energy_consumed") {
-        putInt("remaining", remaining)
-    }
-
-    open fun energyDepleted() = log("energy_depleted")
-
-    open fun coinsEarned(amount: Int) = log("coins_earned") {
-        putInt("amount", amount)
-    }
-
-    open fun coinsSpent(amount: Int, item: String) = log("coins_spent") {
-        putInt("amount", amount)
-        putString("item", item)
-    }
-
-    open fun streakRecorded(streak: Int) = log("streak_recorded") {
-        putInt("streak", streak)
-    }
-
-    open fun streakFreezerUsed(count: Int) = log("streak_freezer_used") {
-        putInt("count", count)
-    }
-
-    open fun dgtSimulacroUnlocked() = log("dgt_simulacro_unlocked")
 }

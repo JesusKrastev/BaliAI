@@ -13,7 +13,7 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
-import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
+import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCaseImpl
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -47,8 +47,8 @@ class HomeViewModelTest {
     private val dateTimeHelper: DateTimeHelper = mock()
     
     private val fakeDecrementCoinsUseCase = DecrementCoinsUseCase(fakeUserRepository)
-    private val fakeRestoreEnergyUseCase = RestoreEnergyUseCase(fakeUserRepository)
-    private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeUserRepository)
+    private val fakeRestoreEnergyUseCase = RestoreEnergyUseCaseImpl(fakeUserRepository)
+    private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeAuthRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
     private val remoteConfigProvider: RemoteConfigProvider = mock()
 

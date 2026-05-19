@@ -63,6 +63,8 @@ class FakeUserRepository : UserRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun updateFcmToken(token: String) {}
+
     override suspend fun clear() {
         _user.value = null
     }
@@ -108,46 +110,25 @@ class FakeAuthRepository : AuthRepository {
     override suspend fun currentUserPhotoUrl(): String? = null
 }
 
-class FakeAnalyticsTracker(firebase: com.google.firebase.analytics.FirebaseAnalytics, mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI) : AnalyticsTracker(firebase, mixpanel) {
+class FakeAnalyticsTracker(
+    firebase: com.google.firebase.analytics.FirebaseAnalytics,
+    mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI
+) : AnalyticsTracker(firebase, mixpanel) {
     val identifiedUsers = mutableListOf<Pair<String, String?>>()
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()
 
-    override fun identifyUser(userId: String, email: String?) {
-        identifiedUsers.add(userId to email)
-    }
-
-    override fun signUp(method: String) {
-        signUpEvents.add(method)
-    }
-
-    override fun login(method: String) {
-        loginEvents.add(method)
-    }
-
+    override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
+    override fun resetUser() {}
+    override fun signUp(method: String) { signUpEvents.add(method) }
+    override fun login(method: String) { loginEvents.add(method) }
     override fun logout() {}
-    override fun trackEvent(eventName: String, properties: Map<String, Any>?) {}
-    override fun geminiUsage(inputTokens: Int, outputTokens: Int, feature: String) {}
     override fun onboardingStarted() {}
-    override fun onboardingStepCompleted(stepName: String) {}
+    override fun onboardingStepCompleted(stepName: String, stepIndex: Int) {}
     override fun onboardingCompleted() {}
-    override fun onboardingAbandoned(lastStep: String) {}
-    override fun testStarted(type: String) {}
-    override fun testCompleted(type: String) {}
-    override fun testAbandoned(type: String, questionNumber: Int) {}
-    override fun questionAnswered(correct: Boolean) {}
-    override fun reviewStarted() {}
-    override fun reviewCompleted() {}
-    override fun storeOpened() {}
-    override fun storeItemViewed(item: String) {}
-    override fun storeItemPurchased(item: String) {}
-    override fun energyConsumed(remaining: Int) {}
-    override fun energyDepleted() {}
-    override fun coinsEarned(amount: Int) {}
-    override fun coinsSpent(amount: Int, item: String) {}
-    override fun streakRecorded(streak: Int) {}
-    override fun streakFreezerUsed(count: Int) {}
-    override fun dgtSimulacroUnlocked() {}
+    override fun onboardingAbandoned(lastStep: String, stepIndex: Int) {}
+    override fun paywallShown(source: String) {}
+    override fun paywallDismissed(purchased: Boolean, source: String) {}
 
     fun clear() {
         identifiedUsers.clear()

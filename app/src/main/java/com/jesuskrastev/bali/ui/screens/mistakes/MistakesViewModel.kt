@@ -3,7 +3,6 @@
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
-import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -51,8 +50,7 @@ class MistakesViewModel @Inject constructor(
     private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
-    private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val analyticsTracker: AnalyticsTracker
+    private val incrementCoinsUseCase: IncrementCoinsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MistakesUiState())
@@ -69,7 +67,6 @@ class MistakesViewModel @Inject constructor(
 
     init {
         generateMistakesTest()
-        analyticsTracker.reviewStarted()
     }
 
     fun onEvent(event: MistakesEvent) {
@@ -81,7 +78,6 @@ class MistakesViewModel @Inject constructor(
             is MistakesEvent.FinishReview -> {
                 viewModelScope.launch {
                     val result = calculateResult()
-                    analyticsTracker.reviewCompleted()
                     event.onResult(result)
                 }
             }
@@ -155,11 +151,6 @@ class MistakesViewModel @Inject constructor(
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
-                analyticsTracker.geminiUsage(
-                    inputTokens  = response.usageMetadata?.promptTokenCount     ?: 0,
-                    outputTokens = response.usageMetadata?.candidatesTokenCount ?: 0,
-                    feature      = "MISTAKES"
-                )
                 val rawText = response.text ?: throw Exception("Sin respuesta de la IA")
 
                 val jsonStartIndex = rawText.indexOf('{')
@@ -171,7 +162,6 @@ class MistakesViewModel @Inject constructor(
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
-                analyticsTracker.testStarted("MISTAKES")
                 _uiState.update { it.copy(questions = questionUiStates, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
@@ -234,7 +224,6 @@ class MistakesViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
-        analyticsTracker.coinsEarned(coinsGained)
 
         withContext(Dispatchers.IO) {
             testResultRepository.insert(
@@ -247,15 +236,8 @@ class MistakesViewModel @Inject constructor(
                 )
             )
 
-            decrementEnergyUseCase().also { newEnergy ->
-                analyticsTracker.energyConsumed(newEnergy)
-                if (newEnergy == 0) analyticsTracker.energyDepleted()
-            }
-            val incrementedStreak = incrementStreakUseCase()
-            newWeekSessions = incrementedStreak
-            if (incrementedStreak > 0) {
-                analyticsTracker.streakRecorded(incrementedStreak)
-            }
+            decrementEnergyUseCase()
+            newWeekSessions = incrementStreakUseCase()
         }
 
         return TestSummary(

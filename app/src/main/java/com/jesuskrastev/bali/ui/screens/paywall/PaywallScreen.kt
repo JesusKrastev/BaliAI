@@ -58,6 +58,7 @@ fun PaywallScreen(
                     dismissRequest = {
                         scope.launch {
                             val isPremiumNow = viewModel.checkPremiumNow()
+                            viewModel.onPaywallDismissed(isPremiumNow)
                             onDismissResult(isPremiumNow)
                         }
                     }

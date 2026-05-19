@@ -36,8 +36,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260320
-        versionName = "z"
+        versionCode = 20260521
+        versionName = "1.1.5"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -46,19 +46,6 @@ android {
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
-    }
-
-    flavorDimensions += "tier"
-
-    productFlavors {
-        create("free") {
-            dimension = "tier"
-        }
-        create("premium") {
-            dimension = "tier"
-            applicationIdSuffix = ".premium"
-            versionNameSuffix = "-premium"
-        }
     }
 
     buildTypes {

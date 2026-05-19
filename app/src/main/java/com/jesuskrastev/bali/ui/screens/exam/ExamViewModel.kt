@@ -3,7 +3,6 @@
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
-import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -57,8 +56,7 @@ class ExamViewModel @Inject constructor(
     private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
-    private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val analyticsTracker: AnalyticsTracker
+    private val incrementCoinsUseCase: IncrementCoinsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExamUiState())
@@ -90,7 +88,6 @@ class ExamViewModel @Inject constructor(
                 viewModelScope.launch {
                     val result = calculateResult()
                     examFinished = true
-                    analyticsTracker.testCompleted("EXAM")
                     event.onResult(result)
                 }
             }
@@ -107,7 +104,6 @@ class ExamViewModel @Inject constructor(
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
-            analyticsTracker.questionAnswered(isCorrect)
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
         }
     }
@@ -187,11 +183,6 @@ class ExamViewModel @Inject constructor(
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
-                analyticsTracker.geminiUsage(
-                    inputTokens = response.usageMetadata?.promptTokenCount ?: 0,
-                    outputTokens = response.usageMetadata?.candidatesTokenCount ?: 0,
-                    feature = "EXAM"
-                )
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val jsonStartIndex = rawText.indexOf('{')
@@ -201,7 +192,6 @@ class ExamViewModel @Inject constructor(
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
-                analyticsTracker.testStarted("EXAM")
                 _uiState.update { it.copy(questions = questionUiStates, isLoading = false) }
                 startTimer()
             } catch (e: Exception) {
@@ -288,7 +278,6 @@ class ExamViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
-        analyticsTracker.coinsEarned(coinsGained)
 
         withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
@@ -316,15 +305,8 @@ class ExamViewModel @Inject constructor(
                 }
             }
 
-            decrementEnergyUseCase().also { newEnergy ->
-                analyticsTracker.energyConsumed(newEnergy)
-                if (newEnergy == 0) analyticsTracker.energyDepleted()
-            }
-            val incrementedStreak = incrementStreakUseCase()
-            newWeekSessions = incrementedStreak
-            if (incrementedStreak > 0) {
-                analyticsTracker.streakRecorded(incrementedStreak)
-            }
+            decrementEnergyUseCase()
+            newWeekSessions = incrementStreakUseCase()
         }
 
         return TestSummary(
@@ -346,8 +328,5 @@ class ExamViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         timerJob?.cancel()
-        if (!examFinished && _uiState.value.questions.isNotEmpty()) {
-            analyticsTracker.testAbandoned("EXAM", _uiState.value.currentQuestionIndex + 1)
-        }
     }
 }

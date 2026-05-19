@@ -1,21 +1,19 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
-import com.jesuskrastev.bali.domain.usecase.ExecuteFirestoreMigrationsUseCase
+import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
 
-/**
- * Fake implementation for ExecuteFirestoreMigrationsUseCase testing
- */
-class FakeExecuteFirestoreMigrationsUseCase(
-    migrationManager: com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
-) : ExecuteFirestoreMigrationsUseCase(migrationManager) {
-    var invocations = mutableListOf<String>()
-    
-    override suspend fun invoke(userId: String) {
-        invocations.add(userId)
+class FakeFirestoreMigrationManager : FirestoreMigrationManager {
+    val executedMigrations = mutableListOf<String>()
+
+    override suspend fun executePendingMigrations(userId: String) {
+        executedMigrations.add(userId)
     }
 
-    
+    override suspend fun getCurrentSchemaVersion(userId: String): Int = 1
+
+    override fun getTargetSchemaVersion(): Int = 1
+
     fun clear() {
-        invocations.clear()
+        executedMigrations.clear()
     }
 }

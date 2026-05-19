@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.paywall
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +15,13 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SubscriptionViewModel @Inject constructor(
-    private val subscriptionRepository: SubscriptionRepository
+    private val subscriptionRepository: SubscriptionRepository,
+    private val analyticsTracker: AnalyticsTracker
 ) : ViewModel() {
+
+    init {
+        analyticsTracker.paywallShown()
+    }
 
     // Emits true if the user has the 'premium' entitlement active
     val hasPremium: StateFlow<Boolean> = subscriptionRepository.customerInfoStream()
@@ -59,6 +65,11 @@ class SubscriptionViewModel @Inject constructor(
 
     fun clearRestoreMessage() {
         _restoreMessage.value = null
+    }
+
+    /** Tracks paywall dismissal and whether a purchase was completed. */
+    fun onPaywallDismissed(purchased: Boolean) {
+        analyticsTracker.paywallDismissed(purchased)
     }
 
     suspend fun checkPremiumNow(): Boolean {
