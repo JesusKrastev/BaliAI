@@ -13,7 +13,6 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
-import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCaseImpl
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -47,7 +46,6 @@ class HomeViewModelTest {
     private val dateTimeHelper: DateTimeHelper = mock()
     
     private val fakeDecrementCoinsUseCase = DecrementCoinsUseCase(fakeUserRepository)
-    private val fakeRestoreEnergyUseCase = RestoreEnergyUseCaseImpl(fakeUserRepository)
     private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeAuthRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
     private val remoteConfigProvider: RemoteConfigProvider = mock()
@@ -68,7 +66,6 @@ class HomeViewModelTest {
             generateInitialPathUseCase = fakeGenerateInitialPathUseCase,
             analyticsTracker = fakeAnalyticsTracker,
             dateTimeHelper = dateTimeHelper,
-            restoreEnergyUseCase = fakeRestoreEnergyUseCase,
             remoteConfigProvider = remoteConfigProvider,
             context = context
         )
@@ -78,15 +75,6 @@ class HomeViewModelTest {
     fun `isLoggedIn state is correctly reflected`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
         assertThat(viewModel.uiState.value.isLoggedIn).isTrue()
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `showEnergyDialog can be toggled`() = runTest {
-        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        assertThat(viewModel.uiState.value.showEnergyDialog).isFalse()
-        viewModel.showEnergyDialog()
-        assertThat(viewModel.uiState.value.showEnergyDialog).isTrue()
         collectJob.cancel()
     }
 

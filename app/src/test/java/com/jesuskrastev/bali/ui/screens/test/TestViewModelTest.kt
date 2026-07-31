@@ -5,7 +5,6 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCaseImpl
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -36,7 +35,6 @@ class TestViewModelTest {
     private val fakePathRepository = FakePathRepository()
     private val mockGemini: GenerativeModel = mock()
 
-    private val fakeDecrementEnergyUseCase = DecrementEnergyUseCaseImpl(fakeUserRepository)
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
@@ -50,7 +48,6 @@ class TestViewModelTest {
             testResultRepository = fakeTestResultRepository,
             answerRepository = fakeAnswerRepository,
             gemini = mockGemini,
-            decrementEnergyUseCase = fakeDecrementEnergyUseCase,
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,

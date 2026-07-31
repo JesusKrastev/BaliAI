@@ -46,8 +46,6 @@ class UserDaoTest {
             xp = 100,
             level = 5,
             coins = 50,
-            energy = 5,
-            lastEnergyUpdateTimestamp = System.currentTimeMillis(),
             currentStreak = 10,
             highestStreak = 15,
             streakFreezes = 1
@@ -68,7 +66,6 @@ class UserDaoTest {
             name = "Test User",
             xp = 100,
             level = 5,
-            energy = 5,
             currentStreak = 10
         )
 

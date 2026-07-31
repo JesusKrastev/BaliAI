@@ -114,16 +114,6 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateXp(xp, level) }
     )
 
-    override suspend fun updateEnergy(energy: Int) = updateField(
-        fields = mapOf("energy" to energy),
-        localAction = { userDao.updateEnergy(energy) }
-    )
-
-    override suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long) = updateField(
-        fields = mapOf("energy" to energy, "lastEnergyUpdateTimestamp" to timestamp),
-        localAction = { userDao.updateEnergyAndTimestamp(energy, timestamp) }
-    )
-
     override suspend fun updateCoins(coins: Int) = updateField(
         fields = mapOf("coins" to coins),
         localAction = { userDao.updateCoins(coins) }

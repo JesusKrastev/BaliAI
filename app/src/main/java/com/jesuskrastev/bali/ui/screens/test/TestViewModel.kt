@@ -12,7 +12,6 @@ import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -66,7 +65,6 @@ class TestViewModel @Inject constructor(
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
     private val gemini: GenerativeModel,
-    private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
@@ -403,8 +401,7 @@ class TestViewModel @Inject constructor(
                 }
             }
 
-            // 3. Decrement energy and increment streak
-            decrementEnergyUseCase()
+            // 3. Increment streak
             newWeekSessions = incrementStreakUseCase()
 
             // 4. Update path ONLY if coming from a path node and score >= 70%

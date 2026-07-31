@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 
 class FakeUserRepository : UserRepository {
-    private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, energy = 5, level = 1, xp = 0))
+    private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
     
     override fun get(): Flow<User?> = _user
 
@@ -37,14 +37,6 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun updateXp(xp: Int, level: Int) {
         _user.update { it?.copy(xp = xp, level = level) }
-    }
-
-    override suspend fun updateEnergy(energy: Int) {
-        _user.update { it?.copy(energy = energy) }
-    }
-
-    override suspend fun updateEnergyAndTimestamp(energy: Int, timestamp: Long) {
-        _user.update { it?.copy(energy = energy, lastEnergyUpdateTimestamp = timestamp) }
     }
 
     override suspend fun updateCoins(coins: Int) {
@@ -124,7 +116,6 @@ class FakeAnalyticsTracker(
     override fun login(method: String) { loginEvents.add(method) }
     override fun logout() {}
     override fun onboardingStarted() {}
-    override fun onboardingStepCompleted(stepName: String, stepIndex: Int) {}
     override fun onboardingCompleted() {}
     override fun onboardingAbandoned(lastStep: String, stepIndex: Int) {}
     override fun paywallShown(source: String) {}

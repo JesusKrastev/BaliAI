@@ -9,7 +9,6 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
-import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -53,7 +52,6 @@ class ExamViewModel @Inject constructor(
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
     private val gemini: GenerativeModel,
-    private val decrementEnergyUseCase: DecrementEnergyUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase
@@ -305,7 +303,6 @@ class ExamViewModel @Inject constructor(
                 }
             }
 
-            decrementEnergyUseCase()
             newWeekSessions = incrementStreakUseCase()
         }
 

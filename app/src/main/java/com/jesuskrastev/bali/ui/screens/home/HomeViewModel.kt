@@ -16,7 +16,6 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
-import com.jesuskrastev.bali.domain.usecase.RestoreEnergyUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.LessonNode
@@ -41,7 +40,6 @@ class HomeViewModel @Inject constructor(
     private val generateInitialPathUseCase: GenerateInitialPathUseCase,
     private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
-    private val restoreEnergyUseCase: RestoreEnergyUseCase,
     private val remoteConfigProvider: RemoteConfigProvider,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -49,7 +47,6 @@ class HomeViewModel @Inject constructor(
     private val _isPathLoading = MutableStateFlow(false)
     private val _pathError = MutableStateFlow<String?>(null)
 
-    private val _showEnergyDialog = MutableStateFlow(false)
     private val _showNoCoinsDialog = MutableStateFlow(false)
     private val _dailyTip = MutableStateFlow("")
 
@@ -62,7 +59,6 @@ class HomeViewModel @Inject constructor(
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
-        refreshUserState()
         viewModelScope.launch {
             remoteConfigProvider.fetchAndActivate()
         }
@@ -107,25 +103,11 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun refreshUserState() {
-        viewModelScope.launch {
-            // Espera a que haya un estado de login definido antes de ejecutar
-            authRepository.isLoggedIn.first()
-
-            try {
-                restoreEnergyUseCase()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
     val uiState: StateFlow<HomeUiState> = combine(
         userRepository.get(),
         testResultRepository.count(),
         answerRepository.getRecentMistakes(),
         testResultRepository.getAverageScore(),
-        _showEnergyDialog,
         _showNoCoinsDialog,
         _dailyTip,
         authRepository.isLoggedIn,
@@ -137,13 +119,12 @@ class HomeViewModel @Inject constructor(
         val totalTests = flows[1] as Int
         val mistakes = flows[2] as List<*>
         val avgScore = flows[3] as Double? ?: 0.0
-        val showEnergyDialog = flows[4] as Boolean
-        val showNoCoinsDialog = flows[5] as Boolean
-        val dailyTip = flows[6] as String
-        val isLoggedIn = flows[7] as Boolean
-        val pathNodes = flows[8] as List<*>?
-        val isPathLoading = flows[9] as Boolean
-        val pathError = flows[10] as String?
+        val showNoCoinsDialog = flows[4] as Boolean
+        val dailyTip = flows[5] as String
+        val isLoggedIn = flows[6] as Boolean
+        val pathNodes = flows[7] as List<*>?
+        val isPathLoading = flows[8] as Boolean
+        val pathError = flows[9] as String?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -174,13 +155,10 @@ class HomeViewModel @Inject constructor(
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
                 xpLevel = user.level,
-                energyCount = user.energy,
-                lastEnergyUpdateTimestamp = user.lastEnergyUpdateTimestamp,
                 mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
                 highestStreak = user.highestStreak,
-                showEnergyDialog = showEnergyDialog,
                 showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
                 isLoggedIn = isLoggedIn,
@@ -214,14 +192,6 @@ class HomeViewModel @Inject constructor(
                 _showNoCoinsDialog.value = true
             }
         }
-    }
-
-    fun showEnergyDialog() {
-        _showEnergyDialog.value = true
-    }
-
-    fun dismissEnergyDialog() {
-        _showEnergyDialog.value = false
     }
 
     fun dismissNoCoinsDialog() {

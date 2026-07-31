@@ -4,7 +4,6 @@ import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementEnergyUseCaseImpl
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -24,7 +23,6 @@ class MistakesViewModelTest {
     private val fakeAnswerRepository = FakeAnswerRepository()
     private val fakeTestResultRepository = FakeTestResultRepository()
 
-    private val fakeDecrementEnergyUseCase = DecrementEnergyUseCaseImpl(fakeUserRepository)
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
@@ -38,7 +36,6 @@ class MistakesViewModelTest {
             answerRepository = fakeAnswerRepository,
             testResultRepository = fakeTestResultRepository,
             gemini = mock(),
-            decrementEnergyUseCase = fakeDecrementEnergyUseCase,
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase

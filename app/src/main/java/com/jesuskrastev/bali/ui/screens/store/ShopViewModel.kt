@@ -21,7 +21,6 @@ sealed class ShopEvent {
 
 data class ShopUiState(
     val coinsCount: Int = 0,
-    val energyCount: Int = 0,
     val streakFreezes: Int = 0,
     val selectedItem: ShopItem? = null,
     val isProcessing: Boolean = false
@@ -42,7 +41,6 @@ class ShopViewModel @Inject constructor(
         user?.let {
             ShopUiState(
                 coinsCount = it.coins,
-                energyCount = it.energy,
                 streakFreezes = it.streakFreezes,
                 selectedItem = selected
             )
