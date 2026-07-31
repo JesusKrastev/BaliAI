@@ -109,6 +109,9 @@ open class AnalyticsTracker @Inject constructor(
     /** Tracks completion of the SocialProof step. */
     open fun onboardingStepSocialProof() = log("social_proof")
 
+    /** Tracks that the user tapped the "rate the app" button on the SocialProof step. */
+    open fun onboardingRateAppClicked() = log("onboarding_rate_app_clicked")
+
     /** Tracks completion of the Processing step. */
     open fun onboardingStepProcessing() = log("processing")
 

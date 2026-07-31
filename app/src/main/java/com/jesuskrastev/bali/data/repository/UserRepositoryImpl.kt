@@ -69,10 +69,13 @@ class UserRepositoryImpl @Inject constructor(
         actionLocal = localAction
     )
 
-    override suspend fun insert(user: User) = withAuthRouting(
-        actionRemote = { userId -> firestoreUserDao.updateUser(userId, user) },
-        actionLocal = { userDao.insert(user.toEntity()) }
-    )
+    /**
+     * Persists onboarding answers locally only (Room). Onboarding responses are
+     * intentionally never written to Firestore, regardless of auth state.
+     */
+    override suspend fun insert(user: User) = withContext(Dispatchers.IO) {
+        userDao.insert(user.toEntity())
+    }
 
     override suspend fun resetStreak() = updateField(
         fields = mapOf("currentStreak" to 0),

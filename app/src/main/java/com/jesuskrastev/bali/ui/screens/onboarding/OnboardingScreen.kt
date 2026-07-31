@@ -189,9 +189,9 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectExperience(experience))
                 }
             }
-            OnboardingStep.Reasons -> {
-                StepMultiSelectorList(OnboardingConfig.reasons, state.data.reasons, viewModel) {
-                    viewModel.onEvent(OnboardingEvent.ToggleReason(it))
+            OnboardingStep.TheoryBlocker -> {
+                StepSelectorList(OnboardingConfig.theoryBlockers, viewModel) { blocker, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectTheoryBlocker(blocker))
                 }
             }
             OnboardingStep.ExamDate -> StepExamDate(state.data.examDate, viewModel)
@@ -222,7 +222,9 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.Notifications -> StepNotifications(viewModel, notificationManager)
-            OnboardingStep.SocialProof -> StepSocialProof()
+            OnboardingStep.SocialProof -> StepSocialProof(
+                onRateAppClicked = { viewModel.onEvent(OnboardingEvent.RateAppClicked) }
+            )
             OnboardingStep.Processing -> StepProcessing(progress = state.processingProgress)
             OnboardingStep.Comparison -> StepComparison(state.data)
             OnboardingStep.LossAversion -> StepLossAversion(data = state.data)
@@ -235,7 +237,7 @@ private fun OnboardingStepContent(
 
 // Utility Functions
 private fun shouldShowBottomButton(step: OnboardingStep): Boolean = when (step) {
-    OnboardingStep.Name, OnboardingStep.DialogueExperience, OnboardingStep.Reasons,
+    OnboardingStep.Name, OnboardingStep.DialogueExperience,
     OnboardingStep.DifficultTopics, OnboardingStep.DialogueDifficultTopics,
     OnboardingStep.Notifications, OnboardingStep.SocialProof,
     OnboardingStep.Comparison, OnboardingStep.LossAversion, OnboardingStep.MethodComparison -> true
@@ -249,7 +251,6 @@ private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.SocialProof -> "Yo también puedo →"
     OnboardingStep.Comparison -> "Quiero este método 💪"
     OnboardingStep.LossAversion -> "Ver mi plan ahora 🎯"
-    OnboardingStep.Reasons -> "Estos son mis motivos →"
     OnboardingStep.DifficultTopics -> "Estos son mis retos →"
     else -> "Continuar →"
 }

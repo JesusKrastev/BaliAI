@@ -16,8 +16,10 @@ object OnboardingConfig {
         "\uD83E\uDEA7 Ya tengo otro carnet"
     )
 
-    val reasons = listOf(
-        "💼 Trabajo", "🏠 Independencia", "✈️ Viajes", "👨‍👩‍👧‍👦 Familia", "🛠️ Oportunidad académica", "🏎️ Disfrute personal"
+    val theoryBlockers = listOf(
+        "😵‍💫 No sé ni por dónde empezar",
+        "📉 Estudio pero no veo que avance",
+        "🧭 Me falta un método claro"
     )
 
     val dailyGoals = listOf(
@@ -36,7 +38,9 @@ object OnboardingConfig {
     )
 
     val concerns = listOf(
-        "\uD83E\uDEA4 Las preguntas trampa", "⏳ Quedarme sin tiempo", "😰 Los nervios del momento", "\uD83D\uDEAB Bloquearme"
+        "😬 Llegar sin estar realmente preparado",
+        "📄 Que el examen no se parezca a lo que he estudiado",
+        "🤦 Fallar por detalles tontos"
     )
 
     val studyTimes = listOf(

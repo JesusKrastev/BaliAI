@@ -1,6 +1,7 @@
 [versions]
 agp = "8.13.2"
 appUpdate = "2.1.0"
+playReview = "2.0.2"
 coilSvg = "2.6.0"
 kotlin = "2.0.21"
 coreKtx = "1.17.0"
@@ -39,6 +40,8 @@ chartsVersion = "0.1.0"
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 app-update = { module = "com.google.android.play:app-update", version.ref = "appUpdate" }
 app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "appUpdate" }
+play-review = { module = "com.google.android.play:review", version.ref = "playReview" }
+play-review-ktx = { module = "com.google.android.play:review-ktx", version.ref = "playReview" }
 coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coilSvg" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

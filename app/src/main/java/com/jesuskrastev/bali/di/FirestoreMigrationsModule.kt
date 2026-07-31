@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.di
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV4ToV5
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
 import dagger.Module
 import dagger.Provides
@@ -34,6 +35,11 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV3ToV4(migration: MigrationV3ToV4): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV4ToV5(migration: MigrationV4ToV5): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

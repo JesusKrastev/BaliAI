@@ -165,6 +165,10 @@ dependencies {
     implementation(libs.app.update)
     implementation(libs.app.update.ktx)
 
+    // In-App review
+    implementation(libs.play.review)
+    implementation(libs.play.review.ktx)
+
     // Mixpanel
     implementation(libs.mixpanel.android)
 

@@ -16,7 +16,7 @@ data class OnboardingData(
     val name: String? = null,
     val licenseType: String? = null,
     val experience: String? = null,
-    val reasons: Set<String> = emptySet(),
+    val theoryBlocker: String? = null,
     val examDate: Long? = null,
     val dailyGoal: String? = null,
     val learningPreference: String? = null,
@@ -30,7 +30,7 @@ sealed class OnboardingStep {
     data object License : OnboardingStep()
     data object Experience : OnboardingStep()
     data object DialogueExperience : OnboardingStep()
-    data object Reasons : OnboardingStep()
+    data object TheoryBlocker : OnboardingStep()
     data object ExamDate : OnboardingStep()
     data object MethodComparison : OnboardingStep()
     data object DailyGoal : OnboardingStep()
@@ -73,7 +73,7 @@ class OnboardingViewModel @Inject constructor(
 
     private val stepsOrder = listOf(
         OnboardingStep.Name, OnboardingStep.License, OnboardingStep.Experience,
-        OnboardingStep.DialogueExperience, OnboardingStep.Reasons, OnboardingStep.ExamDate,
+        OnboardingStep.DialogueExperience, OnboardingStep.TheoryBlocker, OnboardingStep.ExamDate,
         OnboardingStep.MethodComparison, OnboardingStep.DailyGoal, OnboardingStep.LearningPreference, OnboardingStep.DifficultTopics,
         OnboardingStep.DialogueDifficultTopics, OnboardingStep.Concern, OnboardingStep.StudyTime,
         OnboardingStep.Notifications, OnboardingStep.SocialProof, OnboardingStep.Processing,
@@ -90,7 +90,7 @@ class OnboardingViewModel @Inject constructor(
             is OnboardingEvent.SetName -> updateData { it.copy(name = event.name) }
             is OnboardingEvent.SelectLicense -> selectStepItem { it.copy(licenseType = event.license) }
             is OnboardingEvent.SelectExperience -> selectStepItem { it.copy(experience = event.experience) }
-            is OnboardingEvent.ToggleReason -> toggleReason(event.reason)
+            is OnboardingEvent.SelectTheoryBlocker -> selectStepItem { it.copy(theoryBlocker = event.blocker) }
             is OnboardingEvent.SelectExamDate -> selectStepItem { it.copy(examDate = event.dateMillis) }
             is OnboardingEvent.SelectDailyGoal -> selectStepItem { it.copy(dailyGoal = event.goal) }
             is OnboardingEvent.SelectLearningPreference -> selectStepItem { it.copy(learningPreference = event.preference) }
@@ -100,6 +100,7 @@ class OnboardingViewModel @Inject constructor(
             OnboardingEvent.GoToNextStep -> goToNextStep()
             OnboardingEvent.GoToPreviousStep -> goToPreviousStep()
             OnboardingEvent.CompleteOnboarding -> completeOnboarding()
+            OnboardingEvent.RateAppClicked -> analyticsTracker.onboardingRateAppClicked()
         }
     }
 
@@ -114,12 +115,6 @@ class OnboardingViewModel @Inject constructor(
         updateMascotMessage()
     }
 
-    private fun toggleReason(reason: String) {
-        val current = _uiState.value.data.reasons
-        val newSet = if (current.contains(reason)) current - reason else current + reason
-        updateData { it.copy(reasons = newSet) }
-    }
-
     private fun toggleDifficultTopic(topic: String) {
         val current = _uiState.value.data.difficultTopics
         val newSet = if (current.contains(topic)) current - topic else current + topic
@@ -132,7 +127,7 @@ class OnboardingViewModel @Inject constructor(
             OnboardingStep.License -> analyticsTracker.onboardingStepLicense()
             OnboardingStep.Experience -> analyticsTracker.onboardingStepExperience()
             OnboardingStep.DialogueExperience -> analyticsTracker.onboardingStepDialogueExperience()
-            OnboardingStep.Reasons -> analyticsTracker.onboardingStepReasons()
+            OnboardingStep.TheoryBlocker -> analyticsTracker.onboardingStepReasons()
             OnboardingStep.ExamDate -> analyticsTracker.onboardingStepExamDate()
             OnboardingStep.MethodComparison -> analyticsTracker.onboardingStepMethodComparison()
             OnboardingStep.DailyGoal -> analyticsTracker.onboardingStepDailyGoal()
@@ -186,13 +181,8 @@ class OnboardingViewModel @Inject constructor(
                 name = data.name,
                 licenseType = data.licenseType,
                 experience = data.experience,
-                reasons = data.reasons.joinToString(","),
                 examDateMillis = data.examDate,
-                dailyGoal = data.dailyGoal,
-                learningPreference = data.learningPreference,
                 difficultTopics = data.difficultTopics.joinToString(","),
-                concern = data.concern,
-                studyTime = data.studyTime,
                 lastPracticeTimestamp = 0,
                 currentStreak = 0
             )

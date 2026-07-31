@@ -16,7 +16,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 
 @Database(
     entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, LessonNodeEntity::class],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -27,6 +27,49 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun lessonNodeDao(): LessonNodeDao
 
     companion object {
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // SQLite doesn't support DROP COLUMN, so we recreate the table without
+                // reasons/dailyGoal/learningPreference/concern/studyTime — those onboarding
+                // answers are never read after onboarding and shouldn't be persisted.
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS users_new (
+                        id TEXT NOT NULL,
+                        name TEXT,
+                        licenseType TEXT,
+                        experience TEXT,
+                        examDateMillis INTEGER,
+                        difficultTopics TEXT NOT NULL,
+                        lastPracticeTimestamp INTEGER NOT NULL,
+                        currentStreak INTEGER NOT NULL,
+                        xp INTEGER NOT NULL,
+                        level INTEGER NOT NULL,
+                        coins INTEGER NOT NULL,
+                        streakFreezes INTEGER NOT NULL,
+                        highestStreak INTEGER NOT NULL,
+                        practiceDays TEXT NOT NULL,
+                        weekSessions INTEGER NOT NULL,
+                        currentWeekStart INTEGER NOT NULL,
+                        PRIMARY KEY(id)
+                    )
+                """.trimIndent())
+                database.execSQL("""
+                    INSERT INTO users_new
+                        (id, name, licenseType, experience, examDateMillis, difficultTopics,
+                         lastPracticeTimestamp, currentStreak,
+                         xp, level, coins, streakFreezes, highestStreak,
+                         practiceDays, weekSessions, currentWeekStart)
+                    SELECT id, name, licenseType, experience, examDateMillis, difficultTopics,
+                         lastPracticeTimestamp, currentStreak,
+                         xp, level, coins, streakFreezes, highestStreak,
+                         practiceDays, weekSessions, currentWeekStart
+                    FROM users
+                """.trimIndent())
+                database.execSQL("DROP TABLE users")
+                database.execSQL("ALTER TABLE users_new RENAME TO users")
+            }
+        }
+
         val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // SQLite doesn't support DROP COLUMN, so we recreate the table without energy/lastEnergyUpdateTimestamp

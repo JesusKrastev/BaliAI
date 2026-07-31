@@ -13,7 +13,6 @@ class OnboardingReducer {
             val name = data.name ?: ""
             name.isNotBlank() && name.all { it.isLetter() || it.isWhitespace() }
         }
-        OnboardingStep.Reasons -> data.reasons.isNotEmpty()
         OnboardingStep.DifficultTopics -> data.difficultTopics.isNotEmpty()
         is OnboardingStep.DialogueExperience,
         is OnboardingStep.DialogueDifficultTopics,
@@ -31,14 +30,14 @@ class OnboardingReducer {
             OnboardingStep.License -> "|${data.name ?: ""}|, ¿qué carnet vas a por ello?"
             OnboardingStep.Experience -> "¿De dónde partimos? Así |clavo el plan| 🎯"
             OnboardingStep.DialogueExperience -> getExperienceReaction(data.experience)
-            OnboardingStep.Reasons -> "¿Por qué quieres el carnet? Esto es |tu motor| 🔥"
+            OnboardingStep.TheoryBlocker -> "¿Qué es lo que más se te complica |del teórico|? 🎯"
             OnboardingStep.ExamDate -> "¿Cuándo es el examen? Sin fecha no hay |plan de ataque| 📅"
             OnboardingStep.MethodComparison -> "Con |Bali| aprendes |toda| la teórica. Sin nosotros |olvidas la mitad| 🤯"
             OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Poco y constante |bate| a mucho y esporádico ⚡"
             OnboardingStep.LearningPreference -> "¿Cómo aprendes mejor? Tu |método favorito| manda 🧠"
             OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan? Los |atacamos primero| 💪"
             OnboardingStep.DialogueDifficultTopics -> "Listo. Estos temas |no te van a coger de sorpresa| 🎯"
-            OnboardingStep.Concern -> "¿Qué te da más miedo del examen? Lo |domamos juntos| 😤"
+            OnboardingStep.Concern -> "¿Qué es lo que más te preocupa de cara al examen? Lo |dejamos resuelto| 😤"
             OnboardingStep.StudyTime -> "¿Cuándo tienes la mente más fresca? Ponemos las clases |difíciles ahí| 🌟"
             OnboardingStep.Notifications -> "¿Te aviso para que |no pierdas el ritmo|? Solo 1 push al día 🔔"
             OnboardingStep.SocialProof -> "|9.000 personas| ya aprobaron. |Tú eres el siguiente| 💯"
@@ -56,16 +55,5 @@ class OnboardingReducer {
         "\uD83D\uDD01 He suspendido y quiero repetirlo" -> "Esta vez |es diferente|. Ya sabes dónde están las trampas 💪"
         "\uD83E\uDEA7 Ya tengo otro carnet" -> "Con experiencia tienes |la mitad ganada|. A rematar 😎"
         else -> ""
-    }
-
-    private fun getReasonReaction(reasons: Set<String>): String = when {
-        reasons.size > 1 -> "Con |esa motivación| no hay examen que se resista 🔥"
-        reasons.contains("💼 Trabajo") -> "El carnet es tu |acceso a oportunidades| que ahora no ves 💼"
-        reasons.contains("🏠 Independencia") -> "Ir donde quieras, cuando quieras. Eso es |libertad real| 🗽"
-        reasons.contains("✈️ Viajes") -> "El mundo entero está para |descubrir| desde el volante 🗺️"
-        reasons.contains("👨‍👩‍👧‍👦 Familia") -> "|Tu familia| va a estar |orgullosa| 🚗"
-        reasons.contains("🛠️ Oportunidad académica") -> "Inviertes en ti mismo. |Decisión ganadora| 📚"
-        reasons.contains("🏎️ Disfrute personal") -> "|Pasión pura| por conducir. |Ese feeling| es el que nos lleva al éxito 🏎️"
-        else -> "¿Por qué quieres el carnet?"
     }
 }

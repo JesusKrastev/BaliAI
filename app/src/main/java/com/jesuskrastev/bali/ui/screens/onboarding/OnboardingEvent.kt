@@ -5,7 +5,7 @@ sealed class OnboardingEvent {
     data class SetName(val name: String) : OnboardingEvent()
     data class SelectLicense(val license: String) : OnboardingEvent()
     data class SelectExperience(val experience: String) : OnboardingEvent()
-    data class ToggleReason(val reason: String) : OnboardingEvent()
+    data class SelectTheoryBlocker(val blocker: String) : OnboardingEvent()
     data class SelectExamDate(val dateMillis: Long?) : OnboardingEvent()
     data class SelectDailyGoal(val goal: String) : OnboardingEvent()
     data class SelectLearningPreference(val preference: String) : OnboardingEvent()
@@ -16,4 +16,6 @@ sealed class OnboardingEvent {
     data object GoToNextStep : OnboardingEvent()
     data object GoToPreviousStep : OnboardingEvent()
     data object CompleteOnboarding : OnboardingEvent()
+    // Rating Events
+    data object RateAppClicked : OnboardingEvent()
 }

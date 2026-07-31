@@ -3,8 +3,11 @@ package com.jesuskrastev.bali.domain.model
 /**
  * Represents a user in the Bali App.
  *
- * This domain model encapsulates all user-related data, including their profile information,
- * learning preferences, progress metrics (XP, level, coins), and streak tracking.
+ * This domain model encapsulates user-related data actually used by the app: profile
+ * information consumed by AI prompt generation (license, experience, difficult topics,
+ * exam date), progress metrics (XP, level, coins), and streak tracking. Onboarding
+ * answers that aren't read anywhere after onboarding (reasons, daily goal, learning
+ * preference, concern, study time) are intentionally not persisted here.
  *
  * @property id The unique identifier of the user (typically from Firebase Auth).
  * @property name The user's display name.
@@ -23,13 +26,8 @@ data class User(
     val name: String? = null,
     val licenseType: String? = null,
     val experience: String? = null,
-    val reasons: String = "",
     val examDateMillis: Long? = null,
-    val dailyGoal: String? = null,
-    val learningPreference: String? = null,
     val difficultTopics: String = "",
-    val concern: String? = null,
-    val studyTime: String? = null,
     val lastPracticeTimestamp: Long = 0,
     val currentStreak: Int = 0,
     val xp: Int = 0,
