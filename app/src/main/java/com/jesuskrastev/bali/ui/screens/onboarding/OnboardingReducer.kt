@@ -78,7 +78,8 @@ class OnboardingReducer {
             OnboardingStep.LearningPreference -> "¿Cómo prefieres practicar? Tu |método| manda 🧠"
 
             // Cierre
-            OnboardingStep.Processing -> "Analizando tu perfil... tu |plan personalizado| ya viene 🚀"
+            // StepProcessing oculta la mascota y pone su propio título.
+            OnboardingStep.Processing -> ""
             // StepComparison oculta la mascota y pone su propio título.
             OnboardingStep.Comparison -> ""
             OnboardingStep.PlanReveal -> "|$name|, este plan es |solo tuyo|. No lo desperdicies ⚡"

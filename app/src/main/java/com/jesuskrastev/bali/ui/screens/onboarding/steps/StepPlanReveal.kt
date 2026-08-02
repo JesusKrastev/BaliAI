@@ -21,6 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
+import com.jesuskrastev.bali.ui.screens.onboarding.examCountdownLabel
 import com.jesuskrastev.bali.ui.screens.onboarding.optionLabel
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import java.util.concurrent.TimeUnit
@@ -127,7 +128,7 @@ private fun PlanHeader(name: String?, daysLeft: Long?) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.2f)) {
                     Text(
-                        text = "⚡ ${formatCountdown(daysLeft)} para el examen",
+                        text = "⚡ ${examCountdownLabel(daysLeft)} para el examen",
                         style = MaterialTheme.typography.labelLarge,
                         color = Color.White,
                         fontWeight = FontWeight.SemiBold,
@@ -247,20 +248,6 @@ private fun SummaryCard(item: SummaryItem, modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-/**
- * Formats the remaining time until the exam in the largest sensible unit.
- *
- * @param days whole days left until the exam
- * @return a human-readable countdown such as "3 semanas" or "5 días"
- */
-private fun formatCountdown(days: Long): String = when {
-    days >= 14 -> "${days / 7} semanas"
-    days >= 7 -> "1 semana"
-    days == 1L -> "1 día"
-    days == 0L -> "menos de un día"
-    else -> "$days días"
 }
 
 @Preview(showBackground = true)

@@ -224,7 +224,10 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectLearningPreference(preference))
                 }
             }
-            OnboardingStep.Processing -> StepProcessing(progress = state.processingProgress)
+            OnboardingStep.Processing -> StepProcessing(
+                progress = state.processingProgress,
+                data = state.data
+            )
             OnboardingStep.Comparison -> StepComparison(state.data)
             OnboardingStep.PlanReveal -> StepPlanReveal(state.data)
             OnboardingStep.SocialProof -> StepSocialProof(
@@ -245,7 +248,9 @@ private fun OnboardingStepContent(
  * @return false for steps that own their full-height layout and carry their own title
  */
 private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
-    OnboardingStep.MethodComparison, OnboardingStep.Comparison -> false
+    OnboardingStep.MethodComparison,
+    OnboardingStep.Comparison,
+    OnboardingStep.Processing -> false
     else -> true
 }
 

@@ -29,6 +29,20 @@ fun optionLabel(option: String): String =
     option.substringAfter(' ', missingDelimiterValue = option).trim()
 
 /**
+ * Formats the time left until the exam in the largest sensible unit.
+ *
+ * @param days whole days left until the exam
+ * @return a human-readable countdown such as "3 semanas" or "5 días"
+ */
+fun examCountdownLabel(days: Long): String = when {
+    days >= 14 -> "${days / 7} semanas"
+    days >= 7 -> "1 semana"
+    days == 1L -> "1 día"
+    days <= 0L -> "menos de un día"
+    else -> "$days días"
+}
+
+/**
  * OnboardingConfig holds all the static data for the onboarding flow.
  * Separating data from logic improves maintainability and testability.
  */
