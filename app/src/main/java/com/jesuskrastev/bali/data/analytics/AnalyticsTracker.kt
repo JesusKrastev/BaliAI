@@ -64,65 +64,23 @@ open class AnalyticsTracker @Inject constructor(
     /** Tracks that the user started the onboarding flow. */
     open fun onboardingStarted() = log("onboarding_started")
 
-    /** Tracks completion of the Name step. */
-    open fun onboardingStepName() = log("name")
-
-    /** Tracks completion of the License step. */
-    open fun onboardingStepLicense() = log("license")
-
-    /** Tracks completion of the Experience step. */
-    open fun onboardingStepExperience() = log("experience")
-
-    /** Tracks completion of the DialogueExperience step. */
-    open fun onboardingStepDialogueExperience() = log("dialogue_experience")
-
-    /** Tracks completion of the Reasons step. */
-    open fun onboardingStepReasons() = log("reasons")
-
-    /** Tracks completion of the ExamDate step. */
-    open fun onboardingStepExamDate() = log("exam_date")
-
-    /** Tracks completion of the MethodComparison step. */
-    open fun onboardingStepMethodComparison() = log("method_comparison")
-
-    /** Tracks completion of the DailyGoal step. */
-    open fun onboardingStepDailyGoal() = log("daily_goal")
-
-    /** Tracks completion of the LearningPreference step. */
-    open fun onboardingStepLearningPreference() = log("learning_preference")
-
-    /** Tracks completion of the DifficultTopics step. */
-    open fun onboardingStepDifficultTopics() = log("difficult_topics")
-
-    /** Tracks completion of the DialogueDifficultTopics step. */
-    open fun onboardingStepDialogueDifficultTopics() = log("dialogue_difficult_topics")
-
-    /** Tracks completion of the Concern step. */
-    open fun onboardingStepConcern() = log("concern")
-
-    /** Tracks completion of the StudyTime step. */
-    open fun onboardingStepStudyTime() = log("study_time")
-
-    /** Tracks completion of the Notifications step. */
-    open fun onboardingStepNotifications() = log("notifications")
-
-    /** Tracks completion of the SocialProof step. */
-    open fun onboardingStepSocialProof() = log("social_proof")
+    /**
+     * Tracks that a step was *shown* to the user. Each step owns its event name via
+     * `OnboardingStep.analyticsName`, so the funnel stays one event per screen and
+     * adding a screen needs no change here.
+     *
+     * Arrival rather than completion is what makes the counts a funnel: somebody who
+     * lands on a screen and quits has still reached it, and has to be counted there.
+     *
+     * @param eventName the step's analytics name; blank names are ignored so that
+     *   terminal states outside the funnel never emit an event
+     */
+    open fun onboardingStepReached(eventName: String) {
+        if (eventName.isNotBlank()) log(eventName)
+    }
 
     /** Tracks that the user tapped the "rate the app" button on the SocialProof step. */
     open fun onboardingRateAppClicked() = log("onboarding_rate_app_clicked")
-
-    /** Tracks completion of the Processing step. */
-    open fun onboardingStepProcessing() = log("processing")
-
-    /** Tracks completion of the Comparison step. */
-    open fun onboardingStepComparison() = log("comparison")
-
-    /** Tracks completion of the LossAversion step. */
-    open fun onboardingStepLossAversion() = log("loss_aversion")
-
-    /** Tracks completion of the Pact step. */
-    open fun onboardingStepPact() = log("pact")
 
     /** Tracks that the user finished the full onboarding flow and flushes immediately. */
     open fun onboardingCompleted() {
@@ -153,16 +111,48 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Tracks that the user dismissed the paywall and flushes immediately.
+     * Tracks that the user left the paywall having bought. Flushes immediately.
      *
-     * @param purchased true if the user completed a purchase before dismissing
      * @param source entry point that triggered the paywall
      */
-    open fun paywallDismissed(purchased: Boolean, source: String = "onboarding") {
-        log("paywall_dismissed") {
-            putBoolean("purchased", purchased)
-            putString("source", source)
-        }
+    open fun paywallPurchased(source: String = "onboarding") {
+        log("paywall_purchased") { putString("source", source) }
         mixpanel.flush()
+    }
+
+    /**
+     * Tracks that the user closed the paywall without buying. Flushes immediately.
+     *
+     * @param source entry point that triggered the paywall
+     */
+    open fun paywallClosed(source: String = "onboarding") {
+        log("paywall_closed") { putString("source", source) }
+        mixpanel.flush()
+    }
+
+    /**
+     * Tracks that the paywall left the foreground with no decision taken — the user
+     * pressed home, switched apps or killed the app while looking at it.
+     *
+     * Pair with [paywallResumed]: people who walked away for good are the backgrounded
+     * count minus the resumed count. Counting the two separately is what keeps the
+     * Google Play purchase sheet, which also backgrounds the app, from inflating it.
+     *
+     * Flushes immediately, because the process may not survive.
+     *
+     * @param source entry point that triggered the paywall
+     */
+    open fun paywallBackgrounded(source: String = "onboarding") {
+        log("paywall_backgrounded") { putString("source", source) }
+        mixpanel.flush()
+    }
+
+    /**
+     * Tracks that the user came back to the paywall after backgrounding it.
+     *
+     * @param source entry point that triggered the paywall
+     */
+    open fun paywallResumed(source: String = "onboarding") = log("paywall_resumed") {
+        putString("source", source)
     }
 }

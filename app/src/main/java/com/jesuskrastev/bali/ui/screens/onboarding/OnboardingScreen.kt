@@ -17,7 +17,6 @@ import com.jesuskrastev.bali.ui.screens.onboarding.components.MascotHeader
 import com.jesuskrastev.bali.ui.screens.onboarding.components.SmoothProgressBar
 import com.jesuskrastev.bali.ui.screens.onboarding.steps.*
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -25,8 +24,7 @@ fun OnboardingScreen(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: OnboardingViewModel,
-    onComplete: (OnboardingData) -> Unit,
-    notificationManager: NotificationManager = NotificationManager()
+    onComplete: (OnboardingData) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -50,15 +48,14 @@ fun OnboardingScreen(
         topBar = {
             OnboardingTopBar(
                 progress = uiState.progress,
-                visible = uiState.currentStep != OnboardingStep.Processing && uiState.currentStep != OnboardingStep.Completed
+                visible = uiState.currentStep != OnboardingStep.Processing
             )
         },
-        bottomBar = { OnboardingBottomBar(uiState, viewModel, notificationManager) }
+        bottomBar = { OnboardingBottomBar(uiState, viewModel) }
     ) { paddingValues ->
         OnboardingBody(
             uiState = uiState,
             viewModel = viewModel,
-            notificationManager = notificationManager,
             paddingValues = paddingValues,
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope
@@ -66,6 +63,12 @@ fun OnboardingScreen(
     }
 }
 
+/**
+ * Top progress bar of the flow.
+ *
+ * @param progress completion ratio between 0f and 1f
+ * @param visible whether the bar should be rendered at all
+ */
 @Composable
 private fun OnboardingTopBar(progress: Float, visible: Boolean) {
     if (!visible) return
@@ -87,15 +90,18 @@ private fun OnboardingTopBar(progress: Float, visible: Boolean) {
     }
 }
 
+/**
+ * Bottom "continue" button, shown only on steps that do not advance on their own.
+ *
+ * @param uiState current onboarding state
+ * @param viewModel receiver of the navigation event
+ */
 @Composable
 private fun OnboardingBottomBar(
     uiState: OnboardingUiState,
-    viewModel: OnboardingViewModel,
-    notificationManager: NotificationManager = NotificationManager()
+    viewModel: OnboardingViewModel
 ) {
     if (!shouldShowBottomButton(uiState.currentStep)) return
-
-    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -104,16 +110,7 @@ private fun OnboardingBottomBar(
             .navigationBarsPadding()
     ) {
         Button(
-            onClick = {
-                if (uiState.currentStep == OnboardingStep.Notifications) {
-                    scope.launch {
-                        notificationManager.requestNotificationPermission()
-                        viewModel.onEvent(OnboardingEvent.GoToNextStep)
-                    }
-                } else {
-                    viewModel.onEvent(OnboardingEvent.GoToNextStep)
-                }
-            },
+            onClick = { viewModel.onEvent(OnboardingEvent.GoToNextStep) },
             enabled = uiState.canGoNext,
             modifier = Modifier
                 .fillMaxWidth()
@@ -135,7 +132,6 @@ private fun OnboardingBottomBar(
 private fun OnboardingBody(
     uiState: OnboardingUiState,
     viewModel: OnboardingViewModel,
-    notificationManager: NotificationManager,
     paddingValues: PaddingValues,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope
@@ -145,7 +141,8 @@ private fun OnboardingBody(
             .fillMaxSize()
             .padding(paddingValues)
     ) {
-        if (uiState.currentStep != OnboardingStep.Completed) {
+        // Some steps own their full-height layout and read better without the bubble.
+        if (shouldShowMascot(uiState.currentStep)) {
             MascotHeader(
                 message = uiState.mascotMessage,
                 sharedTransitionScope = sharedTransitionScope,
@@ -156,15 +153,14 @@ private fun OnboardingBody(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        OnboardingStepContent(uiState, viewModel, notificationManager)
+        OnboardingStepContent(uiState, viewModel)
     }
 }
 
 @Composable
 private fun OnboardingStepContent(
     state: OnboardingUiState,
-    viewModel: OnboardingViewModel,
-    notificationManager: NotificationManager
+    viewModel: OnboardingViewModel
 ) {
     AnimatedContent(
         targetState = state.currentStep,
@@ -175,8 +171,15 @@ private fun OnboardingStepContent(
         label = "onboarding_step",
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing || state.currentStep == OnboardingStep.Completed) 0.dp else 24.dp)
+            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing) 0.dp else 24.dp)
     ) { step ->
+        // Every screen of the emotional arc shares the same one-idea layout.
+        val narrative = OnboardingConfig.narratives[step]
+        if (narrative != null) {
+            StepNarrative(content = narrative)
+            return@AnimatedContent
+        }
+
         when (step) {
             OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
             OnboardingStep.License -> {
@@ -194,8 +197,23 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectTheoryBlocker(blocker))
                 }
             }
-            OnboardingStep.ExamDate -> StepExamDate(state.data.examDate, viewModel)
+            OnboardingStep.Motivation -> {
+                StepSelectorList(OnboardingConfig.motivations, viewModel) { motivation, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
+                }
+            }
+            OnboardingStep.FutureImpact -> {
+                StepSelectorList(OnboardingConfig.futureImpacts, viewModel) { impact, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectFutureImpact(impact))
+                }
+            }
             OnboardingStep.MethodComparison -> StepMethodComparison()
+            OnboardingStep.ExamDate -> StepExamDate(state.data.examDate, viewModel)
+            OnboardingStep.DifficultTopics -> {
+                StepMultiSelectorList(OnboardingConfig.difficultTopics, state.data.difficultTopics, viewModel) {
+                    viewModel.onEvent(OnboardingEvent.ToggleDifficultTopic(it))
+                }
+            }
             OnboardingStep.DailyGoal -> {
                 StepSelectorList(OnboardingConfig.dailyGoals, viewModel) { goal, _ ->
                     viewModel.onEvent(OnboardingEvent.SelectDailyGoal(goal))
@@ -206,51 +224,63 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectLearningPreference(preference))
                 }
             }
-            OnboardingStep.DifficultTopics -> {
-                StepMultiSelectorList(OnboardingConfig.difficultTopics, state.data.difficultTopics, viewModel) {
-                    viewModel.onEvent(OnboardingEvent.ToggleDifficultTopic(it))
-                }
-            }
-            OnboardingStep.Concern -> {
-                StepSelectorList(OnboardingConfig.concerns, viewModel) { concern, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectConcern(concern))
-                }
-            }
-            OnboardingStep.StudyTime -> {
-                StepSelectorList(OnboardingConfig.studyTimes, viewModel) { studyTime, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectStudyTime(studyTime))
-                }
-            }
-            OnboardingStep.Notifications -> StepNotifications(viewModel, notificationManager)
+            OnboardingStep.Processing -> StepProcessing(progress = state.processingProgress)
+            OnboardingStep.Comparison -> StepComparison(state.data)
+            OnboardingStep.PlanReveal -> StepPlanReveal(state.data)
             OnboardingStep.SocialProof -> StepSocialProof(
                 onRateAppClicked = { viewModel.onEvent(OnboardingEvent.RateAppClicked) }
             )
-            OnboardingStep.Processing -> StepProcessing(progress = state.processingProgress)
-            OnboardingStep.Comparison -> StepComparison(state.data)
-            OnboardingStep.LossAversion -> StepLossAversion(data = state.data)
             OnboardingStep.Pact -> StepPact { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
-            is OnboardingStep.DialogueExperience, is OnboardingStep.DialogueDifficultTopics -> Box(Modifier.fillMaxSize())
+            // Dialogue steps are carried entirely by the mascot bubble above.
+            OnboardingStep.DialogueExperience, OnboardingStep.DialogueDifficultTopics -> Box(Modifier.fillMaxSize())
             else -> Unit
         }
     }
 }
 
-// Utility Functions
-private fun shouldShowBottomButton(step: OnboardingStep): Boolean = when (step) {
-    OnboardingStep.Name, OnboardingStep.DialogueExperience,
-    OnboardingStep.DifficultTopics, OnboardingStep.DialogueDifficultTopics,
-    OnboardingStep.Notifications, OnboardingStep.SocialProof,
-    OnboardingStep.Comparison, OnboardingStep.LossAversion, OnboardingStep.MethodComparison -> true
-    else -> false
+/**
+ * Decides whether the mascot bubble is rendered above the step content.
+ *
+ * @param step the step currently on screen
+ * @return false for steps that own their full-height layout and carry their own title
+ */
+private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
+    OnboardingStep.MethodComparison, OnboardingStep.Comparison -> false
+    else -> true
 }
 
+/**
+ * Decides whether the step needs the bottom button. Informational steps always do;
+ * selection steps advance on tap and therefore do not.
+ *
+ * @param step the step currently on screen
+ * @return true when the bottom button should be rendered
+ */
+private fun shouldShowBottomButton(step: OnboardingStep): Boolean =
+    step is OnboardingStep.Informational ||
+        step == OnboardingStep.Name ||
+        step == OnboardingStep.DifficultTopics
+
+/**
+ * Copy for the bottom button. On the narrative screens the label doubles as a
+ * micro-commitment, so the user agrees with the argument before moving on.
+ *
+ * @param step the step currently on screen
+ * @return the button label
+ */
 private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.Name -> "Empezar mi plan 🚀"
-    OnboardingStep.Notifications -> "Activar recordatorios 🔔"
-    OnboardingStep.MethodComparison -> "Impresionante 🤯"
-    OnboardingStep.SocialProof -> "Yo también puedo →"
-    OnboardingStep.Comparison -> "Quiero este método 💪"
-    OnboardingStep.LossAversion -> "Ver mi plan ahora 🎯"
+    OnboardingStep.Empathy -> "Sí, es justo eso →"
+    OnboardingStep.LossTime -> "Es verdad 😔"
+    OnboardingStep.LossOpportunity -> "No quiero eso →"
+    OnboardingStep.LossAutonomy -> "Se acabó 😤"
+    OnboardingStep.MethodComparison -> "Ese es mi camino 🕊️"
+    OnboardingStep.GainFreedom -> "Eso quiero 🕊️"
+    OnboardingStep.GainExperiences -> "Me lo estoy imaginando 🏖️"
+    OnboardingStep.GainLevelUp -> "Ese es mi siguiente paso 🚀"
     OnboardingStep.DifficultTopics -> "Estos son mis retos →"
+    OnboardingStep.Comparison -> "Quiero este método 💪"
+    OnboardingStep.PlanReveal -> "Este es mi plan 🎯"
+    OnboardingStep.SocialProof -> "Yo también puedo →"
     else -> "Continuar →"
 }

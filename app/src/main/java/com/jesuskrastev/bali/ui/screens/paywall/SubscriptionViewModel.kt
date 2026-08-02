@@ -67,9 +67,40 @@ class SubscriptionViewModel @Inject constructor(
         _restoreMessage.value = null
     }
 
-    /** Tracks paywall dismissal and whether a purchase was completed. */
+    /** True once the user has either bought or closed, so backgrounding stops being tracked. */
+    private var isResolved = false
+
+    /** True while the user is away from a paywall they had not resolved yet. */
+    private var isAway = false
+
+    /**
+     * Tracks how the user left the paywall.
+     *
+     * @param purchased true if the entitlement was active by the time they dismissed
+     */
     fun onPaywallDismissed(purchased: Boolean) {
-        analyticsTracker.paywallDismissed(purchased)
+        isResolved = true
+        if (purchased) analyticsTracker.paywallPurchased() else analyticsTracker.paywallClosed()
+    }
+
+    /**
+     * Tracks that the paywall left the foreground before the user decided anything —
+     * pressing home, switching apps or killing the app.
+     */
+    fun onPaywallBackgrounded() {
+        if (isResolved || isAway) return
+        isAway = true
+        analyticsTracker.paywallBackgrounded()
+    }
+
+    /**
+     * Tracks a return to a paywall that had been backgrounded. Does nothing on the first
+     * foregrounding, which is simply the screen opening.
+     */
+    fun onPaywallResumed() {
+        if (!isAway) return
+        isAway = false
+        analyticsTracker.paywallResumed()
     }
 
     suspend fun checkPremiumNow(): Boolean {

@@ -20,10 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -40,7 +37,7 @@ fun MascotHeader(
     modifier: Modifier = Modifier
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val fullAnnotatedMessage = remember(message) { parseMascotMessage(message, primaryColor) }
+    val fullAnnotatedMessage = remember(message) { message.highlightPipes(primaryColor) }
     var displayedText by remember { mutableStateOf(AnnotatedString("")) }
 
     LaunchedEffect(fullAnnotatedMessage) {
@@ -88,21 +85,6 @@ fun MascotHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 24.dp, top = 12.dp, end = 16.dp, bottom = 12.dp)
             )
-        }
-    }
-}
-
-private fun parseMascotMessage(message: String, primaryColor: Color): AnnotatedString {
-    return buildAnnotatedString {
-        val parts = message.split("|")
-        parts.forEachIndexed { index, part ->
-            if (index % 2 == 1) {
-                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)) {
-                    append(part)
-                }
-            } else {
-                append(part)
-            }
         }
     }
 }

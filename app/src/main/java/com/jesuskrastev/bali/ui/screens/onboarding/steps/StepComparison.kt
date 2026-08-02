@@ -1,11 +1,8 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
-import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
-
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,231 +21,237 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
+import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
+import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
 import com.jesuskrastev.bali.ui.theme.BaliTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
+private const val BALI_PASS_RATE = 0.89f
+private const val AVERAGE_PASS_RATE = 0.47f
+
+/** Height of a bar at 100%. Both bars are measured against this, so their ratio stays honest. */
+private val BAR_FULL_HEIGHT = 200.dp
+
+private val BAR_WIDTH = 82.dp
+
+/** The losing bar rises first so the winning one lands last and holds the attention. */
+private const val LOSING_BAR_DELAY_MS = 200L
+private const val WINNING_BAR_DELAY_MS = 550L
+
+/** Bouncy enough to feel alive, damped enough that the overshoot never looks like a glitch. */
+private val BAR_SPRING = spring<Float>(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessLow
+)
+
+/**
+ * Post-processing screen that turns the collected profile into the single number the user
+ * cares about: their odds of passing on the first attempt.
+ *
+ * It talks about the *result*, not about the method — the learning curve earlier in the flow
+ * already made the case for the method. The step hides the mascot bubble and carries its own
+ * title so the chart gets the full height.
+ *
+ * @param data the answers collected during the onboarding flow, used to personalise the headline
+ */
 @Composable
 fun StepComparison(data: OnboardingData) {
-    val scrollState = rememberScrollState()
-    
-    val cardBgColor = MaterialTheme.colorScheme.surfaceVariant
-    val onCardColor = MaterialTheme.colorScheme.onSurfaceVariant
     val primaryColor = MaterialTheme.colorScheme.primary
-    val errorColor = MaterialTheme.colorScheme.error
-    val baliGreen = Color(0xFF4CAF50)
+    val losingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
 
-    // Valores para las barras
-    val baliValue = 0.89f // 89%
-    val avgValue = 0.47f // 47%
-    
-    // Animación de altura: 0f a 1f en 800ms
-    val animationProgress by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
-        label = "BarHeightAnimation"
-    )
+    val winningProgress = remember { Animatable(0f) }
+    val losingProgress = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        launch {
+            delay(LOSING_BAR_DELAY_MS)
+            losingProgress.animateTo(1f, BAR_SPRING)
+        }
+        launch {
+            delay(WINNING_BAR_DELAY_MS)
+            winningProgress.animateTo(1f, BAR_SPRING)
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Tu probabilidad de aprobar a la primera",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
 
-        // Card principal
-        Surface(
-            color = cardBgColor,
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier.fillMaxWidth()
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Calculada con tus respuestas y con los datos de alumnos con tu mismo perfil",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.Bottom
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Tu Diagnóstico Personalizado 🧬",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = onCardColor
-                )
+            ProbabilityBar(
+                rate = BALI_PASS_RATE,
+                progress = { winningProgress.value },
+                label = "Con Bali AI",
+                barBrush = Brush.verticalGradient(
+                    colors = listOf(primaryColor, primaryColor.copy(alpha = 0.72f))
+                ),
+                valueColor = primaryColor,
+                glowColor = primaryColor
+            )
+            ProbabilityBar(
+                rate = AVERAGE_PASS_RATE,
+                progress = { losingProgress.value },
+                label = "Sin Bali AI",
+                barBrush = Brush.verticalGradient(
+                    colors = listOf(losingColor, losingColor.copy(alpha = 0.55f))
+                ),
+                valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                glowColor = Color.Transparent
+            )
+        }
 
-                // Subtítulo gris pequeño
-                Text(
-                    text = "Analizado en base a tus respuestas y perfil de conductor.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = onCardColor.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 16.dp),
-                    textAlign = TextAlign.Start
-                )
+        Spacer(modifier = Modifier.height(28.dp))
 
-                // Texto en negrita centrado (Dinámico)
-                val mainHeading = when {
-                    data.experience?.contains("cero") == true -> 
-                        "Tus respuestas indican una |clara ventaja| si usas Bali al empezar de cero."
-                    data.experience?.contains("suspendido") == true -> 
-                        "Esta vez |es la definitiva|: con Bali eliminaremos tus errores anteriores."
-                    data.experience?.contains("carnet") == true -> 
-                        "Aprovecharemos tu |experiencia| para que saques el teórico de forma exprés."
-                    else -> "Tus respuestas indican una |clara ventaja| con el método Bali."
-                }
+        Text(
+            text = buildHeadline(data).highlightPipes(primaryColor),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+    }
+}
 
-                Text(
-                    text = parsePersonalizedMessage(mainHeading, primaryColor),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = onCardColor,
-                    textAlign = TextAlign.Center,
-                )
+/**
+ * One bar of the comparison, with its percentage counting up as it grows and its caption
+ * underneath.
+ *
+ * The bar is a laid-out box rather than a canvas drawing, which is what lets the percentage
+ * and the caption be real text — correctly sized, themed and accessible — instead of glyphs
+ * painted at hand-computed coordinates.
+ *
+ * @param rate final value of the bar, between 0f and 1f
+ * @param progress lambda returning the entrance progress, which may overshoot above 1f
+ * @param label caption shown under the bar
+ * @param barBrush fill of the bar
+ * @param valueColor colour of the percentage above the bar
+ * @param glowColor colour of the halo behind the bar; pass [Color.Transparent] for no halo
+ */
+@Composable
+private fun ProbabilityBar(
+    rate: Float,
+    progress: () -> Float,
+    label: String,
+    barBrush: Brush,
+    valueColor: Color,
+    glowColor: Color
+) {
+    // The spring overshoots past 1f, which gives the bar its bounce but would make the
+    // percentage tick above its real value, so the number is clamped and the bar is not.
+    val raw = progress()
+    val barFraction = raw.coerceAtLeast(0f)
+    val displayedPercentage = (rate * 100f * raw.coerceIn(0f, 1f)).roundToInt()
 
-                // Gráfico de Barras con Canvas
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = "$displayedPercentage%",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.ExtraBold,
+            color = valueColor
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Box(contentAlignment = Alignment.BottomCenter) {
+            if (glowColor != Color.Transparent) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val canvasWidth = size.width
-                        val canvasHeight = size.height
-                        
-                        val barWidth = 60.dp.toPx()
-                        val spacing = 80.dp.toPx()
-                        
-                        // Centrar las barras
-                        val baliBarX = (canvasWidth / 2) - barWidth - (spacing / 2)
-                        val avgBarX = (canvasWidth / 2) + (spacing / 2)
-
-                        // Alturas visuales: Bali es más alta (89%), Promedio más baja (47%)
-                        val baliFullHeight = canvasHeight * 0.85f
-                        val avgFullHeight = canvasHeight * 0.45f
-
-                        val baliCurrentHeight = baliFullHeight * animationProgress
-                        val avgCurrentHeight = avgFullHeight * animationProgress
-
-                        // Barra "Con Bali" (Izquierda) - Color de marca
-                        drawRoundRect(
-                            color = primaryColor,
-                            topLeft = Offset(baliBarX, canvasHeight - baliCurrentHeight),
-                            size = Size(barWidth, baliCurrentHeight),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
+                        .width(BAR_WIDTH + 28.dp)
+                        .height(BAR_FULL_HEIGHT * rate * barFraction)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(glowColor.copy(alpha = 0.22f), Color.Transparent)
+                            ),
+                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                         )
-
-                        // Barra "Promedio" (Derecha) - Color gris neutro
-                        drawRoundRect(
-                            color = Color(0xFF64748B),
-                            topLeft = Offset(avgBarX, canvasHeight - avgCurrentHeight),
-                            size = Size(barWidth, avgCurrentHeight),
-                            cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx())
-                        )
-
-                        // Texto de porcentaje dentro de las barras (Usando nativeCanvas para precisión)
-                        if (animationProgress > 0.5f) { // Solo mostrar cuando las barras hayan crecido un poco
-                            val textPaint = android.graphics.Paint().apply {
-                                color = Color.White.toArgb()
-                                textSize = 16.sp.toPx()
-                                isFakeBoldText = true
-                                textAlign = android.graphics.Paint.Align.CENTER
-                            }
-
-                            drawContext.canvas.nativeCanvas.drawText(
-                                "89%",
-                                baliBarX + (barWidth / 2),
-                                canvasHeight - baliCurrentHeight + 28.dp.toPx(),
-                                textPaint
-                            )
-
-                            drawContext.canvas.nativeCanvas.drawText(
-                                "47%",
-                                avgBarX + (barWidth / 2),
-                                canvasHeight - avgCurrentHeight + 28.dp.toPx(),
-                                textPaint
-                            )
-                        }
-                    }
-                }
-
-                // Etiquetas debajo de las barras
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Box(
-                        modifier = Modifier.width(60.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Con Bali",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = onCardColor.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(80.dp))
-                    Box(
-                        modifier = Modifier.width(60.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Promedio",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = onCardColor.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                )
             }
+
+            Box(
+                modifier = Modifier
+                    .width(BAR_WIDTH)
+                    .height(BAR_FULL_HEIGHT * rate * barFraction)
+                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+                    .background(barBrush)
+            )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
+}
+
+/**
+ * Picks the headline that best matches the user's starting point, phrased as an outcome
+ * rather than as a feature.
+ *
+ * @param data the answers collected during the onboarding flow
+ * @return the headline, with the words to highlight wrapped in pipes
+ */
+private fun buildHeadline(data: OnboardingData): String = when (data.experience) {
+    OnboardingConfig.EXPERIENCE_FIRST_TIME ->
+        "Llegar al examen con un método desde el día uno es tu |mayor ventaja|."
+    OnboardingConfig.EXPERIENCE_RETRY ->
+        "Esta vez |es la definitiva|: atacamos justo donde fallaste."
+    else -> "Tu perfil encaja con el de los alumnos que |aprueban a la primera|."
 }
 
 @Preview(showBackground = true)
 @Composable
-fun StepComparisonPreview() {
+private fun StepComparisonPreview() {
     BaliTheme(darkTheme = true) {
-        Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+        Surface(color = MaterialTheme.colorScheme.background) {
             StepComparison(
                 data = OnboardingData(
-                    name = "User",
-                    experience = "\uD83C\uDF93 Empiezo de cero absoluto"
+                    name = "Jesús",
+                    experience = OnboardingConfig.EXPERIENCE_FIRST_TIME
                 )
             )
-        }
-    }
-}
-
-private fun parsePersonalizedMessage(message: String, primaryColor: Color): AnnotatedString {
-    return buildAnnotatedString {
-        val parts = message.split("|")
-        parts.forEachIndexed { index, part ->
-            if (index % 2 == 1) {
-                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold)) {
-                    append(part)
-                }
-            } else {
-                append(part)
-            }
         }
     }
 }

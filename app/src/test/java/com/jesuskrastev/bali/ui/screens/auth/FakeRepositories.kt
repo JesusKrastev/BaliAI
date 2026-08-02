@@ -109,6 +109,7 @@ class FakeAnalyticsTracker(
     val identifiedUsers = mutableListOf<Pair<String, String?>>()
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()
+    val onboardingSteps = mutableListOf<String>()
 
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
@@ -116,15 +117,21 @@ class FakeAnalyticsTracker(
     override fun login(method: String) { loginEvents.add(method) }
     override fun logout() {}
     override fun onboardingStarted() {}
+    override fun onboardingStepReached(eventName: String) { onboardingSteps.add(eventName) }
+    override fun onboardingRateAppClicked() {}
     override fun onboardingCompleted() {}
     override fun onboardingAbandoned(lastStep: String, stepIndex: Int) {}
     override fun paywallShown(source: String) {}
-    override fun paywallDismissed(purchased: Boolean, source: String) {}
+    override fun paywallPurchased(source: String) {}
+    override fun paywallClosed(source: String) {}
+    override fun paywallBackgrounded(source: String) {}
+    override fun paywallResumed(source: String) {}
 
     fun clear() {
         identifiedUsers.clear()
         signUpEvents.clear()
         loginEvents.clear()
+        onboardingSteps.clear()
     }
 }
 

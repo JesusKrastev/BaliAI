@@ -6,54 +6,102 @@ package com.jesuskrastev.bali.ui.screens.onboarding
  */
 class OnboardingReducer {
 
+    /**
+     * Maps a step position to the value of the top progress bar.
+     *
+     * @param index zero-based position of the current step
+     * @param totalSteps number of steps in the flow
+     * @return progress between 0f and 1f
+     */
     fun calculateProgress(index: Int, totalSteps: Int): Float = index.toFloat() / (totalSteps - 1)
 
+    /**
+     * Decides whether the bottom "continue" button is tappable.
+     * Informational steps have nothing to answer, so they are always enabled.
+     *
+     * @param step the step currently on screen
+     * @param data the answers collected so far
+     * @return true when the user may move forward
+     */
     fun shouldEnableNextButton(step: OnboardingStep, data: OnboardingData): Boolean = when (step) {
         OnboardingStep.Name -> {
             val name = data.name ?: ""
             name.isNotBlank() && name.all { it.isLetter() || it.isWhitespace() }
         }
         OnboardingStep.DifficultTopics -> data.difficultTopics.isNotEmpty()
-        is OnboardingStep.DialogueExperience,
-        is OnboardingStep.DialogueDifficultTopics,
-        OnboardingStep.MethodComparison,
-        OnboardingStep.Notifications,
-        OnboardingStep.SocialProof,
-        OnboardingStep.Comparison,
-        OnboardingStep.LossAversion -> true
+        is OnboardingStep.Informational -> true
         else -> false
     }
 
+    /**
+     * Builds the mascot line for a step. On informational screens this line *is* the
+     * headline of the narrative, so the screen body never repeats it.
+     * Text wrapped in pipes (`|like this|`) is rendered highlighted.
+     *
+     * @param step the step currently on screen
+     * @param data the answers collected so far, used to personalise the copy
+     * @return the message to show in the speech bubble
+     */
     fun updateMascotMessage(step: OnboardingStep, data: OnboardingData): String {
+        val name = data.name ?: ""
         return when (step) {
+            // Diagnóstico
             OnboardingStep.Name -> "¡Hola! Soy |Bali| 👋 Tu |copiloto| para aprobar. ¿Cómo te llamas?"
-            OnboardingStep.License -> "|${data.name ?: ""}|, ¿qué carnet vas a por ello?"
-            OnboardingStep.Experience -> "¿De dónde partimos? Así |clavo el plan| 🎯"
+            OnboardingStep.License -> "|$name|, ¿qué carnet quieres sacarte?"
+            OnboardingStep.Experience -> "¿Es tu |primer intento| con el carnet? Así clavo el plan 🎯"
             OnboardingStep.DialogueExperience -> getExperienceReaction(data.experience)
             OnboardingStep.TheoryBlocker -> "¿Qué es lo que más se te complica |del teórico|? 🎯"
+
+            // El porqué
+            OnboardingStep.Motivation -> "Dime una cosa, |$name|: ¿para qué quieres el carnet? 🎯"
+            OnboardingStep.FutureImpact -> "Imagina que |ya lo tienes|. ¿Cuánto cambiaría tu día a día?"
+            OnboardingStep.Empathy -> "|Te entiendo|, $name. Y no eres el único 🫂"
+
+            // Lo que cuesta no tenerlo
+            OnboardingStep.LossTime -> "Mientras tanto, |pierdes tu tiempo| ⏳"
+            OnboardingStep.LossOpportunity -> "Y también |pierdes oportunidades| 🚪"
+            OnboardingStep.LossAutonomy -> "Pero sobre todo, |pierdes autonomía| ⛓️"
+
+            // La solución: StepMethodComparison oculta la mascota y pone su propio título.
+            OnboardingStep.MethodComparison -> ""
+
+            // Lo que ganas
+            OnboardingStep.GainFreedom -> "|Recupera tu libertad| 🕊️"
+            OnboardingStep.GainExperiences -> "|Vive experiencias| que hoy dejas pasar 🏖️"
+            OnboardingStep.GainLevelUp -> "|Sube de nivel| tu vida 📈"
+
+            // El plan
             OnboardingStep.ExamDate -> "¿Cuándo es el examen? Sin fecha no hay |plan de ataque| 📅"
-            OnboardingStep.MethodComparison -> "Con |Bali| aprendes |toda| la teórica. Sin nosotros |olvidas la mitad| 🤯"
-            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Poco y constante |bate| a mucho y esporádico ⚡"
-            OnboardingStep.LearningPreference -> "¿Cómo aprendes mejor? Tu |método favorito| manda 🧠"
             OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan? Los |atacamos primero| 💪"
             OnboardingStep.DialogueDifficultTopics -> "Listo. Estos temas |no te van a coger de sorpresa| 🎯"
-            OnboardingStep.Concern -> "¿Qué es lo que más te preocupa de cara al examen? Lo |dejamos resuelto| 😤"
-            OnboardingStep.StudyTime -> "¿Cuándo tienes la mente más fresca? Ponemos las clases |difíciles ahí| 🌟"
-            OnboardingStep.Notifications -> "¿Te aviso para que |no pierdas el ritmo|? Solo 1 push al día 🔔"
-            OnboardingStep.SocialProof -> "|9.000 personas| ya aprobaron. |Tú eres el siguiente| 💯"
+            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Poco y constante |bate| a mucho y esporádico ⚡"
+            OnboardingStep.LearningPreference -> "¿Cómo prefieres practicar? Tu |método| manda 🧠"
+
+            // Cierre
             OnboardingStep.Processing -> "Analizando tu perfil... tu |plan personalizado| ya viene 🚀"
-            OnboardingStep.Comparison -> "Los datos de tu perfil confirman que con |Bali| tu éxito es |cuestión de semanas| 🚀"
-            OnboardingStep.LossAversion -> "|${data.name ?: ""}|, esto es |solo tuyo|. No lo desperdicies ⚡"
-            OnboardingStep.Pact -> "Último paso, |${data.name ?: ""}|. Hagamos |un trato| ✊"
+            // StepComparison oculta la mascota y pone su propio título.
+            OnboardingStep.Comparison -> ""
+            OnboardingStep.PlanReveal -> "|$name|, este plan es |solo tuyo|. No lo desperdicies ⚡"
+            OnboardingStep.SocialProof -> "|9.000 personas| ya lo consiguieron. |Tú eres el siguiente| 💯"
+            OnboardingStep.Pact -> "Último paso, |$name|. Hagamos |un trato| ✊"
+
             else -> ""
         }
     }
 
+    /**
+     * Reacts to the user's starting point, mirroring their answer back at them.
+     * For someone who already sat the exam the reaction primes the failure statistic
+     * that the rest of the flow builds on.
+     *
+     * @param experience the selected experience label, or null if unanswered
+     * @return the reaction line for the dialogue screen
+     */
     private fun getExperienceReaction(experience: String?): String = when (experience) {
-        "\uD83C\uDF93 Empiezo de cero absoluto" -> "Perfecto. |Empezar de cero| es tu ventaja: sin malos hábitos 🚀"
-        "\uD83D\uDCD6 Ya tengo algunas nociones básicas" -> "Genial, |saltamos| directamente a lo que importa ⚡"
-        "\uD83D\uDD01 He suspendido y quiero repetirlo" -> "Esta vez |es diferente|. Ya sabes dónde están las trampas 💪"
-        "\uD83E\uDEA7 Ya tengo otro carnet" -> "Con experiencia tienes |la mitad ganada|. A rematar 😎"
+        OnboardingConfig.EXPERIENCE_FIRST_TIME ->
+            "Perfecto. Ir |a la primera| es tu ventaja: lo hacemos bien desde el día uno 🚀"
+        OnboardingConfig.EXPERIENCE_RETRY ->
+            "Ya sabes lo que se siente. El |58% suspende a la primera|. Contigo va a ser distinto 💪"
         else -> ""
     }
 }
