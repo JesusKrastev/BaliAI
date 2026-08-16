@@ -13,6 +13,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.jesuskrastev.bali.ui.screens.chat.ChatScreen
+import com.jesuskrastev.bali.ui.screens.chat.ChatViewModel
 import com.jesuskrastev.bali.ui.screens.coins.CoinsGainedScreen
 import com.jesuskrastev.bali.ui.screens.exam.ExamScreen
 import com.jesuskrastev.bali.ui.screens.exam.ExamViewModel
@@ -67,6 +69,9 @@ object ShopRoute
 
 @Serializable
 object SuggestionsRoute
+
+@Serializable
+object ChatRoute
 
 @Serializable
 data class AuthRoute(val restrictNewAccounts: Boolean = false)
@@ -167,6 +172,9 @@ fun AppNavigation(
                     },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
+                    },
+                    onChatClick = {
+                        navController.navigate(ChatRoute)
                     }
                 )
             }
@@ -404,6 +412,14 @@ fun AppNavigation(
                 SuggestionsScreen(
                     onBackClick = { navController.popBackStack() },
                     viewModel = viewModel
+                )
+            }
+
+            composable<ChatRoute> {
+                val viewModel: ChatViewModel = hiltViewModel()
+                ChatScreen(
+                    viewModel = viewModel,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
         }

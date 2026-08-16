@@ -118,7 +118,6 @@ class FakeAnalyticsTracker(
     override fun logout() {}
     override fun onboardingStarted() {}
     override fun onboardingStepReached(eventName: String) { onboardingSteps.add(eventName) }
-    override fun onboardingRateAppClicked() {}
     override fun onboardingCompleted() {}
     override fun onboardingAbandoned(lastStep: String, stepIndex: Int) {}
     override fun paywallShown(source: String) {}

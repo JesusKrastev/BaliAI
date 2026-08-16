@@ -171,7 +171,7 @@ private fun OnboardingStepContent(
         label = "onboarding_step",
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing) 0.dp else 24.dp)
+            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing || state.currentStep == OnboardingStep.Preview) 0.dp else 24.dp)
     ) { step ->
         // Every screen of the emotional arc shares the same one-idea layout.
         val narrative = OnboardingConfig.narratives[step]
@@ -230,10 +230,9 @@ private fun OnboardingStepContent(
             )
             OnboardingStep.Comparison -> StepComparison(state.data)
             OnboardingStep.PlanReveal -> StepPlanReveal(state.data)
-            OnboardingStep.SocialProof -> StepSocialProof(
-                onRateAppClicked = { viewModel.onEvent(OnboardingEvent.RateAppClicked) }
-            )
+            OnboardingStep.SocialProof -> StepSocialProof()
             OnboardingStep.Pact -> StepPact { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+            OnboardingStep.Preview -> OnboardingPreviewScreen()
             // Dialogue steps are carried entirely by the mascot bubble above.
             OnboardingStep.DialogueExperience, OnboardingStep.DialogueDifficultTopics -> Box(Modifier.fillMaxSize())
             else -> Unit
@@ -250,7 +249,8 @@ private fun OnboardingStepContent(
 private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
     OnboardingStep.MethodComparison,
     OnboardingStep.Comparison,
-    OnboardingStep.Processing -> false
+    OnboardingStep.Processing,
+    OnboardingStep.Preview -> false
     else -> true
 }
 

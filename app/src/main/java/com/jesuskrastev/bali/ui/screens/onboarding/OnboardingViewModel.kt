@@ -82,6 +82,7 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object PlanReveal : Informational("plan_reveal")
     data object SocialProof : Informational("social_proof")
     data object Pact : OnboardingStep("pact")
+    data object Preview : Informational("preview")
 
     data object PaywallPending : OnboardingStep()
     data object Completed : OnboardingStep()
@@ -119,8 +120,8 @@ class OnboardingViewModel @Inject constructor(
         OnboardingStep.ExamDate, OnboardingStep.DifficultTopics,
         OnboardingStep.DialogueDifficultTopics, OnboardingStep.DailyGoal,
         OnboardingStep.LearningPreference,
-        OnboardingStep.Processing, OnboardingStep.Comparison, OnboardingStep.PlanReveal,
-        OnboardingStep.SocialProof, OnboardingStep.Pact
+        OnboardingStep.Processing, OnboardingStep.Comparison, OnboardingStep.Preview,
+        OnboardingStep.PlanReveal, OnboardingStep.SocialProof, OnboardingStep.Pact
     )
 
     init {
@@ -142,6 +143,7 @@ class OnboardingViewModel @Inject constructor(
         val position = stepsOrder.indexOf(step)
         if (position < 0 || step.analyticsName.isBlank()) return
         analyticsTracker.onboardingStepReached(funnelEventName(position, step.analyticsName))
+        if (step == OnboardingStep.Preview) analyticsTracker.onboardingPreviewViewed()
     }
 
     /**
@@ -174,7 +176,6 @@ class OnboardingViewModel @Inject constructor(
             OnboardingEvent.GoToNextStep -> goToNextStep()
             OnboardingEvent.GoToPreviousStep -> goToPreviousStep()
             OnboardingEvent.CompleteOnboarding -> saveDataAndComplete()
-            OnboardingEvent.RateAppClicked -> analyticsTracker.onboardingRateAppClicked()
         }
     }
 
@@ -216,6 +217,9 @@ class OnboardingViewModel @Inject constructor(
      * Reaching the end of the flow hands over to the paywall.
      */
     private fun goToNextStep() {
+        if (_uiState.value.currentStep == OnboardingStep.Preview) {
+            analyticsTracker.onboardingPreviewContinueClicked()
+        }
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
 
         if (currentIndex == stepsOrder.lastIndex) {

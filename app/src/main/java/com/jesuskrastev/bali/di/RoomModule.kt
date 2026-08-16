@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.jesuskrastev.bali.data.local.room.BaliDatabase
 import com.jesuskrastev.bali.data.local.room.dao.AnswerDao
+import com.jesuskrastev.bali.data.local.room.dao.ChatMessageDao
 import com.jesuskrastev.bali.data.local.room.dao.TestResultDao
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
@@ -38,7 +39,8 @@ object RoomModule {
                 BaliDatabase.MIGRATION_8_9,
                 BaliDatabase.MIGRATION_9_10,
                 BaliDatabase.MIGRATION_10_11,
-                BaliDatabase.MIGRATION_11_12
+                BaliDatabase.MIGRATION_11_12,
+                BaliDatabase.MIGRATION_12_13
             )
             .build()
 
@@ -57,4 +59,8 @@ object RoomModule {
     @Provides
     fun provideLessonNodeDao(db: BaliDatabase): LessonNodeDao =
         db.lessonNodeDao()
+
+    @Provides
+    fun provideChatMessageDao(db: BaliDatabase): ChatMessageDao =
+        db.chatMessageDao()
 }

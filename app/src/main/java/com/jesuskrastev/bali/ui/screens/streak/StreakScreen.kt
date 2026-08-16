@@ -1,12 +1,15 @@
 package com.jesuskrastev.bali.ui.screens.streak
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +26,7 @@ import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,8 +41,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -46,7 +50,20 @@ import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.ui.components.WeeklyStreakProgress
 import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
 import com.jesuskrastev.bali.ui.screens.home.StreakStatus
+import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
 
+/** Number of streak freeze slots a user can hold at once. */
+private const val MAX_STREAK_FREEZES = 2
+
+/**
+ * Standalone page with the full picture of the user's streak.
+ *
+ * Shows the weekly goal ring, the day-by-day progress, the available streak freezes and the
+ * current/record streak stats.
+ *
+ * @param viewModel Supplies the weekly streak, goal, freezes and streak records.
+ * @param onBackClick Invoked when the user taps the back arrow.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreakScreen(
@@ -54,124 +71,141 @@ fun StreakScreen(
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val colorPrimary = MaterialTheme.colorScheme.primary
-    val scrollState = rememberScrollState()
 
-    Scaffold(
-        containerColor = Color(0xFF0D0905),
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "TU RACHA",
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = Color.White
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush = BaliBackgroundGradient())
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            text = "TU RACHA",
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
                         )
-                    }
-                },
-                actions = {
-                    // Spacer to maintain centering if needed, or other actions
-                    Box(modifier = Modifier.size(48.dp))
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color.Transparent,
-                    navigationIconContentColor = Color.White
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBackClick) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Volver"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF0D0905),
-                            Color(0xFF1A1108)
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            if (!uiState.isLoading) {
+            }
+        ) { padding ->
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(scrollState)
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     val completedDaysThisWeek =
                         uiState.weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+
                     WeeklyStreakProgress(
                         testsCompletedThisWeek = completedDaysThisWeek,
                         weeklyGoal = uiState.weeklyGoal,
                         macroStreakWeeks = uiState.currentStreak
                     )
 
-                    // Weekly Progress Card
-                    ProgressCard(uiState = uiState, color = colorPrimary)
+                    ProgressCard(weeklyStreak = uiState.weeklyStreak)
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Shields Section
-                    ShieldsCard(freezes = uiState.streakFreezes, color = colorPrimary)
+                    ShieldsCard(freezes = uiState.streakFreezes)
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    // Stats Row
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         StatCard(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                             icon = Icons.Rounded.LocalFireDepartment,
                             label = "SEMANAS SEGUIDAS",
                             value = uiState.currentStreak.toString(),
-                            subLabel = "Racha actual",
-                            color = colorPrimary
+                            subLabel = "Racha actual"
                         )
                         StatCard(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
                             icon = Icons.Rounded.EmojiEvents,
                             label = "MEJOR RACHA",
                             value = uiState.highestStreak.toString(),
-                            subLabel = "Semanas récord",
-                            color = colorPrimary
+                            subLabel = "Semanas récord"
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
 
-                    // Footer Section
-                    FooterSection(message = uiState.encouragingMessage, color = colorPrimary)
+                    FooterSection(message = uiState.encouragingMessage)
 
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(40.dp))
                 }
             }
         }
     }
 }
 
-
+/**
+ * Rounded elevated container shared by every card on this page.
+ *
+ * @param modifier Applied to the surface, so callers can size or weight it.
+ * @param content Card body; it is responsible for its own padding.
+ */
 @Composable
-fun ShieldsCard(freezes: Int, color: Color) {
+private fun StreakCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.03f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+        content = content
+    )
+}
+
+/**
+ * Card listing the streak freezes the user still has available.
+ *
+ * @param freezes Freezes currently owned; drives how many shields are highlighted.
+ */
+@Composable
+private fun ShieldsCard(freezes: Int) {
+    StreakCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -180,25 +214,28 @@ fun ShieldsCard(freezes: Int, color: Color) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Protecciones de Racha",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontWeight = FontWeight.Medium
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Salva tu racha si no cumples el objetivo.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(2) { index ->
-                    val isActive = index < freezes
+                repeat(MAX_STREAK_FREEZES) { index ->
                     Icon(
                         imageVector = Icons.Rounded.Shield,
                         contentDescription = "Escudo",
-                        tint = if (isActive) color else Color.White.copy(alpha = 0.15f),
+                        tint = if (index < freezes) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                        },
                         modifier = Modifier.size(36.dp)
                     )
                 }
@@ -207,20 +244,20 @@ fun ShieldsCard(freezes: Int, color: Color) {
     }
 }
 
+/**
+ * Card with the day-by-day progress of the current week.
+ *
+ * @param weeklyStreak One entry per day of the week, in display order.
+ */
 @Composable
-fun ProgressCard(uiState: MainStreakUiState, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.03f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
+private fun ProgressCard(weeklyStreak: List<DailyStreakState>) {
+    StreakCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
                 text = "Progreso de la Semana",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.6f),
-                fontWeight = FontWeight.Medium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -230,18 +267,22 @@ fun ProgressCard(uiState: MainStreakUiState, color: Color) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                uiState.weeklyStreak.forEach { day ->
-                    DayIndicator(day = day, color = color)
+                weeklyStreak.forEach { day ->
+                    DayIndicator(day = day)
                 }
             }
         }
     }
 }
 
+/**
+ * Single day cell of the weekly progress card.
+ *
+ * @param day Status and label of the day to render.
+ */
 @Composable
-fun DayIndicator(day: DailyStreakState, color: Color) {
+private fun DayIndicator(day: DailyStreakState) {
     val isCompleted = day.status == StreakStatus.COMPLETED
-    val isToday = day.isToday
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -251,60 +292,56 @@ fun DayIndicator(day: DailyStreakState, color: Color) {
             modifier = Modifier
                 .size(34.dp)
                 .clip(CircleShape)
-                .background(if (isCompleted) color else Color.Transparent)
-                .border(
-                    width = 1.dp,
-                    color = if (isCompleted) color else Color.White.copy(alpha = 0.15f),
-                    shape = CircleShape
+                .background(
+                    if (isCompleted) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    }
                 )
-                .then(
-                    if (isCompleted) Modifier.background(
-                        Brush.radialGradient(
-                            listOf(color, color.copy(alpha = 0.6f))
-                        )
-                    ) else Modifier
+                .border(
+                    width = if (day.isToday) 2.dp else 1.dp,
+                    color = when {
+                        isCompleted -> MaterialTheme.colorScheme.primary
+                        day.isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    },
+                    shape = CircleShape
                 ),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = day.dayOfWeek,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (isCompleted) Color.Black else Color.White.copy(alpha = 0.4f)
+                fontWeight = if (day.isToday) FontWeight.Black else FontWeight.Bold,
+                color = when {
+                    isCompleted -> MaterialTheme.colorScheme.onPrimary
+                    day.isToday -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
-
-            if (isCompleted) {
-                // Glow effect simulation
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.radialGradient(
-                                listOf(Color.Transparent, color.copy(alpha = 0.2f))
-                            ),
-                            CircleShape
-                        )
-                )
-            }
         }
     }
 }
 
+/**
+ * Square tile highlighting a single streak statistic.
+ *
+ * @param modifier Applied to the card, so callers can weight it inside a row.
+ * @param icon Leading icon shown next to the label.
+ * @param label Uppercase caption describing the metric.
+ * @param value Formatted metric value.
+ * @param subLabel Secondary line clarifying the metric.
+ */
 @Composable
-fun StatCard(
+private fun StatCard(
     modifier: Modifier = Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     value: String,
-    subLabel: String,
-    color: Color
+    subLabel: String
 ) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.03f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-        modifier = modifier.height(180.dp)
-    ) {
+    StreakCard(modifier = modifier) {
         Column(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -316,13 +353,13 @@ fun StatCard(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = color,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.5.sp
                 )
@@ -330,23 +367,28 @@ fun StatCard(
 
             Text(
                 text = value,
-                style = MaterialTheme.typography.displayMedium,
+                style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
                 text = subLabel,
                 style = MaterialTheme.typography.labelSmall,
-                color = Color.White.copy(alpha = 0.3f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
+/**
+ * Closing block with a badge icon and an encouraging message.
+ *
+ * @param message Personalised line about how close the user is to their record.
+ */
 @Composable
-fun FooterSection(message: String, color: Color) {
+private fun FooterSection(message: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -358,13 +400,13 @@ fun FooterSection(message: String, color: Color) {
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.05f)),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Rounded.AutoAwesome,
                 contentDescription = null,
-                tint = color,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(28.dp)
             )
         }
@@ -373,14 +415,14 @@ fun FooterSection(message: String, color: Color) {
             text = "¡Sigue así, Campeón!",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Black,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
 
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             lineHeight = 20.sp
         )

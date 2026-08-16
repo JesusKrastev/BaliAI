@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import javax.inject.Inject

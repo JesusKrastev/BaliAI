@@ -74,7 +74,7 @@ class OnboardingReducer {
             OnboardingStep.ExamDate -> "¿Cuándo es el examen? Sin fecha no hay |plan de ataque| 📅"
             OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan? Los |atacamos primero| 💪"
             OnboardingStep.DialogueDifficultTopics -> "Listo. Estos temas |no te van a coger de sorpresa| 🎯"
-            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Poco y constante |bate| a mucho y esporádico ⚡"
+            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Mejor poco y constante que mucho y de vez en cuando ⚡"
             OnboardingStep.LearningPreference -> "¿Cómo prefieres practicar? Tu |método| manda 🧠"
 
             // Cierre
@@ -83,7 +83,7 @@ class OnboardingReducer {
             // StepComparison oculta la mascota y pone su propio título.
             OnboardingStep.Comparison -> ""
             OnboardingStep.PlanReveal -> "|$name|, este plan es |solo tuyo|. No lo desperdicies ⚡"
-            OnboardingStep.SocialProof -> "|9.000 personas| ya lo consiguieron. |Tú eres el siguiente| 💯"
+            OnboardingStep.SocialProof -> "|1.000 personas| ya lo consiguieron. |Tú eres el siguiente| 💯"
             OnboardingStep.Pact -> "Último paso, |$name|. Hagamos |un trato| ✊"
 
             else -> ""

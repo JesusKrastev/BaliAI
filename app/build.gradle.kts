@@ -36,8 +36,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260521
-        versionName = "1.1.5w"
+        versionCode = 20260816
+        versionName = "1.1.7"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -164,10 +164,6 @@ dependencies {
     // In-App updates
     implementation(libs.app.update)
     implementation(libs.app.update.ktx)
-
-    // In-App review
-    implementation(libs.play.review)
-    implementation(libs.play.review.ktx)
 
     // Mixpanel
     implementation(libs.mixpanel.android)

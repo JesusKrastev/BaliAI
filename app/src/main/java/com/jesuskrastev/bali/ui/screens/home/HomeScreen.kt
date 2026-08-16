@@ -91,7 +91,8 @@ fun HomeScreen(
     onShopClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
     onAuthClick: () -> Unit = {},
-    onStreakClick: () -> Unit = {}
+    onStreakClick: () -> Unit = {},
+    onChatClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showLevelLockedDialog by remember { mutableStateOf(false) }
@@ -259,6 +260,17 @@ fun HomeScreen(
                         context.startActivity(intent)
                     },
                     icon = { Icon(Icons.Rounded.Description, contentDescription = null) },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+
+                NavigationDrawerItem(
+                    label = { Text("Pregunta a Bali") },
+                    selected = false,
+                    onClick = {
+                        scope.launch { drawerState.close() }
+                        onChatClick()
+                    },
+                    icon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -432,6 +444,9 @@ fun HomeScreen(
                         )
                     }
                 }
+            },
+            floatingActionButton = {
+                AskBaliFab(onClick = onChatClick)
             }
         ) { paddingValues ->
             LearningPathGraph(
@@ -449,6 +464,30 @@ fun HomeScreen(
             )
         }
     }
+}
+
+/**
+ * Entry point to the AI tutor chat. Carries the mascot rather than a generic chat glyph
+ * so it reads as "ask Bali", the same character the student already talks to elsewhere.
+ *
+ * @param onClick invoked when the student wants to open the chat
+ */
+@Composable
+fun AskBaliFab(onClick: () -> Unit) {
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = Color.White,
+        shape = RoundedCornerShape(20.dp),
+        icon = {
+            Image(
+                painter = painterResource(id = R.drawable.bali),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        text = { Text("Pregunta a Bali", fontWeight = FontWeight.Black) }
+    )
 }
 
 @Composable
@@ -1246,7 +1285,8 @@ fun LearningPathGraph(
     Box(modifier = modifier.onGloballyPositioned { containerCoords = it }) {
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)
+            // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
         ) {
         sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
             val sectionNodes = nodesBySection[sectionKey].orEmpty()

@@ -55,6 +55,7 @@ fun CoinsGainedScreen(
                 onClick = onContinueClick,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(24.dp)
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),

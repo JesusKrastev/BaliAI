@@ -79,9 +79,6 @@ open class AnalyticsTracker @Inject constructor(
         if (eventName.isNotBlank()) log(eventName)
     }
 
-    /** Tracks that the user tapped the "rate the app" button on the SocialProof step. */
-    open fun onboardingRateAppClicked() = log("onboarding_rate_app_clicked")
-
     /** Tracks that the user finished the full onboarding flow and flushes immediately. */
     open fun onboardingCompleted() {
         log("onboarding_completed")
@@ -98,6 +95,12 @@ open class AnalyticsTracker @Inject constructor(
         putString("last_step", lastStep)
         putInt("step_index", stepIndex)
     }
+
+    /** Tracks that the pre-paywall live preview screen (real question + gamification) was shown. */
+    open fun onboardingPreviewViewed() = log("onboarding_preview_viewed")
+
+    /** Tracks that the user tapped Continue on the pre-paywall preview screen, heading to the paywall. */
+    open fun onboardingPreviewContinueClicked() = log("onboarding_preview_continue")
 
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
@@ -155,4 +158,45 @@ open class AnalyticsTracker @Inject constructor(
     open fun paywallResumed(source: String = "onboarding") = log("paywall_resumed") {
         putString("source", source)
     }
+
+    // ── AI CHAT ─────────────────────────────────────────────────────────────
+
+    /**
+     * Tracks that the user opened the AI tutor chat.
+     *
+     * @param hasHistory true when the user is resuming an existing conversation, which
+     *   separates first-time curiosity from people who actually came back to it
+     */
+    open fun chatOpened(hasHistory: Boolean) = log("chat_opened") {
+        putBoolean("has_history", hasHistory)
+    }
+
+    /**
+     * Tracks a question sent to the AI tutor.
+     *
+     * The question text is deliberately not sent — only its shape — so the funnel never
+     * carries free-text the user typed.
+     *
+     * @param questionLength number of characters in the question
+     * @param fromSuggestion true when the user tapped a suggested prompt instead of typing
+     * @param turnIndex zero-based position of this question within the conversation
+     */
+    open fun chatMessageSent(questionLength: Int, fromSuggestion: Boolean, turnIndex: Int) =
+        log("chat_message_sent") {
+            putInt("question_length", questionLength)
+            putBoolean("from_suggestion", fromSuggestion)
+            putInt("turn_index", turnIndex)
+        }
+
+    /**
+     * Tracks that the tutor failed to answer.
+     *
+     * @param reason short machine-readable cause, e.g. the exception's simple name
+     */
+    open fun chatMessageFailed(reason: String) = log("chat_message_failed") {
+        putString("reason", reason)
+    }
+
+    /** Tracks that the user wiped their conversation with the AI tutor. */
+    open fun chatCleared() = log("chat_cleared")
 }

@@ -43,4 +43,16 @@ abstract class RepositoryModule {
     abstract fun bindTestResultRepository(
         testResultRepositoryImpl: com.jesuskrastev.bali.data.repository.TestResultRepositoryImpl
     ): com.jesuskrastev.bali.domain.repository.TestResultRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindChatRepository(
+        chatRepositoryImpl: com.jesuskrastev.bali.data.repository.ChatRepositoryImpl
+    ): com.jesuskrastev.bali.domain.repository.ChatRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindAiTutorRepository(
+        geminiTutorRepository: com.jesuskrastev.bali.data.repository.GeminiTutorRepository
+    ): com.jesuskrastev.bali.domain.repository.AiTutorRepository
 }

@@ -117,6 +117,10 @@
 }
 
 # --- FIREBASE & GOOGLE PLAY SERVICES (CRITICAL) ---
+# Anotación interna de Play Services con retención de clase: se referencia en los .class
+# pero no se empaqueta, así que R8 avisa de que falta. No se usa en tiempo de ejecución.
+-dontwarn com.google.android.gms.common.annotation.NoNullnessRewrite
+
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 -keep class com.google.android.gms.auth.** { *; }

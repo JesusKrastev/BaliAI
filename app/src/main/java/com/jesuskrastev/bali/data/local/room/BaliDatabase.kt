@@ -6,17 +6,25 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.TypeConverters
 import com.jesuskrastev.bali.data.local.room.dao.AnswerDao
+import com.jesuskrastev.bali.data.local.room.dao.ChatMessageDao
 import com.jesuskrastev.bali.data.local.room.dao.TestResultDao
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.entities.AnswerEntity
+import com.jesuskrastev.bali.data.local.room.entities.ChatMessageEntity
 import com.jesuskrastev.bali.data.local.room.entities.TestResultEntity
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
 import com.jesuskrastev.bali.data.local.room.entities.LessonNodeEntity
 import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
 
 @Database(
-    entities = [UserEntity::class, TestResultEntity::class, AnswerEntity::class, LessonNodeEntity::class],
-    version = 12,
+    entities = [
+        UserEntity::class,
+        TestResultEntity::class,
+        AnswerEntity::class,
+        LessonNodeEntity::class,
+        ChatMessageEntity::class
+    ],
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,8 +33,24 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun testResultDao(): TestResultDao
     abstract fun answerDao(): AnswerDao
     abstract fun lessonNodeDao(): LessonNodeDao
+    abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Local transcript of the AI tutor chat, used while signed out.
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS chat_messages (
+                        id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        PRIMARY KEY(id)
+                    )
+                """.trimIndent())
+            }
+        }
+
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // SQLite doesn't support DROP COLUMN, so we recreate the table without
