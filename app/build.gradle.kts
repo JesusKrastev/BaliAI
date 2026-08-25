@@ -42,7 +42,6 @@ android {
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
         properties.load(FileInputStream(rootProject.file("local.properties")))
-        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"")
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
@@ -135,7 +134,6 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
 
     // Gemini
-    implementation(libs.google.generativeai)
 
     // Coil
     implementation(libs.coil.compose)
@@ -152,6 +150,10 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.config.ktx)
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.ai)
+    implementation(libs.firebase.appcheck)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
 
     // Auth (Credential Manager)
     implementation(libs.androidx.credentials)

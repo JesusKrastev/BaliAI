@@ -13,7 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
 import org.mockito.kotlin.mock
-import com.google.ai.client.generativeai.GenerativeModel
+import com.google.firebase.ai.GenerativeModel
 
 class ExamViewModelTest {
 

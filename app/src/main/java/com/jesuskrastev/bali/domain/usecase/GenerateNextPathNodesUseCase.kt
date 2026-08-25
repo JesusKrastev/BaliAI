@@ -1,6 +1,7 @@
 ﻿package com.jesuskrastev.bali.domain.usecase
 
-import com.google.ai.client.generativeai.GenerativeModel
+import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.di.PathNodesModel
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
@@ -21,7 +22,7 @@ import javax.inject.Inject
  * a personalized curriculum of lesson nodes, which are then saved via [PathRepository].
  */
 open class GenerateNextPathNodesUseCase @Inject constructor(
-    private val gemini: GenerativeModel,
+    @PathNodesModel private val gemini: GenerativeModel,
     private val userRepository: UserRepository,
     private val pathRepository: PathRepository,
 ) {
@@ -53,16 +54,7 @@ open class GenerateNextPathNodesUseCase @Inject constructor(
             - Los tÃ­tulos deben ser MUY cortos (ej: "Prioridades", "Velocidad", "SeÃ±ales de Peligro").
             - Las descripciones deben motivar y explicar brevemente de quÃ© tratarÃ¡ (max 10-15 palabras).
             
-            FORMATO ESPERADO (JSON PURO):
-            {
-              "nodes": [
-                {
-                  "title": "TÃ­tulo Corto",
-                  "description": "DescripciÃ³n breve y motivadora"
-                }
-              ]
-            }
-            Devuelve SOLO EL JSON y asegÃºrate de parsearlo bien.
+            Devuelve exactamente $count nodos.
         """.trimIndent()
 
         val response = gemini.generateContent(prompt)

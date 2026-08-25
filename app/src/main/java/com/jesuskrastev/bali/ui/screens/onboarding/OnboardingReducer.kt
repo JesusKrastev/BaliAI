@@ -28,7 +28,7 @@ class OnboardingReducer {
             val name = data.name ?: ""
             name.isNotBlank() && name.all { it.isLetter() || it.isWhitespace() }
         }
-        OnboardingStep.DifficultTopics -> data.difficultTopics.isNotEmpty()
+        OnboardingStep.Province -> data.province != null
         is OnboardingStep.Informational -> true
         else -> false
     }
@@ -45,17 +45,16 @@ class OnboardingReducer {
     fun updateMascotMessage(step: OnboardingStep, data: OnboardingData): String {
         val name = data.name ?: ""
         return when (step) {
-            // Diagnóstico
-            OnboardingStep.Name -> "¡Hola! Soy |Bali| 👋 Tu |copiloto| para aprobar. ¿Cómo te llamas?"
-            OnboardingStep.License -> "|$name|, ¿qué carnet quieres sacarte?"
-            OnboardingStep.Experience -> "¿Es tu |primer intento| con el carnet? Así clavo el plan 🎯"
-            OnboardingStep.DialogueExperience -> getExperienceReaction(data.experience)
+            // El porqué
+            OnboardingStep.Motivation -> "Dime una cosa: ¿para qué quieres el carnet? 🎯"
             OnboardingStep.TheoryBlocker -> "¿Qué es lo que más se te complica |del teórico|? 🎯"
 
-            // El porqué
-            OnboardingStep.Motivation -> "Dime una cosa, |$name|: ¿para qué quieres el carnet? 🎯"
+            // Diagnóstico
+            OnboardingStep.Concern -> "¿Qué es lo que más te |preocupa| de cara al examen? 😰"
+            OnboardingStep.Experience -> "¿Es tu |primer intento| con el carnet? Así clavo el plan 🎯"
+            OnboardingStep.Readiness -> "¿Cómo te ves ahora mismo para |el teórico|? 💪"
             OnboardingStep.FutureImpact -> "Imagina que |ya lo tienes|. ¿Cuánto cambiaría tu día a día?"
-            OnboardingStep.Empathy -> "|Te entiendo|, $name. Y no eres el único 🫂"
+            OnboardingStep.Empathy -> "|Te entiendo|. Y no eres el único 🫂"
 
             // Lo que cuesta no tenerlo
             OnboardingStep.LossTime -> "Mientras tanto, |pierdes tu tiempo| ⏳"
@@ -71,10 +70,11 @@ class OnboardingReducer {
             OnboardingStep.GainLevelUp -> "|Sube de nivel| tu vida 📈"
 
             // El plan
-            OnboardingStep.ExamDate -> "¿Cuándo es el examen? Sin fecha no hay |plan de ataque| 📅"
-            OnboardingStep.DifficultTopics -> "¿Qué temas se te atragantan? Los |atacamos primero| 💪"
-            OnboardingStep.DialogueDifficultTopics -> "Listo. Estos temas |no te van a coger de sorpresa| 🎯"
-            OnboardingStep.DailyGoal -> "¿Cuánto tiempo al día? Mejor poco y constante que mucho y de vez en cuando ⚡"
+            OnboardingStep.Name -> "Vamos a montar tu plan. Antes, ¿|cómo te llamas|? 👋"
+            OnboardingStep.ExamDate -> "¿Cuándo es tu examen? Sin fecha no hay |plan de ataque| 📅"
+            OnboardingStep.Province -> "¿En qué |provincia| te examinas? 📍"
+            OnboardingStep.ProvinceConfirmed -> provinceConfirmationHeadline(data.province)
+            OnboardingStep.WeeklyStudy -> "¿Cuánto quieres estudiar |a la semana|? Mejor poco y constante ⚡"
             OnboardingStep.LearningPreference -> "¿Cómo prefieres practicar? Tu |método| manda 🧠"
 
             // Cierre
@@ -82,7 +82,8 @@ class OnboardingReducer {
             OnboardingStep.Processing -> ""
             // StepComparison oculta la mascota y pone su propio título.
             OnboardingStep.Comparison -> ""
-            OnboardingStep.PlanReveal -> "|$name|, este plan es |solo tuyo|. No lo desperdicies ⚡"
+            // StepPlanReveal oculta la mascota y pone su propio encabezado.
+            OnboardingStep.PlanReveal -> ""
             OnboardingStep.SocialProof -> "|1.000 personas| ya lo consiguieron. |Tú eres el siguiente| 💯"
             OnboardingStep.Pact -> "Último paso, |$name|. Hagamos |un trato| ✊"
 
@@ -91,18 +92,13 @@ class OnboardingReducer {
     }
 
     /**
-     * Reacts to the user's starting point, mirroring their answer back at them.
-     * For someone who already sat the exam the reaction primes the failure statistic
-     * that the rest of the flow builds on.
+     * Headline of the screen that pays off the province question by promising the
+     * question bank of the office the user will actually sit the exam in.
      *
-     * @param experience the selected experience label, or null if unanswered
-     * @return the reaction line for the dialogue screen
+     * @param province the province the user selected, or null if it was skipped
+     * @return the message to show in the speech bubble
      */
-    private fun getExperienceReaction(experience: String?): String = when (experience) {
-        OnboardingConfig.EXPERIENCE_FIRST_TIME ->
-            "Perfecto. Ir |a la primera| es tu ventaja: lo hacemos bien desde el día uno 🚀"
-        OnboardingConfig.EXPERIENCE_RETRY ->
-            "Ya sabes lo que se siente. El |58% suspende a la primera|. Contigo va a ser distinto 💪"
-        else -> ""
-    }
+    private fun provinceConfirmationHeadline(province: String?): String = province
+        ?.let { "Tenemos el temario que se usa en |$it| 📋" }
+        ?: "Tenemos el |temario oficial| de la DGT 📋"
 }

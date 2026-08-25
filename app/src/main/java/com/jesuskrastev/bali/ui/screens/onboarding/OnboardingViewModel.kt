@@ -12,17 +12,28 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.random.Random
 
+/**
+ * Everything the user tells us during onboarding.
+ *
+ * Only [name] and [experience] outlive the flow; the rest exists to personalise the copy
+ * of the later screens and to make the generated plan read as the user's own.
+ *
+ * @property examTiming the bucket the user picked, kept for display
+ * @property examDate the date [examTiming] estimates, used by the countdown and the plan
+ */
 data class OnboardingData(
     val name: String? = null,
-    val licenseType: String? = null,
     val experience: String? = null,
     val theoryBlocker: String? = null,
+    val concern: String? = null,
+    val readiness: String? = null,
     val motivation: String? = null,
     val futureImpact: String? = null,
+    val examTiming: String? = null,
     val examDate: Long? = null,
-    val dailyGoal: String? = null,
+    val province: String? = null,
+    val weeklyStudy: String? = null,
     val learningPreference: String? = null,
-    val difficultTopics: Set<String> = emptySet(),
 )
 
 /**
@@ -44,15 +55,14 @@ sealed class OnboardingStep(val analyticsName: String = "") {
      */
     sealed class Informational(analyticsName: String) : OnboardingStep(analyticsName)
 
-    // ── Diagnóstico ────────────────────────────────────────────────────────
-    data object Name : OnboardingStep("name")
-    data object License : OnboardingStep("license")
-    data object Experience : OnboardingStep("experience")
-    data object DialogueExperience : Informational("dialogue_experience")
-    data object TheoryBlocker : OnboardingStep("reasons")
-
     // ── El porqué ──────────────────────────────────────────────────────────
     data object Motivation : OnboardingStep("motivation")
+    data object TheoryBlocker : OnboardingStep("reasons")
+
+    // ── Diagnóstico ────────────────────────────────────────────────────────
+    data object Concern : OnboardingStep("concern")
+    data object Experience : OnboardingStep("experience")
+    data object Readiness : OnboardingStep("readiness")
     data object FutureImpact : OnboardingStep("future_impact")
     data object Empathy : Informational("empathy")
 
@@ -70,10 +80,13 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object GainLevelUp : Informational("gain_level_up")
 
     // ── El plan ────────────────────────────────────────────────────────────
+    // The name opens this block: the whole emotional arc is answered with taps, and the
+    // keyboard only shows up once the user is invested and the plan is about to be built.
+    data object Name : OnboardingStep("name")
     data object ExamDate : OnboardingStep("exam_date")
-    data object DifficultTopics : OnboardingStep("difficult_topics")
-    data object DialogueDifficultTopics : Informational("dialogue_difficult_topics")
-    data object DailyGoal : OnboardingStep("daily_goal")
+    data object Province : OnboardingStep("province")
+    data object ProvinceConfirmed : Informational("province_confirmed")
+    data object WeeklyStudy : OnboardingStep("weekly_study")
     data object LearningPreference : OnboardingStep("learning_preference")
 
     // ── Cierre ─────────────────────────────────────────────────────────────
@@ -82,14 +95,13 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object PlanReveal : Informational("plan_reveal")
     data object SocialProof : Informational("social_proof")
     data object Pact : OnboardingStep("pact")
-    data object Preview : Informational("preview")
 
     data object PaywallPending : OnboardingStep()
     data object Completed : OnboardingStep()
 }
 
 data class OnboardingUiState(
-    val currentStep: OnboardingStep = OnboardingStep.Name,
+    val currentStep: OnboardingStep = OnboardingStep.Motivation,
     val data: OnboardingData = OnboardingData(),
     val progress: Float = 0f,
     val processingProgress: Float = 0f,
@@ -111,30 +123,36 @@ class OnboardingViewModel @Inject constructor(
     private val reducer = OnboardingReducer()
 
     private val stepsOrder = listOf(
-        OnboardingStep.Name, OnboardingStep.License, OnboardingStep.Experience,
-        OnboardingStep.DialogueExperience, OnboardingStep.TheoryBlocker,
-        OnboardingStep.Motivation, OnboardingStep.FutureImpact, OnboardingStep.Empathy,
+        // El porqué
+        OnboardingStep.Motivation, OnboardingStep.TheoryBlocker,
+        // Diagnóstico
+        OnboardingStep.Concern, OnboardingStep.Experience, OnboardingStep.Comparison,
+        OnboardingStep.Readiness, OnboardingStep.FutureImpact, OnboardingStep.Empathy,
+        // Lo que cuesta no tenerlo
         OnboardingStep.LossTime, OnboardingStep.LossOpportunity, OnboardingStep.LossAutonomy,
+        // La solución y lo que ganas
         OnboardingStep.MethodComparison,
         OnboardingStep.GainFreedom, OnboardingStep.GainExperiences, OnboardingStep.GainLevelUp,
-        OnboardingStep.ExamDate, OnboardingStep.DifficultTopics,
-        OnboardingStep.DialogueDifficultTopics, OnboardingStep.DailyGoal,
-        OnboardingStep.LearningPreference,
-        OnboardingStep.Processing, OnboardingStep.Comparison, OnboardingStep.Preview,
-        OnboardingStep.PlanReveal, OnboardingStep.SocialProof, OnboardingStep.Pact
+        // El plan
+        OnboardingStep.Name, OnboardingStep.ExamDate,
+        OnboardingStep.Province, OnboardingStep.ProvinceConfirmed,
+        OnboardingStep.WeeklyStudy, OnboardingStep.LearningPreference,
+        // Cierre
+        OnboardingStep.SocialProof, OnboardingStep.Processing, OnboardingStep.PlanReveal,
+        OnboardingStep.Pact
     )
 
     init {
         updateMascotMessage()
         analyticsTracker.onboardingStarted()
-        trackStepReached(OnboardingStep.Name)
+        trackStepReached(stepsOrder.first())
     }
 
     /**
      * Reports that a screen was shown, naming the event after its position in the flow.
      *
      * The number is derived from [stepsOrder] rather than stored on the step, so it can
-     * never drift out of sync with the real order. The `p` prefix is not decoration:
+     * never drift out of sync with the real order. The `o` prefix is not decoration:
      * Firebase silently drops events whose name starts with a digit.
      *
      * @param step the step that just became visible
@@ -143,7 +161,6 @@ class OnboardingViewModel @Inject constructor(
         val position = stepsOrder.indexOf(step)
         if (position < 0 || step.analyticsName.isBlank()) return
         analyticsTracker.onboardingStepReached(funnelEventName(position, step.analyticsName))
-        if (step == OnboardingStep.Preview) analyticsTracker.onboardingPreviewViewed()
     }
 
     /**
@@ -151,10 +168,10 @@ class OnboardingViewModel @Inject constructor(
      *
      * @param position zero-based index of the step in [stepsOrder]
      * @param slug the step's semantic name
-     * @return a name such as `p07_future_impact`
+     * @return a name such as `o07_future_impact`
      */
     private fun funnelEventName(position: Int, slug: String): String =
-        "p%02d_%s".format(position + 1, slug)
+        "o%02d_%s".format(position + 1, slug)
 
     /**
      * Entry point for every user interaction in the onboarding flow.
@@ -164,15 +181,22 @@ class OnboardingViewModel @Inject constructor(
     fun onEvent(event: OnboardingEvent) {
         when (event) {
             is OnboardingEvent.SetName -> updateData { it.copy(name = event.name) }
-            is OnboardingEvent.SelectLicense -> selectStepItem { it.copy(licenseType = event.license) }
             is OnboardingEvent.SelectExperience -> selectStepItem { it.copy(experience = event.experience) }
             is OnboardingEvent.SelectTheoryBlocker -> selectStepItem { it.copy(theoryBlocker = event.blocker) }
+            is OnboardingEvent.SelectConcern -> selectStepItem { it.copy(concern = event.concern) }
+            is OnboardingEvent.SelectReadiness -> selectStepItem { it.copy(readiness = event.readiness) }
             is OnboardingEvent.SelectMotivation -> selectStepItem { it.copy(motivation = event.motivation) }
             is OnboardingEvent.SelectFutureImpact -> selectStepItem { it.copy(futureImpact = event.impact) }
-            is OnboardingEvent.SelectExamDate -> selectStepItem { it.copy(examDate = event.dateMillis) }
-            is OnboardingEvent.SelectDailyGoal -> selectStepItem { it.copy(dailyGoal = event.goal) }
+            is OnboardingEvent.SelectExamTiming -> selectStepItem {
+                it.copy(
+                    examTiming = event.timing,
+                    examDate = OnboardingConfig.examDateFor(event.timing)
+                )
+            }
+            // The province needs a confirmation tap, so it does not advance on its own.
+            is OnboardingEvent.SelectProvince -> updateData { it.copy(province = event.province) }
+            is OnboardingEvent.SelectWeeklyStudy -> selectStepItem { it.copy(weeklyStudy = event.weeklyStudy) }
             is OnboardingEvent.SelectLearningPreference -> selectStepItem { it.copy(learningPreference = event.preference) }
-            is OnboardingEvent.ToggleDifficultTopic -> toggleDifficultTopic(event.topic)
             OnboardingEvent.GoToNextStep -> goToNextStep()
             OnboardingEvent.GoToPreviousStep -> goToPreviousStep()
             OnboardingEvent.CompleteOnboarding -> saveDataAndComplete()
@@ -202,24 +226,10 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Adds or removes a topic from the multi-choice "difficult topics" answer.
-     *
-     * @param topic label of the toggled topic
-     */
-    private fun toggleDifficultTopic(topic: String) {
-        val current = _uiState.value.data.difficultTopics
-        val newSet = if (current.contains(topic)) current - topic else current + topic
-        updateData { it.copy(difficultTopics = newSet) }
-    }
-
-    /**
      * Advances to the next step, logging the completion of the current one.
      * Reaching the end of the flow hands over to the paywall.
      */
     private fun goToNextStep() {
-        if (_uiState.value.currentStep == OnboardingStep.Preview) {
-            analyticsTracker.onboardingPreviewContinueClicked()
-        }
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
 
         if (currentIndex == stepsOrder.lastIndex) {
@@ -251,10 +261,8 @@ class OnboardingViewModel @Inject constructor(
             val data = _uiState.value.data
             val preferences = User(
                 name = data.name,
-                licenseType = data.licenseType,
                 experience = data.experience,
                 examDateMillis = data.examDate,
-                difficultTopics = data.difficultTopics.joinToString(","),
                 lastPracticeTimestamp = 0,
                 currentStreak = 0
             )

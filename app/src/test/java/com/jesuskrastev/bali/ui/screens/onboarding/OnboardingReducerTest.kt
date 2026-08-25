@@ -43,12 +43,12 @@ class OnboardingReducerTest {
     }
 
     @Test
-    fun `difficult topics step requires at least one topic`() {
-        val empty = OnboardingData(difficultTopics = emptySet())
-        val picked = OnboardingData(difficultTopics = setOf("🛑 Señales y marcas"))
+    fun `province step requires a province`() {
+        val empty = OnboardingData(province = null)
+        val picked = OnboardingData(province = "Almería")
 
-        assertThat(reducer.shouldEnableNextButton(OnboardingStep.DifficultTopics, empty)).isFalse()
-        assertThat(reducer.shouldEnableNextButton(OnboardingStep.DifficultTopics, picked)).isTrue()
+        assertThat(reducer.shouldEnableNextButton(OnboardingStep.Province, empty)).isFalse()
+        assertThat(reducer.shouldEnableNextButton(OnboardingStep.Province, picked)).isTrue()
     }
 
     @Test
@@ -60,29 +60,52 @@ class OnboardingReducerTest {
 
     @Test
     fun `mascot messages interpolate the user name`() {
-        val message = reducer.updateMascotMessage(OnboardingStep.Motivation, OnboardingData(name = "Jesús"))
+        val message = reducer.updateMascotMessage(OnboardingStep.Pact, OnboardingData(name = "Jesús"))
 
         assertThat(message).contains("Jesús")
     }
 
     @Test
-    fun `repeat candidates get the failure statistic instead of a generic reaction`() {
-        val data = OnboardingData(experience = OnboardingConfig.EXPERIENCE_RETRY)
+    fun `the screens shown before the name never leave a gap where it would go`() {
+        // The name is asked at the start of the plan block, so everything from the "why"
+        // through the whole emotional arc has to read without it.
+        val beforeTheName = listOf(
+            OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Concern,
+            OnboardingStep.Experience, OnboardingStep.Readiness, OnboardingStep.FutureImpact,
+            OnboardingStep.Empathy, OnboardingStep.LossTime, OnboardingStep.LossOpportunity,
+            OnboardingStep.LossAutonomy, OnboardingStep.GainFreedom,
+            OnboardingStep.GainExperiences, OnboardingStep.GainLevelUp, OnboardingStep.Name
+        )
 
-        val reaction = reducer.updateMascotMessage(OnboardingStep.DialogueExperience, data)
-
-        assertThat(reaction).contains("58%")
+        beforeTheName.forEach { step ->
+            val message = reducer.updateMascotMessage(step, OnboardingData(name = null))
+            assertThat(message).isNotEmpty()
+            assertThat(message).doesNotContain("null")
+            assertThat(message).doesNotContain("  ")
+            assertThat(message).doesNotContain(" ,")
+            assertThat(message).doesNotContain(" .")
+        }
     }
 
     @Test
-    fun `every experience option produces a reaction`() {
-        OnboardingConfig.experiences.forEach { experience ->
-            val reaction = reducer.updateMascotMessage(
-                OnboardingStep.DialogueExperience,
-                OnboardingData(experience = experience)
-            )
-            assertThat(reaction).isNotEmpty()
-        }
+    fun `the province confirmation names the province the user picked`() {
+        val message = reducer.updateMascotMessage(
+            OnboardingStep.ProvinceConfirmed,
+            OnboardingData(province = "Almería")
+        )
+
+        assertThat(message).contains("Almería")
+    }
+
+    @Test
+    fun `the province confirmation still reads without a province`() {
+        val message = reducer.updateMascotMessage(
+            OnboardingStep.ProvinceConfirmed,
+            OnboardingData(province = null)
+        )
+
+        assertThat(message).isNotEmpty()
+        assertThat(message).doesNotContain("null")
     }
 
     @Test

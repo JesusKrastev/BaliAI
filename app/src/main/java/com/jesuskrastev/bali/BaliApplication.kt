@@ -8,6 +8,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
 import coil.util.DebugLogger
+import com.google.firebase.appcheck.FirebaseAppCheck
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
@@ -48,6 +49,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
             return
         }
 
+        initAppCheck()
         createNotificationChannel()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
         MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
@@ -60,6 +62,19 @@ class BaliApplication : Application(), ImageLoaderFactory {
                 .diagnosticsEnabled(true)
                 .build(),
         )
+    }
+
+    /**
+     * Attests that requests really come from this app before Firebase AI Logic will serve
+     * them.
+     *
+     * Firebase AI Logic keeps the Gemini credentials out of the APK, but its endpoint is
+     * reachable by anyone who knows the project — App Check is what closes it, so this is
+     * half of the protection rather than an optional extra. Which provider does the
+     * attesting depends on the build type, so it comes from the source sets.
+     */
+    private fun initAppCheck() {
+        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(appCheckProviderFactory())
     }
 
     private fun createNotificationChannel() {

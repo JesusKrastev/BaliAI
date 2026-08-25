@@ -2,7 +2,8 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.ai.client.generativeai.GenerativeModel
+import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -51,7 +52,7 @@ class ExamViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
-    private val gemini: GenerativeModel,
+    @QuestionsModel private val gemini: GenerativeModel,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase
@@ -156,7 +157,6 @@ class ExamViewModel @Inject constructor(
                     - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara, pedagÃ³gica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difÃ­ciles.
                     
                     REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡MUY IMPORTANTE!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 30 preguntas. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas.
                     - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16 en lugar de triÃ¡ngulos en autopista, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
                     
                     REGLAS DE IMÃGENES (SISTEMA FILEPATH):
@@ -165,27 +165,12 @@ class ExamViewModel @Inject constructor(
                     - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
                     - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, mecÃ¡nica), usa null.
                     
-                    FORMATO DE RESPUESTA (JSON PURO):
-                    {
-                      "questions": [
-                        {
-                          "text": "Â¿Pregunta real con estilo DGT?",
-                          "options": ["Texto detallado de la opciÃ³n 1", "Texto detallado de la opciÃ³n 2", "Texto detallado de la opciÃ³n 3"],
-                          "correctAnswerIndex": 0,
-                          "explanation": "Breve justificaciÃ³n de la norma...",
-                          "imageUrl": "URL_O_NULL"
-                        }
-                      ]
-                    }
-                    Responde SOLO con el JSON vÃ¡lido. AsegÃºrate de que el array "questions" tenga EXACTAMENTE 30 elementos y cierra correctamente todas las llaves y corchetes.
+                    Genera EXACTAMENTE 30 preguntas.
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
-                val jsonStartIndex = rawText.indexOf('{')
-                val jsonEndIndex = rawText.lastIndexOf('}')
-                val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
                 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 

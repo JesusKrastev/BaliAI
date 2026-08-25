@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private val SUCCESS_GREEN = Color(0xFF10B981)
 
@@ -36,13 +37,17 @@ private val SUCCESS_GREEN = Color(0xFF10B981)
  *
  * The tick pops in with a spring instead of appearing on a frame boundary, which is what
  * makes the list feel like work finishing rather than like a static image being swapped.
+ * The badge on the left carries the *state* of the task and the emoji carries its *subject*,
+ * so the two never compete: the badge always looks the same across rows, the emoji never does.
  *
+ * @param emoji symbol identifying what this step is about
  * @param text the task description
  * @param isCompleted true once the task is done
  * @param isActive true while the task is the one in progress
  */
 @Composable
 fun ProcessingTaskRow(
+    emoji: String,
     text: String,
     isCompleted: Boolean,
     isActive: Boolean
@@ -96,7 +101,11 @@ fun ProcessingTaskRow(
             )
         }
 
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Text(text = emoji, fontSize = 18.sp)
+
+        Spacer(modifier = Modifier.width(10.dp))
 
         Text(
             text = text,

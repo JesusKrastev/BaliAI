@@ -33,11 +33,18 @@ import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
 import com.jesuskrastev.bali.ui.screens.onboarding.components.ProcessingTaskRow
 import com.jesuskrastev.bali.ui.screens.onboarding.examCountdownLabel
-import com.jesuskrastev.bali.ui.screens.onboarding.optionLabel
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import java.util.concurrent.TimeUnit
 
 private val RING_SIZE = 148.dp
+
+/**
+ * One entry of the "building your plan" checklist.
+ *
+ * @param emoji symbol identifying what the step is about
+ * @param text short description of the work being done
+ */
+private data class ProcessingTask(val emoji: String, val text: String)
 
 /**
  * The "building your plan" screen.
@@ -105,7 +112,8 @@ fun StepProcessing(progress: Float, data: OnboardingData) {
                     val startsAt = index.toFloat() / tasks.size
 
                     ProcessingTaskRow(
-                        text = task,
+                        emoji = task.emoji,
+                        text = task.text,
                         isCompleted = progress >= completedAt,
                         isActive = progress in startsAt..<completedAt
                     )
@@ -158,59 +166,65 @@ private fun ProgressRing(progress: Float, percentage: Int) {
 /**
  * Builds the checklist from what the user answered.
  *
- * The list is always the same length so the layout never jumps, and every entry has a
- * neutral fallback for the questions that went unanswered.
+ * Every line is kept to a handful of words so the row reads at a glance while the ring is
+ * still moving — a sentence would never be finished before the next task lights up. The list
+ * is always the same length so the layout never jumps, and every entry has a neutral fallback
+ * for the questions that went unanswered.
  *
  * @param data the answers collected during the onboarding flow
- * @return one line per task, in the order they get ticked off
+ * @return one task per line, in the order they get ticked off
  */
-private fun buildProcessingTasks(data: OnboardingData): List<String> = listOf(
+private fun buildProcessingTasks(data: OnboardingData): List<ProcessingTask> = listOf(
     when (data.experience) {
-        OnboardingConfig.EXPERIENCE_RETRY -> "Revisando por qué se falla a la primera"
-        OnboardingConfig.EXPERIENCE_FIRST_TIME -> "Preparando tu arranque desde cero"
-        else -> "Analizando tu punto de partida"
+        OnboardingConfig.EXPERIENCE_RETRY -> ProcessingTask("🔁", "Revisando tus fallos")
+        OnboardingConfig.EXPERIENCE_FIRST_TIME -> ProcessingTask("🎓", "Empezando desde cero")
+        else -> ProcessingTask("🎯", "Analizando tu nivel")
     },
 
-    data.licenseType
-        ?.let { "Cargando el temario oficial de ${optionLabel(it)}" }
-        ?: "Cargando el temario oficial de la DGT",
+    ProcessingTask(
+        emoji = "📍",
+        text = data.province
+            ?.let { "Seleccionando preguntas de $it" }
+            ?: "Seleccionando preguntas de la DGT"
+    ),
 
-    when {
-        data.difficultTopics.size == 1 ->
-            "Reforzando ${optionLabel(data.difficultTopics.first())}"
-        data.difficultTopics.size > 1 ->
-            "Reforzando tus ${data.difficultTopics.size} temas más flojos"
-        else -> "Localizando tus puntos débiles"
+    when (data.theoryBlocker) {
+        OnboardingConfig.BLOCKER_NO_START -> ProcessingTask("🧩", "Ordenando el temario")
+        OnboardingConfig.BLOCKER_NO_PROGRESS -> ProcessingTask("📈", "Midiendo tu avance")
+        OnboardingConfig.BLOCKER_NO_METHOD -> ProcessingTask("🧭", "Fijando tu método")
+        else -> ProcessingTask("🛡️", "Buscando tus puntos débiles")
     },
 
-    examWorkLabel(data.examDate),
+    ProcessingTask(emoji = "📅", text = examWorkLabel(data.examDate)),
 
-    data.dailyGoal
-        ?.let { "Cuadrando tus ${optionLabel(it).substringBefore(" (")} al día" }
-        ?: "Cuadrando tu agenda de estudio",
+    ProcessingTask(
+        emoji = "⏱️",
+        text = OnboardingConfig.weeklyStudyShortLabel(data.weeklyStudy)
+            ?.let { "Ritmo: ${it.replaceFirstChar { c -> c.lowercase() }}" }
+            ?: "Ajustando tu ritmo"
+    ),
 
-    data.motivation
-        ?.let { "Apuntando todo a: ${optionLabel(it).replaceFirstChar { c -> c.lowercase() }}" }
-        ?: "Rematando tu estrategia anti-trampa"
+    when (data.motivation) {
+        OnboardingConfig.MOTIVATION_INDEPENDENCE -> ProcessingTask("🕊️", "Meta: independencia")
+        OnboardingConfig.MOTIVATION_WORK -> ProcessingTask("💼", "Meta: mejor trabajo")
+        OnboardingConfig.MOTIVATION_FREEDOM -> ProcessingTask("🌍", "Meta: moverte libre")
+        else -> ProcessingTask("🏁", "Fijando tu meta")
+    }
 )
 
 /**
  * Describes the scheduling task in terms of the user's own exam date.
  *
  * @param examDateMillis the chosen exam date, or null if it was skipped
- * @return the task line for the calendar step
+ * @return the task text for the calendar step
  */
 private fun examWorkLabel(examDateMillis: Long?): String {
     val days = examDateMillis
         ?.minus(System.currentTimeMillis())
         ?.let { TimeUnit.MILLISECONDS.toDays(it) }
-        ?: return "Repartiendo el temario por semanas"
+        ?: return "Repartiendo por semanas"
 
-    return if (days > 0) {
-        "Repartiendo el temario en ${examCountdownLabel(days)}"
-    } else {
-        "Repartiendo el temario por semanas"
-    }
+    return if (days > 0) "Repartiendo en ${examCountdownLabel(days)}" else "Repartiendo por semanas"
 }
 
 @Preview(showBackground = true)
@@ -222,11 +236,11 @@ private fun StepProcessingPreview() {
                 progress = 0.45f,
                 data = OnboardingData(
                     name = "Jesús",
-                    licenseType = "🚗 Coche (B)",
                     experience = OnboardingConfig.EXPERIENCE_FIRST_TIME,
+                    theoryBlocker = OnboardingConfig.theoryBlockers.last(),
                     motivation = "💼 Tener mejores oportunidades de trabajo",
-                    dailyGoal = "🕓 30 min (Recomendado)",
-                    difficultTopics = setOf("🛑 Señales y marcas", "🚦 Prioridades de paso"),
+                    province = "Almería",
+                    weeklyStudy = OnboardingConfig.weeklyStudyOptions.first(),
                     examDate = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(21)
                 )
             )

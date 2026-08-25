@@ -2,7 +2,8 @@ package com.jesuskrastev.bali.ui.screens.test
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.ai.client.generativeai.GenerativeModel
+import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -64,7 +65,7 @@ class TestViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
-    private val gemini: GenerativeModel,
+    @QuestionsModel private val gemini: GenerativeModel,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
@@ -239,7 +240,6 @@ class TestViewModel @Inject constructor(
                     - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara y lÃ³gica. Intenta darle un toque pedagÃ³gico adaptado a su nivel.
                     
                     REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio a lo largo de las 10 preguntas. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas. 
                     - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triÃ¡ngulos ya no son obligatorios en autopista/autovÃ­a), lÃ­mites de velocidad a 30 km/h en vÃ­as urbanas de un Ãºnico carril, nuevas normativas de VMP (patinetes elÃ©ctricos) y las seÃ±ales de trÃ¡fico de nueva creaciÃ³n. Cero informaciÃ³n obsoleta.
                     - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sÃ³lo", o "como norma general" para poner a prueba la atenciÃ³n del alumno.
                     
@@ -249,20 +249,7 @@ class TestViewModel @Inject constructor(
                     - Codigos ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
                     - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol), usa null.
                     
-                    FORMATO DE RESPUESTA (JSON PURO):
-                    {
-                      "selectedCategory": "Nombre exacto de la categorÃ­a elegida o $currentTopic o $aiNodeTitle",
-                      "questions": [
-                        {
-                          "text": "Â¿Pregunta?",
-                          "options": ["OpciÃ³n 1", "OpciÃ³n 2", "OpciÃ³n 3"],
-                          "correctAnswerIndex": 0,
-                          "explanation": "Breve explicaciÃ³n lÃ³gica...",
-                          "imageUrl": "URL_O_NULL"
-                        }
-                      ]
-                    }
-                    Responde SOLO el JSON. AsegÃºrate de cerrar bien las llaves.
+                    Genera EXACTAMENTE 10 preguntas e indica en "selectedCategory" la categoría elegida.
                     """.trimIndent()
 
                 val response = gemini.generateContent(prompt)

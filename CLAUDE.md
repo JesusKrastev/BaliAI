@@ -37,8 +37,11 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **DI**: Hilt 2.52 with KSP (not KAPT)
 - **Local DB**: Room 2.6.1 (DB version 10, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
-- **Backend**: Firebase BOM 33.13.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config)
-- **AI**: Google Generative AI SDK 0.9.0 (Gemini)
+- **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
+- **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
+  in the app: Firebase proxies the call and App Check attests the caller. Models are configured in
+  `di/GeminiModule.kt`, one qualifier per use (`@TutorModel`, `@QuestionsModel`, `@PathNodesModel`).
+  Note the project is on Kotlin 2.0.21, so Firebase BOM 34.x will not compile against it.
 - **Payments**: RevenueCat 9.23.1
 - **Push**: OneSignal + Firebase Messaging
 - **Analytics**: Mixpanel + Firebase Analytics (both tracked via `AnalyticsTracker`)
@@ -125,7 +128,9 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 
 ## Important Rules
 
-- **NEVER commit `local.properties`** — it contains `GEMINI_API_KEY`, `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, and `REVENUECAT_API_KEY`. The build will fail without it; add it locally.
+- **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, and `REVENUECAT_API_KEY`. The build will fail without it; add it locally.
+- **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
+- Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
 - `BaliApplication.isRobolectric()` guards skip SDK initialization (OneSignal, Mixpanel, RevenueCat) in unit tests. NEVER remove this guard — those SDKs crash under Robolectric.
 - `versionCode` format is `YYYYMMDD` (e.g., `20260320`). NEVER use sequential integers.

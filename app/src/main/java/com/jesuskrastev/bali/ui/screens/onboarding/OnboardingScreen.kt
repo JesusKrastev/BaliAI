@@ -171,7 +171,8 @@ private fun OnboardingStepContent(
         label = "onboarding_step",
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing || state.currentStep == OnboardingStep.Preview) 0.dp else 24.dp)
+            // StepProcessing centres its own full-bleed layout and applies its own padding.
+            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing) 0.dp else 24.dp)
     ) { step ->
         // Every screen of the emotional arc shares the same one-idea layout.
         val narrative = OnboardingConfig.narratives[step]
@@ -181,15 +182,9 @@ private fun OnboardingStepContent(
         }
 
         when (step) {
-            OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
-            OnboardingStep.License -> {
-                StepSelectorList(OnboardingConfig.licenses, viewModel) { license, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectLicense(license))
-                }
-            }
-            OnboardingStep.Experience -> {
-                StepSelectorList(OnboardingConfig.experiences, viewModel) { experience, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectExperience(experience))
+            OnboardingStep.Motivation -> {
+                StepSelectorList(OnboardingConfig.motivations, viewModel) { motivation, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
                 }
             }
             OnboardingStep.TheoryBlocker -> {
@@ -197,9 +192,19 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectTheoryBlocker(blocker))
                 }
             }
-            OnboardingStep.Motivation -> {
-                StepSelectorList(OnboardingConfig.motivations, viewModel) { motivation, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
+            OnboardingStep.Concern -> {
+                StepSelectorList(OnboardingConfig.concerns, viewModel) { concern, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectConcern(concern))
+                }
+            }
+            OnboardingStep.Experience -> {
+                StepSelectorList(OnboardingConfig.experiences, viewModel) { experience, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectExperience(experience))
+                }
+            }
+            OnboardingStep.Readiness -> {
+                StepSelectorList(OnboardingConfig.readinessLevels, viewModel) { readiness, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectReadiness(readiness))
                 }
             }
             OnboardingStep.FutureImpact -> {
@@ -208,15 +213,21 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.MethodComparison -> StepMethodComparison()
-            OnboardingStep.ExamDate -> StepExamDate(state.data.examDate, viewModel)
-            OnboardingStep.DifficultTopics -> {
-                StepMultiSelectorList(OnboardingConfig.difficultTopics, state.data.difficultTopics, viewModel) {
-                    viewModel.onEvent(OnboardingEvent.ToggleDifficultTopic(it))
+            OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
+            OnboardingStep.ExamDate -> {
+                StepSelectorList(OnboardingConfig.examTimings, viewModel) { timing, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectExamTiming(timing))
                 }
             }
-            OnboardingStep.DailyGoal -> {
-                StepSelectorList(OnboardingConfig.dailyGoals, viewModel) { goal, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectDailyGoal(goal))
+            OnboardingStep.Province -> StepProvince(state.data.province) { province ->
+                viewModel.onEvent(OnboardingEvent.SelectProvince(province))
+            }
+            OnboardingStep.ProvinceConfirmed -> {
+                StepNarrative(content = OnboardingConfig.provinceConfirmation(state.data.province))
+            }
+            OnboardingStep.WeeklyStudy -> {
+                StepSelectorList(OnboardingConfig.weeklyStudyOptions, viewModel) { weeklyStudy, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(weeklyStudy))
                 }
             }
             OnboardingStep.LearningPreference -> {
@@ -232,9 +243,6 @@ private fun OnboardingStepContent(
             OnboardingStep.PlanReveal -> StepPlanReveal(state.data)
             OnboardingStep.SocialProof -> StepSocialProof()
             OnboardingStep.Pact -> StepPact { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
-            OnboardingStep.Preview -> OnboardingPreviewScreen()
-            // Dialogue steps are carried entirely by the mascot bubble above.
-            OnboardingStep.DialogueExperience, OnboardingStep.DialogueDifficultTopics -> Box(Modifier.fillMaxSize())
             else -> Unit
         }
     }
@@ -250,7 +258,7 @@ private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
     OnboardingStep.MethodComparison,
     OnboardingStep.Comparison,
     OnboardingStep.Processing,
-    OnboardingStep.Preview -> false
+    OnboardingStep.PlanReveal -> false
     else -> true
 }
 
@@ -264,7 +272,7 @@ private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
 private fun shouldShowBottomButton(step: OnboardingStep): Boolean =
     step is OnboardingStep.Informational ||
         step == OnboardingStep.Name ||
-        step == OnboardingStep.DifficultTopics
+        step == OnboardingStep.Province
 
 /**
  * Copy for the bottom button. On the narrative screens the label doubles as a
@@ -283,7 +291,7 @@ private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.GainFreedom -> "Eso quiero 🕊️"
     OnboardingStep.GainExperiences -> "Me lo estoy imaginando 🏖️"
     OnboardingStep.GainLevelUp -> "Ese es mi siguiente paso 🚀"
-    OnboardingStep.DifficultTopics -> "Estos son mis retos →"
+    OnboardingStep.ProvinceConfirmed -> "Perfecto →"
     OnboardingStep.Comparison -> "Quiero este método 💪"
     OnboardingStep.PlanReveal -> "Este es mi plan 🎯"
     OnboardingStep.SocialProof -> "Yo también puedo →"

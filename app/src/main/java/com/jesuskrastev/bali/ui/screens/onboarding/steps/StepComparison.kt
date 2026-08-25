@@ -41,7 +41,13 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private const val BALI_PASS_RATE = 0.89f
-private const val AVERAGE_PASS_RATE = 0.47f
+
+/**
+ * The complement of the 58% failure rate the title leads with. The two numbers are on
+ * screen at the same time, so they have to add up to 100 or the chart contradicts the
+ * headline sitting right above it.
+ */
+private const val AVERAGE_PASS_RATE = 0.42f
 
 /** Height of a bar at 100%. Both bars are measured against this, so their ratio stays honest. */
 private val BAR_FULL_HEIGHT = 200.dp
@@ -94,7 +100,7 @@ fun StepComparison(data: OnboardingData) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Tu probabilidad de aprobar a la primera",
+            text = buildTitle(data).highlightPipes(primaryColor),
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -227,11 +233,30 @@ private fun ProbabilityBar(
 }
 
 /**
- * Picks the headline that best matches the user's starting point, phrased as an outcome
- * rather than as a feature.
+ * Picks the title, which answers back the attempt the user just told us about.
+ *
+ * Both variants lead with the same failure rate the chart is drawn from, so the screen
+ * reads as a reaction to their answer rather than as a generic statistic: a repeat
+ * candidate is told they already know what it feels like, a first-timer is told it does
+ * not have to happen to them.
  *
  * @param data the answers collected during the onboarding flow
- * @return the headline, with the words to highlight wrapped in pipes
+ * @return the title, with the words to highlight wrapped in pipes
+ */
+private fun buildTitle(data: OnboardingData): String = when (data.experience) {
+    OnboardingConfig.EXPERIENCE_FIRST_TIME ->
+        "El |58%| suspende a la primera. No tiene que ser tu caso."
+    OnboardingConfig.EXPERIENCE_RETRY ->
+        "Ya sabes lo que se siente. El |58%| suspende a la primera, y tú no vas a repetir."
+    else -> "Tu probabilidad de aprobar |a la primera|"
+}
+
+/**
+ * Picks the closing line under the chart, which turns the title's statistic into what the
+ * user's own plan does about it.
+ *
+ * @param data the answers collected during the onboarding flow
+ * @return the closing line, with the words to highlight wrapped in pipes
  */
 private fun buildHeadline(data: OnboardingData): String = when (data.experience) {
     OnboardingConfig.EXPERIENCE_FIRST_TIME ->

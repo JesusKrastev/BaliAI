@@ -2,7 +2,8 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.ai.client.generativeai.GenerativeModel
+import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -45,7 +46,7 @@ class MistakesViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val answerRepository: AnswerRepository,
     private val testResultRepository: TestResultRepository,
-    private val gemini: GenerativeModel,
+    @QuestionsModel private val gemini: GenerativeModel,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase
@@ -88,16 +89,30 @@ class MistakesViewModel @Inject constructor(
         generateMistakesTest()
     }
 
+    /**
+     * Builds the review session: takes the student's most recent unresolved mistakes and
+     * asks Gemini for one reformulated question per mistake.
+     *
+     * The list is capped at [MAX_MISTAKES_PER_REVIEW] before it reaches the prompt. The
+     * remote source returns every uncorrected answer ever recorded, with no limit, and
+     * the prompt asks for exactly one question per item — so without this cap a student
+     * with a long history triggers a generation of a hundred-plus questions that costs a
+     * fortune and, past the output limit, comes back truncated and unparseable anyway.
+     */
     private fun generateMistakesTest() {
         viewModelScope.launch {
             try {
                 val recentMistakes = answerRepository.getRecentMistakes().first()
+                    .sortedByDescending { it.date }
+                    .take(MAX_MISTAKES_PER_REVIEW)
                 if (recentMistakes.isEmpty()) {
                     _uiState.update { it.copy(isLoading = false, error = "Â¡Felicidades! No tienes errores pendientes por repasar.") }
                     return@launch
                 }
 
-                val mistakesContext = recentMistakes.joinToString("\n") { "- $it" }
+                // Only the question text: interpolating the whole Answer would ship
+                // ids, option indexes and dates the model has no use for.
+                val mistakesContext = recentMistakes.joinToString("\n") { "- ${it.questionText}" }
                 val user = userRepository.get().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
                 val studentLevel = user?.level ?: 1
@@ -123,7 +138,6 @@ class MistakesViewModel @Inject constructor(
                     - EXPLICACIÃ“N: MÃ¡ximo 25 palabras. Al ser un test de repaso, la explicaciÃ³n debe ser muy didÃ¡ctica, aclarando la "trampa" o el concepto que el alumno suele confundir.
                     
                     REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
-                    - ALEATORIEDAD EXTREMA: El valor de "correctAnswerIndex" (0, 1 o 2) DEBE ser completamente aleatorio. ESTÃ PROHIBIDO repetir la misma posiciÃ³n correcta mÃ¡s de 2 veces seguidas.
                     - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de patinetes VMP).
                     - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas atraigan el error tÃ­pico que el alumno cometiÃ³ antes.
                     
@@ -133,19 +147,6 @@ class MistakesViewModel @Inject constructor(
                     - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
                     - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, documentaciÃ³n), usa null.
     
-                    FORMATO DE RESPUESTA (JSON PURO):
-                    {
-                      "questions": [
-                        {
-                          "text": "Â¿Pregunta reformulada con estilo DGT?",
-                          "options": ["Texto detallado de la opciÃ³n 1", "Texto detallado de la opciÃ³n 2", "Texto detallado de la opciÃ³n 3"],
-                          "correctAnswerIndex": 0,
-                          "explanation": "ExplicaciÃ³n didÃ¡ctica sobre el error frecuente...",
-                          "imageUrl": "URL_O_NULL"
-                        }
-                      ]
-                    }
-                    Responde SOLO el JSON vÃ¡lido y cierra correctamente todas las llaves y corchetes.
                 """.trimIndent()
 
                 val response = gemini.generateContent(prompt)
@@ -155,7 +156,6 @@ class MistakesViewModel @Inject constructor(
                 val jsonEndIndex = rawText.lastIndexOf('}')
                 if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON invÃ¡lido devuelto por la IA")
 
-                val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
                 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
@@ -165,6 +165,14 @@ class MistakesViewModel @Inject constructor(
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
         }
+    }
+
+    companion object {
+        /**
+         * How many mistakes a single review session covers. One generated question per
+         * mistake, so this is also the size — and the cost — of the Gemini call.
+         */
+        private const val MAX_MISTAKES_PER_REVIEW = 30
     }
 
     private fun selectOption(optionIndex: Int) {

@@ -15,16 +15,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-private val testimonials = listOf(
-    Triple("Sara M.", "Aprobé al primer intento 🎉", "Llevaba meses estudiando sola sin avanzar. Con Bali en 3 semanas lo clavé."),
-    Triple("Carlos R.", "Lo recomiendo sin dudar ⭐", "Las explicaciones de la IA son mucho mejores que estudiar el manual. No me aburrí en ningún momento."),
-    Triple("Ana G.", "El mejor dinero que he gastado ✨", "Tenía miedo a las preguntas trampa. Bali me enseñó exactamente cómo detectarlas.")
-)
+import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
 
 /**
  * Onboarding step showing social proof: an aggregate rating stat and testimonials
  * from real users.
+ *
+ * The reviews and the headline number come from [OnboardingConfig] so this screen and the
+ * plan never quote a different figure — or the same person — minutes apart.
  */
 @Composable
 fun StepSocialProof() {
@@ -58,7 +56,7 @@ fun StepSocialProof() {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "1.000+",
+                    text = "+${OnboardingConfig.USERS_HELPED}",
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -77,7 +75,7 @@ fun StepSocialProof() {
                     }
                 }
                 Text(
-                    text = "4.8 / 5 en Google Play",
+                    text = OnboardingConfig.STORE_RATING,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -86,10 +84,15 @@ fun StepSocialProof() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Testimonials
-        testimonials.forEachIndexed { index, (name, title, body) ->
-            TestimonialCard(name = name, title = title, body = body)
-            if (index < testimonials.lastIndex) {
+        // Testimonials — the rest are saved for the plan screen.
+        val shown = OnboardingConfig.testimonials.take(OnboardingConfig.SOCIAL_PROOF_TESTIMONIALS)
+        shown.forEachIndexed { index, testimonial ->
+            TestimonialCard(
+                name = testimonial.name,
+                title = testimonial.title,
+                body = testimonial.body
+            )
+            if (index < shown.lastIndex) {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }

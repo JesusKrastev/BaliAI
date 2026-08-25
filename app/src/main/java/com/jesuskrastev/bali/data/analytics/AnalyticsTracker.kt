@@ -96,12 +96,6 @@ open class AnalyticsTracker @Inject constructor(
         putInt("step_index", stepIndex)
     }
 
-    /** Tracks that the pre-paywall live preview screen (real question + gamification) was shown. */
-    open fun onboardingPreviewViewed() = log("onboarding_preview_viewed")
-
-    /** Tracks that the user tapped Continue on the pre-paywall preview screen, heading to the paywall. */
-    open fun onboardingPreviewContinueClicked() = log("onboarding_preview_continue")
-
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**

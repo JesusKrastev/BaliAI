@@ -46,3 +46,6 @@ debug.keystore
 .idea/usage.statistics.xml
 .idea/tasks.xml
 .idea/dictionaries
+
+# Agent tooling con credenciales locales
+.codex/
