@@ -2,7 +2,6 @@ package com.jesuskrastev.bali.ui.screens.home
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -226,20 +225,6 @@ fun HomeScreen(
 
                 // Navigation Items
                 NavigationDrawerItem(
-                    label = { Text("Notificaciones") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        }
-                        context.startActivity(intent)
-                    },
-                    icon = { Icon(Icons.Rounded.Notifications, contentDescription = null) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                NavigationDrawerItem(
                     label = { Text("Política de privacidad") },
                     selected = false,
                     onClick = {
@@ -260,17 +245,6 @@ fun HomeScreen(
                         context.startActivity(intent)
                     },
                     icon = { Icon(Icons.Rounded.Description, contentDescription = null) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Pregunta a Bali") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onChatClick()
-                    },
-                    icon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
