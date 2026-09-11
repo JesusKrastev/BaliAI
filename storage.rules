@@ -1,0 +1,13 @@
+rules_version = '2';
+
+// Public read-only access for static app assets (e.g. DGT traffic sign
+// images used in the learning path tests). Writes are never allowed from
+// clients; assets are uploaded via the Firebase CLI/Console only.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
