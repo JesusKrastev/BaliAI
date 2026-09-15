@@ -37,8 +37,8 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260816
-        versionName = "1.1.7"
+        versionCode = 20260911
+        versionName = "1.1.9"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         val properties = Properties()
@@ -177,12 +177,12 @@ dependencies {
     // Mixpanel
     implementation(libs.mixpanel.android)
 
-    // Testing - Unit Tests
-    testImplementation(libs.truth)
-    testImplementation(libs.mockito.kotlin)
     // PostHog
     implementation(libs.posthog.android)
 
+    // Testing - Unit Tests
+    testImplementation(libs.truth)
+    testImplementation(libs.mockito.kotlin)
     testImplementation(libs.mockito.inline)
     testImplementation(libs.junit4)
 
