@@ -9,6 +9,7 @@ import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
 import coil.util.DebugLogger
 import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.perf.FirebasePerformance
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
@@ -41,6 +42,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
             .build()
     }
 
+    /** Initializes telemetry and third-party SDKs unless the process is a Robolectric test. */
     override fun onCreate() {
         super.onCreate()
 
@@ -49,6 +51,9 @@ class BaliApplication : Application(), ImageLoaderFactory {
             return
         }
 
+        if (BuildConfig.DEBUG) {
+            FirebasePerformance.getInstance().isPerformanceCollectionEnabled = true
+        }
         initAppCheck()
         createNotificationChannel()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)

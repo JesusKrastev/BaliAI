@@ -12,6 +12,7 @@ plugins {
     alias(libs.plugins.com.google.dagger)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.firebase.perf)
     alias(libs.plugins.roborazzi)
     id("jacoco")
 }
@@ -152,6 +153,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.ai)
     implementation(libs.firebase.appcheck)
+    implementation(libs.firebase.perf)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
 

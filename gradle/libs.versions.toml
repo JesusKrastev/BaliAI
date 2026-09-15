@@ -28,6 +28,7 @@ googleServices = "4.4.4"
 firebaseCrashlytics = "3.0.6"
 credentials = "1.3.0"
 googleid = "1.1.1"
+firebasePerf = "2.0.2"
 kotlinxCoroutines = "1.9.0"
 roborazzi = "1.6.0"
 robolectric = "4.14.1"
@@ -82,6 +83,7 @@ firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" }
 firebase-messaging-ktx = { module = "com.google.firebase:firebase-messaging-ktx" }
 firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx" }
+firebase-perf = { module = "com.google.firebase:firebase-perf" }
 firebase-ai = { module = "com.google.firebase:firebase-ai" }
 firebase-appcheck = { module = "com.google.firebase:firebase-appcheck" }
 firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity" }
@@ -121,6 +123,7 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+firebase-perf = { id = "com.google.firebase.firebase-perf", version.ref = "firebasePerf" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 com-google-dagger = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }
