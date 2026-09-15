@@ -24,9 +24,18 @@ import com.revenuecat.purchases.ui.revenuecatui.Paywall
 import com.revenuecat.purchases.ui.revenuecatui.PaywallOptions
 import kotlinx.coroutines.launch
 
+/**
+ * Displays the RevenueCat paywall and reports whether premium is active on dismissal.
+ *
+ * The caller owns the hard-paywall policy: a false result must keep this composable on
+ * screen, while a true result may advance to the mandatory login gate.
+ *
+ * @param onDismissResult receives true only when RevenueCat confirms the premium entitlement
+ * @param viewModel owner of subscription checks and paywall analytics
+ */
 @Composable
 fun PaywallScreen(
-    onDismissResult: (Boolean) -> Unit, // returns true if purchase successful
+    onDismissResult: (Boolean) -> Unit,
     viewModel: SubscriptionViewModel = hiltViewModel()
 ) {
     val hasPremium by viewModel.hasPremium.collectAsState()

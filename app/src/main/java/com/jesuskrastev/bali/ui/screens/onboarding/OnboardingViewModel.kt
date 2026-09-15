@@ -233,8 +233,7 @@ class OnboardingViewModel @Inject constructor(
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
 
         if (currentIndex == stepsOrder.lastIndex) {
-            // The paywall reports its own arrival through paywallShown().
-            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
+            persistDataAndShowPaywall()
             return
         }
 
@@ -255,22 +254,29 @@ class OnboardingViewModel @Inject constructor(
         updateNavigationState()
     }
 
-    /** Persists the collected profile, logs completion and ends the flow. */
-    private fun saveDataAndComplete() {
+    /** Persists the collected profile before showing the paywall so it survives app closure. */
+    private fun persistDataAndShowPaywall() {
         viewModelScope.launch {
-            val data = _uiState.value.data
-            val preferences = User(
-                name = data.name,
-                experience = data.experience,
-                examDateMillis = data.examDate,
-                lastPracticeTimestamp = 0,
-                currentStreak = 0
-            )
-            userRepository.insert(preferences)
-            analyticsTracker.onboardingCompleted()
-            _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
+            userRepository.insert(_uiState.value.data.toUser())
+            // The paywall reports its own arrival through paywallShown().
+            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
         }
     }
+
+    /** Logs completion after RevenueCat confirms premium and ends the flow. */
+    private fun saveDataAndComplete() {
+        analyticsTracker.onboardingCompleted()
+        _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
+    }
+
+    /** Converts collected onboarding answers into the local profile persisted before payment. */
+    private fun OnboardingData.toUser(): User = User(
+        name = name,
+        experience = experience,
+        examDateMillis = examDate,
+        lastPracticeTimestamp = 0,
+        currentStreak = 0
+    )
 
     /** Moves back one step, if the current one is not the first. */
     private fun goToPreviousStep() {

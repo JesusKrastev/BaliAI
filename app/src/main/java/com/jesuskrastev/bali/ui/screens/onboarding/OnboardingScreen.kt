@@ -18,6 +18,14 @@ import com.jesuskrastev.bali.ui.screens.onboarding.components.SmoothProgressBar
 import com.jesuskrastev.bali.ui.screens.onboarding.steps.*
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 
+/**
+ * Renders onboarding and keeps its paywall blocking until RevenueCat confirms premium.
+ *
+ * @param sharedTransitionScope scope used by the mascot transition
+ * @param animatedVisibilityScope visibility scope of the onboarding destination
+ * @param viewModel owner of the onboarding state and profile persistence
+ * @param onComplete invoked after a successful purchase and profile persistence
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun OnboardingScreen(
@@ -30,15 +38,19 @@ fun OnboardingScreen(
 
     if (uiState.currentStep == OnboardingStep.PaywallPending) {
         PaywallScreen(
-            onDismissResult = {
-                viewModel.onEvent(OnboardingEvent.CompleteOnboarding)
-                onComplete(uiState.data)
+            onDismissResult = { hasPremium ->
+                if (hasPremium) {
+                    viewModel.onEvent(OnboardingEvent.CompleteOnboarding)
+                }
             }
         )
         return
     }
 
     if (uiState.currentStep == OnboardingStep.Completed) {
+        LaunchedEffect(Unit) {
+            onComplete(uiState.data)
+        }
         return
     }
 

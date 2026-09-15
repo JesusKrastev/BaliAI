@@ -1,6 +1,8 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +30,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.R
 
+/**
+ * Google sign-in screen.
+ *
+ * @param sharedTransitionScope scope shared with the previous screen for the mascot transition
+ * @param animatedVisibilityScope visibility scope of this destination inside the shared transition
+ * @param onBackClick invoked when the user closes the screen; unused when [isMandatory] is true
+ * @param onLoginClick invoked with the current [Context] to start the Google credential flow
+ * @param isLoggingIn true while the credential flow is running
+ * @param errorMessage generic error to show in a dialog, or null
+ * @param errorEmail email of a Google account with no Bali profile, or null
+ * @param onErrorDismiss clears whichever error is on screen
+ * @param isMandatory true when the session is required to keep using the app: the close button
+ *   and the back gesture are disabled and the copy explains why the account is needed
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AuthScreen(
@@ -38,9 +54,15 @@ fun AuthScreen(
     isLoggingIn: Boolean,
     errorMessage: String?,
     errorEmail: String?,
-    onErrorDismiss: () -> Unit
+    onErrorDismiss: () -> Unit,
+    isMandatory: Boolean = false
 ) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
+
+    // A mandatory gate has no screen behind it: back leaves the app instead of slipping
+    // into a session-less app the user has already paid for.
+    BackHandler(enabled = isMandatory) { activity?.finish() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -52,14 +74,16 @@ fun AuthScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onBackClick
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar",
-                        tint = MaterialTheme.colorScheme.onBackground
-                    )
+                if (!isMandatory) {
+                    IconButton(
+                        onClick = onBackClick
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cerrar",
+                            tint = MaterialTheme.colorScheme.onBackground
+                        )
+                    }
                 }
             }
         }
@@ -166,7 +190,7 @@ fun AuthScreen(
 
             // Bold Headline
             Text(
-                text = "Tu progreso,\nsiempre a salvo",
+                text = if (isMandatory) "Último paso:\ninicia sesión" else "Tu progreso,\nsiempre a salvo",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.ExtraBold,
                 textAlign = TextAlign.Center,
@@ -178,7 +202,11 @@ fun AuthScreen(
 
             // Subheadline
             Text(
-                text = "Inicia sesión para guardar tus estadísticas, test realizados y nivel de experiencia en la nube.",
+                text = if (isMandatory) {
+                    "Tu cuenta activa tu acceso y guarda tu plan, tus estadísticas y tu progreso en la nube. Sin ella no podemos continuar."
+                } else {
+                    "Inicia sesión para guardar tus estadísticas, test realizados y nivel de experiencia en la nube."
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),

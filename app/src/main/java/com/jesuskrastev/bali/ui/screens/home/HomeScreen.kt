@@ -1,7 +1,5 @@
 package com.jesuskrastev.bali.ui.screens.home
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -61,21 +59,35 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.lazy.rememberLazyListState
-import coil.compose.AsyncImage
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
-import kotlinx.coroutines.launch
 
+/**
+ * Renders the home dashboard: streak/coins status, the AI-tutor entry point, and the
+ * scrollable learning-path graph. The account menu that used to open from here as a side
+ * drawer (profile, legal links, sign out) now lives in the Settings tab.
+ *
+ * @param sharedTransitionScope shared-element scope carried from the navigation host's layout
+ * @param animatedVisibilityScope animated-visibility scope for shared-element transitions
+ * @param viewModel supplies [HomeUiState] and drives path generation / exam coin gating
+ * @param onStudyClick starts a free-practice test
+ * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type name
+ * @param onTopicsClick opens the topics picker
+ * @param onMistakesClick opens the saved-mistakes review
+ * @param onExamClick requests the official exam flow, coin-gated via [HomeViewModel.startExam]
+ * @param onShopClick opens the coin shop
+ * @param onAuthClick navigates to sign-in; used by the logged-out sync banner
+ * @param onStreakClick opens the streak detail screen
+ * @param onChatClick opens the AI tutor chat
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
@@ -88,355 +100,143 @@ fun HomeScreen(
     onMistakesClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
     onShopClick: () -> Unit = {},
-    onFeedbackClick: () -> Unit = {},
     onAuthClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showLevelLockedDialog by remember { mutableStateOf(false) }
-    var showLogoutConfirmDialog by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                modifier = Modifier.width(300.dp),
-                drawerContainerColor = MaterialTheme.colorScheme.surface,
-                drawerShape = RoundedCornerShape(topEnd = 32.dp, bottomEnd = 32.dp)
-            ) {
-                Spacer(Modifier.height(48.dp))
-                
-                // Profile Header Section
-                if (uiState.isLoggedIn) {
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.profilePictureUrl != null) {
-                            AsyncImage(
-                                model = uiState.profilePictureUrl,
-                                contentDescription = "Foto de perfil",
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Surface(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                shape = CircleShape,
-                                modifier = Modifier.size(48.dp),
-                                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Person,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column {
-                            Text(
-                                text = uiState.userName,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black
-                            )
-                            
-                            Text(
-                                text = uiState.userEmail ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                } else {
-                    // "Sign In" Section (Style from image)
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                            .fillMaxWidth()
-                            .clickable { 
-                                scope.launch { drawerState.close() }
-                                onAuthClick()
-                            },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(48.dp),
-                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Person,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = buildAnnotatedString {
-                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Black)) {
-                                        append("Regístrate")
-                                    }
-                                    append(" o ")
-                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Black)) {
-                                        append("inicia sesión")
-                                    }
-                                    append(" si ya")
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "tienes una cuenta",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Icon(
-                            imageVector = Icons.Rounded.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // Navigation Items
-                NavigationDrawerItem(
-                    label = { Text("Política de privacidad") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://baliaipage.vercel.app/privacidad.html"))
-                        context.startActivity(intent)
-                    },
-                    icon = { Icon(Icons.Rounded.Security, contentDescription = null) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Términos y condiciones") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://baliaipage.vercel.app/terminos.html"))
-                        context.startActivity(intent)
-                    },
-                    icon = { Icon(Icons.Rounded.Description, contentDescription = null) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                NavigationDrawerItem(
-                    label = { Text("Enviar sugerencia") },
-                    selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        onFeedbackClick()
-                    },
-                    icon = { Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                // Logout
-                if (uiState.isLoggedIn) {
-                    NavigationDrawerItem(
-                        label = { Text("Cerrar sesión", color = MaterialTheme.colorScheme.error) },
-                        selected = false,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            showLogoutConfirmDialog = true
-                        },
-                        icon = { Icon(Icons.Rounded.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-    ) {
-        // Diálogo de confirmación de cierre de sesión
-        if (showLogoutConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showLogoutConfirmDialog = false },
-                title = { Text("Cerrar sesión", fontWeight = FontWeight.Bold) },
-                text = { Text("¿Estás seguro de que quieres cerrar sesión? Tu progreso se sincronizará la próxima vez que entres.") },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            showLogoutConfirmDialog = false
-                            viewModel.signOut(context)
-                        }
-                    ) {
-                        Text("CERRAR SESIÓN", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showLogoutConfirmDialog = false }) {
-                        Text("CANCELAR", fontWeight = FontWeight.Bold)
-                    }
-                },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
-        // Diálogo de falta de monedas
-        if (uiState.showNoCoinsDialog) {
-            AlertDialog(
-                onDismissRequest = { viewModel.dismissNoCoinsDialog() },
-                title = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.coin),
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("¡Sin monedas!", fontWeight = FontWeight.Black)
-                    }
-                },
-                text = {
-                    Text(
-                        "Necesitas 100 monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
-                        textAlign = TextAlign.Center
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { viewModel.dismissNoCoinsDialog() },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("ENTENDIDO", fontWeight = FontWeight.Bold)
-                    }
-                },
-                shape = RoundedCornerShape(32.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
-        // Diálogo de nivel bloqueado
-        if (showLevelLockedDialog) {
-            AlertDialog(
-                onDismissRequest = { showLevelLockedDialog = false },
-                title = {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "🔒",
-                                fontSize = 32.sp,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("¡Nivel insuficiente!", fontWeight = FontWeight.Black)
-                    }
-                },
-                text = {
-                    Text(
-                        "Todavía no tienes suficiente experiencia para el examen oficial. ¡Sigue practicando hasta llegar al nivel 7!",
-                        textAlign = TextAlign.Center
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { showLevelLockedDialog = false },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("¡A ENTRENAR!", fontWeight = FontWeight.Bold)
-                    }
-                },
-                shape = RoundedCornerShape(32.dp),
-                containerColor = MaterialTheme.colorScheme.surface
-            )
-        }
-
-
-
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
+    // Diálogo de falta de monedas
+    if (uiState.showNoCoinsDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissNoCoinsDialog() },
+            title = {
                 Column(
-                    modifier = if (uiState.isLoggedIn) Modifier.statusBarsPadding() else Modifier.padding(0.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    AnimatedVisibility(
-                        visible = !uiState.isLoggedIn,
-                    ) {
-                        SyncBanner(
-                            onAction = onAuthClick
-                        )
-                    }
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.background,
-                    ) {
-                        UserStatusRow(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                            streak = uiState.streak,
-                            coinsCount = uiState.coinsCount,
-                            onCoinsClick = onShopClick,
-                            onMenuClick = {
-                                scope.launch { drawerState.open() }
-                            },
-                            onStreakClick = { onStreakClick() }
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.coin),
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("¡Sin monedas!", fontWeight = FontWeight.Black)
                 }
             },
-            floatingActionButton = {
-                AskBaliFab(onClick = onChatClick)
-            }
-        ) { paddingValues ->
-            LearningPathGraph(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                pathNodes = uiState.pathNodes,
-                isPathLoading = uiState.isPathLoading,
-                onNodeClick = { node ->
-                    onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
-                },
-                onGenerateClick = {
-                    viewModel.generateNextPathNodesCount()
+            text = {
+                Text(
+                    "Necesitas 100 monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissNoCoinsDialog() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("ENTENDIDO", fontWeight = FontWeight.Bold)
                 }
-            )
+            },
+            shape = RoundedCornerShape(32.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // Diálogo de nivel bloqueado
+    if (showLevelLockedDialog) {
+        AlertDialog(
+            onDismissRequest = { showLevelLockedDialog = false },
+            title = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "🔒",
+                            fontSize = 32.sp,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("¡Nivel insuficiente!", fontWeight = FontWeight.Black)
+                }
+            },
+            text = {
+                Text(
+                    "Todavía no tienes suficiente experiencia para el examen oficial. ¡Sigue practicando hasta llegar al nivel 7!",
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showLevelLockedDialog = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("¡A ENTRENAR!", fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(32.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
+    // AppNavigation's own Scaffold already reserves the status bar (top) and the
+    // persistent bottom bar's height (bottom) for this whole screen via NavHost's
+    // content padding, so this inner Scaffold must not reserve system bar insets a
+    // second time here — that previously doubled the top gap and left dead space
+    // above the bottom bar.
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            Column {
+                AnimatedVisibility(
+                    visible = !uiState.isLoggedIn,
+                ) {
+                    SyncBanner(
+                        onAction = onAuthClick
+                    )
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    UserStatusRow(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        streak = uiState.streak,
+                        coinsCount = uiState.coinsCount,
+                        onCoinsClick = onShopClick,
+                        onStreakClick = { onStreakClick() }
+                    )
+                }
+            }
+        },
+        floatingActionButton = {
+            AskBaliFab(onClick = onChatClick)
         }
+    ) { paddingValues ->
+        LearningPathGraph(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            pathNodes = uiState.pathNodes,
+            isPathLoading = uiState.isPathLoading,
+            onNodeClick = { node ->
+                onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+            },
+            onGenerateClick = {
+                viewModel.generateNextPathNodesCount()
+            }
+        )
     }
 }
 
@@ -472,7 +272,6 @@ fun SyncBanner(onAction: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .statusBarsPadding()
                 .fillMaxWidth()
                 .heightIn(min = 72.dp)
                 .clipToBounds()
@@ -722,13 +521,21 @@ fun PremiumBanner(
     }
 }
 
+/**
+ * Shows the streak and coins pills anchored to the top of Home.
+ *
+ * @param modifier layout modifier applied to the row
+ * @param streak current daily streak count
+ * @param coinsCount current coin balance
+ * @param onCoinsClick opens the coin shop
+ * @param onStreakClick opens the streak detail screen
+ */
 @Composable
 fun UserStatusRow(
     modifier: Modifier = Modifier,
     streak: Int,
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
-    onMenuClick: () -> Unit = {},
     onStreakClick: () -> Unit = {}
 ) {
     Row(
@@ -736,16 +543,8 @@ fun UserStatusRow(
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.End
     ) {
-        IconButton(onClick = onMenuClick) {
-            Icon(
-                imageVector = Icons.Rounded.Menu,
-                contentDescription = "Menú",
-                tint = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -766,7 +565,7 @@ fun UserStatusRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.streak),
+                        painter = painterResource(id = R.drawable.streak_icon),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1266,13 +1065,22 @@ fun LearningPathGraph(
             val sectionNodes = nodesBySection[sectionKey].orEmpty()
             if (sectionNodes.isEmpty()) return@forEachIndexed
 
+            // Breathing room before every section after the first — a regular scrolling item
+            // rather than padding baked into the sticky header, so it scrolls away instead of
+            // showing up as a stuck gap once the header pins to the top.
+            if (sectionIdx > 0) {
+                item(key = "section_gap_$sectionKey") {
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
+            }
+
             // Sticky section header
             stickyHeader(key = "section_$sectionKey") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(top = if (sectionIdx > 0) 48.dp else 16.dp, bottom = 16.dp)
+                        .padding(top = 16.dp, bottom = 16.dp)
                 ) {
                     SectionHeaderCard(
                         sectionIndex = sectionKey,
@@ -1680,6 +1488,5 @@ fun PathLoadingState() {
         )
     }
 }
-
 
 

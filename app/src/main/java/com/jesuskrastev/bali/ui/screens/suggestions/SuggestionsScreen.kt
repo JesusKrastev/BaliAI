@@ -27,9 +27,14 @@ fun SuggestionsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // AppNavigation's own Scaffold already reserves the status bar for this whole screen via
+    // NavHost's content padding, so this inner Scaffold must not reserve it a second time here
+    // — that previously pushed the top app bar down with extra dead space above it.
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             CenterAlignedTopAppBar(
+                windowInsets = WindowInsets(0, 0, 0, 0),
                 title = { Text("Enviar sugerencia", fontWeight = FontWeight.Black) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
@@ -102,7 +107,7 @@ fun SuggestionsScreen(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Ayúdanos a mejorar Bali. Cuéntanos qué te gustaría ver en la app o qué podemos mejorar.",
+                    "Ayúdame a saber qué podría mejorar. Cuéntame qué te gustaría ver en la app.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

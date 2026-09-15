@@ -7,7 +7,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -33,10 +35,13 @@ import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.ui.navigation.AppNavigation
+import com.jesuskrastev.bali.ui.navigation.AuthRoute
 import com.jesuskrastev.bali.ui.navigation.GreetingsRoute
 import com.jesuskrastev.bali.ui.navigation.HomeRoute
+import com.jesuskrastev.bali.ui.navigation.PaywallRoute
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import dagger.hilt.android.AndroidEntryPoint
+import com.jesuskrastev.bali.ui.screens.main.AppEntryPoint
 import com.jesuskrastev.bali.ui.screens.main.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,13 +54,14 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    /** Creates the app UI after resolving migration, onboarding and authentication state. */
     override fun onCreate(savedInstanceState: Bundle?) {
         val viewModel: MainViewModel by viewModels()
         
         installSplashScreen().apply {
             setKeepOnScreenCondition {
                 // Mantener el splash screen visible mientras se migra o se cargan datos
-                viewModel.isMigrating.value || viewModel.isOnboardingCompleted.value == null
+                viewModel.isMigrating.value || viewModel.entryPoint.value == null
             }
         }
         super.onCreate(savedInstanceState)
@@ -63,7 +69,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BaliTheme {
-                val isOnboardingCompleted by viewModel.isOnboardingCompleted.collectAsState()
+                val entryPoint by viewModel.entryPoint.collectAsState()
                 val updateState by viewModel.updateState.collectAsState()
                 val isMigrating by viewModel.isMigrating.collectAsState()
                 val migrationError by viewModel.migrationError.collectAsState()
@@ -86,7 +92,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(updateState) {
                     if (updateState is UpdateState.Downloaded) {
                         val result = snackbarHostState.showSnackbar(
-                            message = "ActualizaciÃ³n descargada. Reinicia para aplicar.",
+                            message = "Actualización descargada. Reinicia para aplicar.",
                             actionLabel = "Reiniciar",
                             duration = SnackbarDuration.Indefinite
                         )
@@ -96,16 +102,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // This Scaffold only hosts the update snackbar; it must not reserve any system
+                // bar insets for itself, otherwise AppNavigation's own Scaffold (and every
+                // screen's own statusBarsPadding()/navigationBarsPadding() calls) would see
+                // those insets as already consumed and render flush under the status/nav bars.
                 Scaffold(
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
                     snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
                 ) { innerPadding ->
                     when {
                         migrationError != null -> {
-                            // Pantalla de Error en Base de Datos (Ãšnica UI bloqueante ahora)
+                            // Pantalla de Error en Base de Datos (Única UI bloqueante ahora)
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(innerPadding),
+                                    .padding(innerPadding)
+                                    .systemBarsPadding(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -114,10 +126,16 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
-                        isOnboardingCompleted != null && !isMigrating -> {
-                            // NavegaciÃ³n Normal (Aparece cuando el SplashScreen se oculta y no hay error)
-                            val startDestination = if (isOnboardingCompleted == true) HomeRoute else GreetingsRoute
-                            key(isOnboardingCompleted) {
+                        entryPoint != null && !isMigrating -> {
+                            // Navegación Normal (Aparece cuando el SplashScreen se oculta y no hay error)
+                            // Sin sesión no se entra a la app, aunque el usuario ya haya pagado.
+                            val startDestination: Any = when (entryPoint) {
+                                AppEntryPoint.HOME -> HomeRoute
+                                AppEntryPoint.LOGIN -> AuthRoute(isMandatory = true)
+                                AppEntryPoint.PAYWALL -> PaywallRoute
+                                else -> GreetingsRoute
+                            }
+                            key(entryPoint) {
                                 AppNavigation(startDestination = startDestination)
                             }
                         }
@@ -127,6 +145,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Resumes any Play update that was downloaded or interrupted while backgrounded. */
     override fun onResume() {
         super.onResume()
         // Check for pending downloads or interrupted immediate updates
