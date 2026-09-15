@@ -104,8 +104,9 @@ class FakeAuthRepository : AuthRepository {
 
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
-    mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI
-) : AnalyticsTracker(firebase, mixpanel) {
+    mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
+    posthog: com.posthog.PostHogInterface
+) : AnalyticsTracker(firebase, mixpanel, posthog) {
     val identifiedUsers = mutableListOf<Pair<String, String?>>()
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()

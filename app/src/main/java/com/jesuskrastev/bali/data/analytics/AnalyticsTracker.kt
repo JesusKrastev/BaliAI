@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.data.analytics
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.mixpanel.android.mpmetrics.MixpanelAPI
+import com.posthog.PostHogInterface
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,42 +11,45 @@ import javax.inject.Singleton
 @Singleton
 open class AnalyticsTracker @Inject constructor(
     private val firebase: FirebaseAnalytics,
-    private val mixpanel: MixpanelAPI
+    private val mixpanel: MixpanelAPI,
+    private val posthog: PostHogInterface
 ) {
 
+    /** Sends [event] with the properties built by [params] to Firebase, Mixpanel and PostHog. */
     private fun log(event: String, params: Bundle.() -> Unit = {}) {
         val bundle = Bundle().apply(params)
+        val properties = bundleToMap(bundle)
         firebase.logEvent(event, bundle)
-        mixpanel.track(event, bundleToJson(bundle))
+        mixpanel.track(event, JSONObject(properties))
+        posthog.capture(event = event, properties = properties)
     }
 
-    private fun bundleToJson(bundle: Bundle): JSONObject {
-        val json = JSONObject()
+    /** Converts a params [Bundle] into a plain map so Mixpanel and PostHog can share it. */
+    private fun bundleToMap(bundle: Bundle): Map<String, Any> {
+        val map = mutableMapOf<String, Any>()
         for (key in bundle.keySet()) {
             val value = bundle.get(key)
-            if (value != null) {
-                try {
-                    json.put(key, value)
-                } catch (_: Exception) {}
-            }
+            if (value != null) map[key] = value
         }
-        return json
+        return map
     }
 
     // ── USERS ───────────────────────────────────────────────────────────────
 
-    /** Identifies the user in both Firebase and Mixpanel and opts them into tracking. */
+    /** Identifies the user in Firebase, Mixpanel and PostHog, and opts Mixpanel into tracking. */
     open fun identifyUser(userId: String, email: String? = null) {
         firebase.setUserId(userId)
         mixpanel.identify(userId)
         mixpanel.optInTracking()
         email?.let { mixpanel.people.set("\$email", it) }
+        posthog.identify(distinctId = userId, userProperties = email?.let { mapOf("email" to it) })
     }
 
     /** Resets analytics identity on sign-out. */
     open fun resetUser() {
         firebase.setUserId(null)
         mixpanel.reset()
+        posthog.reset()
     }
 
     // ── AUTH ────────────────────────────────────────────────────────────────
@@ -83,6 +87,7 @@ open class AnalyticsTracker @Inject constructor(
     open fun onboardingCompleted() {
         log("onboarding_completed")
         mixpanel.flush()
+        posthog.flush()
     }
 
     /**
@@ -115,6 +120,7 @@ open class AnalyticsTracker @Inject constructor(
     open fun paywallPurchased(source: String = "onboarding") {
         log("paywall_purchased") { putString("source", source) }
         mixpanel.flush()
+        posthog.flush()
     }
 
     /**
@@ -125,6 +131,7 @@ open class AnalyticsTracker @Inject constructor(
     open fun paywallClosed(source: String = "onboarding") {
         log("paywall_closed") { putString("source", source) }
         mixpanel.flush()
+        posthog.flush()
     }
 
     /**
@@ -142,6 +149,7 @@ open class AnalyticsTracker @Inject constructor(
     open fun paywallBackgrounded(source: String = "onboarding") {
         log("paywall_backgrounded") { putString("source", source) }
         mixpanel.flush()
+        posthog.flush()
     }
 
     /**

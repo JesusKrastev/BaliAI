@@ -44,7 +44,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
   Note the project is on Kotlin 2.0.21, so Firebase BOM 34.x will not compile against it.
 - **Payments**: RevenueCat 9.23.1
 - **Push**: OneSignal + Firebase Messaging
-- **Analytics**: Mixpanel + Firebase Analytics (both tracked via `AnalyticsTracker`)
+- **Analytics**: Mixpanel + PostHog + Firebase Analytics (all three tracked via `AnalyticsTracker`)
 - **Images**: Coil 2.7.0 with SVG support
 - **Animations**: Lottie 6.4.1
 - **Testing**: JUnit4, Truth, Mockito-Kotlin, Robolectric 4.14.1, Roborazzi 1.6.0
@@ -111,7 +111,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - Screenshot tests only run in debug build variants — do not run them against release.
 - When adding a new `Room` migration, increment `BaliDatabase.version`, add a `Migration` object to the `BaliDatabase` companion, and test it with an instrumented DAO test.
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
-- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel), never call either SDK directly from a ViewModel.
+- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel + PostHog), never call any of those SDKs directly from a ViewModel.
 
 ## Code Quality
 
@@ -128,7 +128,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 
 ## Important Rules
 
-- **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, and `REVENUECAT_API_KEY`. The build will fail without it; add it locally.
+- **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. The build will fail without it; add it locally.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.

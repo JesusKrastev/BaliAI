@@ -17,6 +17,7 @@ hiltNavigationCompose = "1.2.0"
 hilt = "2.52"
 mixpanelAndroid = "7.3.3"
 onesignal = "[5.6.1, 5.6.99]"
+posthogAndroid = "3.58.2"
 purchases = "9.23.1"
 purchasesUi = "9.23.1"
 room = "2.6.1"
@@ -27,8 +28,8 @@ firebaseBom = "33.16.0"
 googleServices = "4.4.4"
 firebaseCrashlytics = "3.0.6"
 credentials = "1.3.0"
-googleid = "1.1.1"
 firebasePerf = "2.0.2"
+googleid = "1.1.1"
 kotlinxCoroutines = "1.9.0"
 roborazzi = "1.6.0"
 robolectric = "4.14.1"
@@ -82,8 +83,8 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx" }
 firebase-messaging-ktx = { module = "com.google.firebase:firebase-messaging-ktx" }
-firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx" }
 firebase-perf = { module = "com.google.firebase:firebase-perf" }
+firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx" }
 firebase-ai = { module = "com.google.firebase:firebase-ai" }
 firebase-appcheck = { module = "com.google.firebase:firebase-appcheck" }
 firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity" }
@@ -96,6 +97,7 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 mixpanel-android = { module = "com.mixpanel.android:mixpanel-android", version.ref = "mixpanelAndroid" }
 onesignal = { module = "com.onesignal:OneSignal", version.ref = "onesignal" }
 
+posthog-android = { module = "com.posthog:posthog-android", version.ref = "posthogAndroid" }
 # Testing
 mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version = "5.4.0" }
 mockito-inline = { module = "org.mockito:mockito-inline", version = "5.2.0" }
@@ -121,9 +123,9 @@ google-services = { id = "com.google.gms.google-services", version.ref = "google
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlytics" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+firebase-perf = { id = "com.google.firebase.firebase-perf", version.ref = "firebasePerf" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-firebase-perf = { id = "com.google.firebase.firebase-perf", version.ref = "firebasePerf" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 com-google-dagger = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

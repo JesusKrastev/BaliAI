@@ -46,6 +46,8 @@ android {
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
+        buildConfigField("String", "POSTHOG_API_KEY", "\"${properties.getProperty("POSTHOG_API_KEY")}\"")
+        buildConfigField("String", "POSTHOG_HOST", "\"${properties.getProperty("POSTHOG_HOST", "https://us.i.posthog.com")}\"")
     }
 
     buildTypes {
@@ -151,9 +153,9 @@ dependencies {
     implementation(libs.firebase.messaging.ktx)
     implementation(libs.firebase.config.ktx)
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.perf)
     implementation(libs.firebase.ai)
     implementation(libs.firebase.appcheck)
-    implementation(libs.firebase.perf)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
 
@@ -175,6 +177,9 @@ dependencies {
     // Testing - Unit Tests
     testImplementation(libs.truth)
     testImplementation(libs.mockito.kotlin)
+    // PostHog
+    implementation(libs.posthog.android)
+
     testImplementation(libs.mockito.inline)
     testImplementation(libs.junit4)
 
