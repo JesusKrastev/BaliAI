@@ -187,7 +187,7 @@ object GeminiModule {
      * answer — some 70% of the cost. Should this ever move to a model that reasons, cap
      * it with `thinkingConfig`, available from firebase-ai 17.x onwards.
      */
-    private const val MODEL_NAME = "gemini-3.5-flash-lite"
+    private const val MODEL_NAME = "gemini-3.1-flash-lite"
 
     private const val JSON_MIME_TYPE = "application/json"
 
