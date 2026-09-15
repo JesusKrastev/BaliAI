@@ -64,10 +64,11 @@ open class AskDrivingTutorUseCase @Inject constructor(
 
     companion object {
         /**
-         * How many previous turns travel with each question. Six covers the follow-ups
-         * students actually ask ("¿y de noche?") — they nearly always refer to the last
-         * exchange — while keeping a long conversation from inflating every later prompt.
+         * How many previous turns travel with each question. Two — the last exchange —
+         * covers the follow-ups students actually ask ("¿y de noche?"), which nearly
+         * always refer to the answer they just got. Kept to the bare minimum since this
+         * resends on every single question in the conversation.
          */
-        const val MAX_HISTORY_TURNS = 6
+        const val MAX_HISTORY_TURNS = 2
     }
 }

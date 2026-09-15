@@ -24,11 +24,22 @@ class ChatReducer {
      * @return the state to render, unchanged for events this reducer does not own
      */
     fun reduce(state: ChatUiState, event: ChatEvent): ChatUiState = when (event) {
-        is ChatEvent.DraftChanged -> state.copy(draft = event.text)
+        is ChatEvent.DraftChanged -> state.copy(draft = event.text.take(MAX_QUESTION_CHARS))
         ChatEvent.DismissError -> state.copy(error = null, failedQuestion = null)
         ChatEvent.RequestClear -> state.copy(showClearConfirmation = true)
         ChatEvent.CancelClear -> state.copy(showClearConfirmation = false)
         else -> state
+    }
+
+    companion object {
+        /**
+         * Hard cap on the question the student can type. Enough for a genuinely detailed
+         * driving doubt while stopping a pasted essay from turning one chat turn into a
+         * disproportionately expensive prompt — every character here is billed on every
+         * request, since [com.jesuskrastev.bali.data.repository.GeminiTutorRepository]
+         * sends the current question in full, unlike past turns which it already trims.
+         */
+        private const val MAX_QUESTION_CHARS = 600
     }
 
     /**

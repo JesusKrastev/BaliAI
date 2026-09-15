@@ -194,8 +194,12 @@ object GeminiModule {
     /** The DGT exam always offers three answers. */
     private const val OPTIONS_PER_QUESTION = 3
 
-    /** Room for the ~120-word answer the tutor's system instruction asks for. */
-    private const val TUTOR_MAX_OUTPUT_TOKENS = 400
+    /**
+     * The tutor's system instruction asks for ~120 words, which in Spanish runs close to
+     * 200 tokens. This leaves headroom for the "más detalle" exception without leaving
+     * the ceiling loose enough to let a single reply run away in cost.
+     */
+    private const val TUTOR_MAX_OUTPUT_TOKENS = 300
 
     /** A measured 30-question exam lands near 4.100 tokens; this is the circuit breaker. */
     private const val QUESTIONS_MAX_OUTPUT_TOKENS = 8_000

@@ -121,10 +121,11 @@ class GeminiTutorRepository @Inject constructor(
         private const val DEFAULT_LICENSE = "B (Coche)"
 
         /**
-         * How much of a past turn is worth re-sending. Enough to resolve a follow-up
-         * like "¿y de noche?" without paying for a full old answer on every question.
+         * How much of a past turn is worth re-sending. Just the gist — enough to resolve
+         * a follow-up like "¿y de noche?" without paying for a full old answer on every
+         * question.
          */
-        private const val MAX_TURN_CHARS = 320
+        private const val MAX_TURN_CHARS = 150
 
         /**
          * The tutor's role and rules. Sent once per request as the model's system
