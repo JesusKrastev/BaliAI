@@ -156,7 +156,7 @@ class MistakesViewModel @Inject constructor(
                 val jsonEndIndex = rawText.lastIndexOf('}')
                 if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON invÃ¡lido devuelto por la IA")
 
-                
+
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()

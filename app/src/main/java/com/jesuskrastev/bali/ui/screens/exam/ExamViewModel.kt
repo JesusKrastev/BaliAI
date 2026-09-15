@@ -171,7 +171,6 @@ class ExamViewModel @Inject constructor(
                 val response = gemini.generateContent(prompt)
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
-                
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
