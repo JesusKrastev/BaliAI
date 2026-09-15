@@ -16,7 +16,11 @@ object LessonQuestionBank {
         "https://firebasestorage.googleapis.com/v0/b/bali-ai-facc4.firebasestorage.app/o/signs%2F"
 
     /** Builds the public Firebase Storage download URL for a sign image PNG by file name (without extension). */
-    private fun signImage(fileName: String) = "${SIGN_IMAGE_BASE_URL}$fileName.png?alt=media"
+    fun signImage(fileName: String) = "${SIGN_IMAGE_BASE_URL}$fileName.png?alt=media"
+
+    /** Builds the public Firebase Storage URL for a mini-game asset stored under `game-assets/`. */
+    fun gameAsset(fileName: String) =
+        "https://firebasestorage.googleapis.com/v0/b/bali-ai-facc4.firebasestorage.app/o/game-assets%2F$fileName.png?alt=media"
 
     data class StaticQuestion(
         val text: String,

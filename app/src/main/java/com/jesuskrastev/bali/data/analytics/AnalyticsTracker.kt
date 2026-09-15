@@ -201,4 +201,42 @@ open class AnalyticsTracker @Inject constructor(
 
     /** Tracks that the user wiped their conversation with the AI tutor. */
     open fun chatCleared() = log("chat_cleared")
+
+    // ── MINI-GAMES ──────────────────────────────────────────────────────────
+
+    /**
+     * Tracks that the user started an arcade mini-game session.
+     *
+     * @param gameId the [com.jesuskrastev.bali.ui.screens.games.GameType] id being played
+     */
+    open fun gameStarted(gameId: String) = log("game_started") {
+        putString("game_id", gameId)
+    }
+
+    /**
+     * Tracks that a mini-game session finished all its rounds.
+     *
+     * @param gameId the game that was played
+     * @param score number of rounds won
+     * @param totalRounds total rounds in the session
+     * @param durationSeconds time spent playing the session
+     */
+    open fun gameCompleted(gameId: String, score: Int, totalRounds: Int, durationSeconds: Int) =
+        log("game_completed") {
+            putString("game_id", gameId)
+            putInt("score", score)
+            putInt("total_rounds", totalRounds)
+            putInt("duration_seconds", durationSeconds)
+        }
+
+    /**
+     * Tracks that the user left a mini-game before finishing the session.
+     *
+     * @param gameId the game that was abandoned
+     * @param roundIndex zero-based round the user was on when they left
+     */
+    open fun gameAbandoned(gameId: String, roundIndex: Int) = log("game_abandoned") {
+        putString("game_id", gameId)
+        putInt("round_index", roundIndex)
+    }
 }

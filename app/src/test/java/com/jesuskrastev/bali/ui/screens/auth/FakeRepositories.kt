@@ -102,6 +102,8 @@ class FakeAuthRepository : AuthRepository {
     override suspend fun currentUserPhotoUrl(): String? = null
 }
 
+data class GameCompletedEvent(val gameId: String, val score: Int, val totalRounds: Int, val durationSeconds: Int)
+
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
     mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
@@ -111,6 +113,9 @@ class FakeAnalyticsTracker(
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()
     val onboardingSteps = mutableListOf<String>()
+    val gameStartedEvents = mutableListOf<String>()
+    val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
+    val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
 
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
@@ -126,12 +131,20 @@ class FakeAnalyticsTracker(
     override fun paywallClosed(source: String) {}
     override fun paywallBackgrounded(source: String) {}
     override fun paywallResumed(source: String) {}
+    override fun gameStarted(gameId: String) { gameStartedEvents.add(gameId) }
+    override fun gameCompleted(gameId: String, score: Int, totalRounds: Int, durationSeconds: Int) {
+        gameCompletedEvents.add(GameCompletedEvent(gameId, score, totalRounds, durationSeconds))
+    }
+    override fun gameAbandoned(gameId: String, roundIndex: Int) { gameAbandonedEvents.add(gameId to roundIndex) }
 
     fun clear() {
         identifiedUsers.clear()
         signUpEvents.clear()
         loginEvents.clear()
         onboardingSteps.clear()
+        gameStartedEvents.clear()
+        gameCompletedEvents.clear()
+        gameAbandonedEvents.clear()
     }
 }
 

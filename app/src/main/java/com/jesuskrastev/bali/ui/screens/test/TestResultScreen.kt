@@ -67,6 +67,9 @@ fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, St
  * @param durationSeconds time spent completing the test
  * @param accuracy percentage of correctly answered questions
  * @param onContinueClick callback invoked when the user continues
+ * @param secondaryActionLabel optional label for a secondary outlined action (e.g. "JUGAR OTRA VEZ"
+ *   in the arcade mini-games); when null, only the primary continue button is shown
+ * @param onSecondaryActionClick callback invoked when the secondary action is tapped
  */
 fun TestResultScreen(
     xpGained: Int,
@@ -77,7 +80,9 @@ fun TestResultScreen(
     leveledUp: Boolean = false,
     durationSeconds: Int,
     accuracy: Int,
-    onContinueClick: () -> Unit
+    onContinueClick: () -> Unit,
+    secondaryActionLabel: String? = null,
+    onSecondaryActionClick: () -> Unit = {},
 ) {
     val showConfetti = accuracy >= 70
     val minutes = durationSeconds / 60
@@ -93,16 +98,28 @@ fun TestResultScreen(
 
     Scaffold(
         bottomBar = {
-            Button(
-                onClick = onContinueClick,
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(24.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text("CONTINUAR", fontWeight = FontWeight.Black)
+                Button(
+                    onClick = onContinueClick,
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("CONTINUAR", fontWeight = FontWeight.Black)
+                }
+                if (secondaryActionLabel != null) {
+                    OutlinedButton(
+                        onClick = onSecondaryActionClick,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(secondaryActionLabel, fontWeight = FontWeight.Black)
+                    }
+                }
             }
         }) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
