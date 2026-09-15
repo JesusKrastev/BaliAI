@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.airbnb.lottie.compose.*
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.review.InAppReviewEffect
 
 fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, String> {
     val minutes = durationSeconds / 60
@@ -54,6 +55,19 @@ fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, St
 }
 
 @Composable
+/**
+ * Celebrates a completed test and requests a Play Store review after an excellent result.
+ *
+ * @param xpGained total experience earned by the user
+ * @param baseXp experience earned before bonuses
+ * @param bonusPerfection optional bonus for a perfect result
+ * @param bonusFast optional bonus for completing the test quickly
+ * @param bonusStreak optional bonus for maintaining a streak
+ * @param leveledUp whether the result increased the user's level
+ * @param durationSeconds time spent completing the test
+ * @param accuracy percentage of correctly answered questions
+ * @param onContinueClick callback invoked when the user continues
+ */
 fun TestResultScreen(
     xpGained: Int,
     baseXp: Int,
@@ -68,6 +82,8 @@ fun TestResultScreen(
     val showConfetti = accuracy >= 70
     val minutes = durationSeconds / 60
     val seconds = durationSeconds % 60
+
+    InAppReviewEffect(accuracy = accuracy)
 
     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.confetti))
     val progress by animateLottieCompositionAsState(
