@@ -87,6 +87,9 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: internal
+          # Clavado a 0 a proposito: una build de PR nunca debe empujar una
+          # actualizacion a nadie. La prioridad se decide al publicar la release.
+          inAppUpdatePriority: 0
           status: completed
           whatsNewDirectory: distribution/whatsnew
 

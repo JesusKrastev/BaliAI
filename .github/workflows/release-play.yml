@@ -11,6 +11,12 @@ on:
         default: internal
         type: choice
         options: [internal, alpha, beta, production]
+      priority:
+        description: 'Prioridad in-app update (0-5). La app abre el flujo bloqueante a partir de 4'
+        required: true
+        default: '0'
+        type: choice
+        options: ['0', '1', '2', '3', '4', '5']
 
 concurrency:
   group: release-play
@@ -100,6 +106,9 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ inputs.track || 'internal' }}
+          # Solo se puede fijar al crear la release: la API la rechaza despues de
+          # desplegarla. Un push de tag no lleva inputs y cae a 0.
+          inAppUpdatePriority: ${{ inputs.priority || 0 }}
           status: completed
           whatsNewDirectory: distribution/whatsnew
 
