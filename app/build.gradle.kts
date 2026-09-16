@@ -46,12 +46,10 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
+        // La signingConfig "debug" es la que AGP crea por defecto: misma ruta
+        // (~/.android/debug.keystore) y mismas credenciales, pero generándola si no
+        // existe. Declararla a mano hacía que validateSigningDebug fallase en
+        // cualquier máquina limpia, como los runners de CI.
         create("release") {
             val keystorePath = secret("RELEASE_KEYSTORE_PATH")
             if (keystorePath.isNotBlank()) {
