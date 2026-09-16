@@ -17,6 +17,27 @@ plugins {
     id("jacoco")
 }
 
+/** Propiedades de local.properties; queda vacío si el fichero no existe (caso CI). */
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) FileInputStream(file).use { load(it) }
+}
+
+/**
+ * Resuelve un secreto de build buscando primero en local.properties (desarrollo local)
+ * y después en las variables de entorno (CI).
+ *
+ * Un valor en blanco cuenta como ausente: GitHub Actions define la variable de entorno
+ * igualmente cuando el secret no existe, y sin esto el [default] nunca se aplicaría.
+ *
+ * @param key clave, con el mismo nombre en local.properties y en el entorno.
+ * @param default valor devuelto si la clave no existe en ninguno de los dos orígenes.
+ * @return el valor del secreto, o [default] si no está definido en ningún sitio.
+ */
+fun secret(key: String, default: String = ""): String =
+    localProperties.getProperty(key)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(key)?.takeIf { it.isNotBlank() }
+        ?: default
 
 android {
     namespace = "com.jesuskrastev.bali"
@@ -25,11 +46,18 @@ android {
     }
 
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        // La signingConfig "debug" es la que AGP crea por defecto: misma ruta
+        // (~/.android/debug.keystore) y mismas credenciales, pero generándola si no
+        // existe. Declararla a mano hacía que validateSigningDebug fallase en
+        // cualquier máquina limpia, como los runners de CI.
+        create("release") {
+            val keystorePath = secret("RELEASE_KEYSTORE_PATH")
+            if (keystorePath.isNotBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = secret("RELEASE_STORE_PASSWORD")
+                keyAlias = secret("RELEASE_KEY_ALIAS")
+                keyPassword = secret("RELEASE_KEY_PASSWORD")
+            }
         }
     }
 
@@ -37,17 +65,17 @@ android {
         applicationId = "com.jesuskrastev.bali"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20260911
+        // Format   o YYYYMMDDNN: fecha de publicación + nº de build de ese día.
+        // En CI lo inyecta el workflow vía CI_VERSION_CODE; en local se usa el valor base.
+        versionCode = secret("CI_VERSION_CODE", "2026091100").toInt()
         versionName = "1.1.9"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
-        val properties = Properties()
-        properties.load(FileInputStream(rootProject.file("local.properties")))
-        buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${properties.getProperty("ONE_SIGNAL_APP_ID")}\"")
-        buildConfigField("String", "MIXPANEL_TOKEN", "\"${properties.getProperty("MIXPANEL_TOKEN")}\"")
-        buildConfigField("String", "REVENUECAT_API_KEY", "\"${properties.getProperty("REVENUECAT_API_KEY")}\"")
-        buildConfigField("String", "POSTHOG_API_KEY", "\"${properties.getProperty("POSTHOG_API_KEY")}\"")
-        buildConfigField("String", "POSTHOG_HOST", "\"${properties.getProperty("POSTHOG_HOST", "https://us.i.posthog.com")}\"")
+        buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${secret("ONE_SIGNAL_APP_ID")}\"")
+        buildConfigField("String", "MIXPANEL_TOKEN", "\"${secret("MIXPANEL_TOKEN")}\"")
+        buildConfigField("String", "REVENUECAT_API_KEY", "\"${secret("REVENUECAT_API_KEY")}\"")
+        buildConfigField("String", "POSTHOG_API_KEY", "\"${secret("POSTHOG_API_KEY")}\"")
+        buildConfigField("String", "POSTHOG_HOST", "\"${secret("POSTHOG_HOST", "https://us.i.posthog.com")}\"")
     }
 
     buildTypes {
@@ -64,7 +92,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Con keystore de subida (CI o local.properties) firma de release; si no, debug,
+            // para que un bundleRelease local siga funcionando sin credenciales.
+            signingConfig = if (secret("RELEASE_KEYSTORE_PATH").isNotBlank()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {
