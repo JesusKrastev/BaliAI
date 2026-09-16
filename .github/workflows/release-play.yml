@@ -11,6 +11,12 @@ on:
         default: internal
         type: choice
         options: [internal, alpha, beta, production]
+      priority:
+        description: 'Prioridad in-app update (0-5). La app abre el flujo bloqueante a partir de 4'
+        required: true
+        default: '0'
+        type: choice
+        options: ['0', '1', '2', '3', '4', '5']
 
 concurrency:
   group: release-play
@@ -53,6 +59,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/keystore"
           printf '%s' "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/keystore/upload.jks"
 
+      # Destapa en segundos un keystore, alias o contrasena mal configurados, que
+      # de otro modo no fallarian hasta el final de bundleRelease, ~7 minutos despues.
+      - name: Validar keystore
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/keystore/upload.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: java .github/scripts/ValidateKeystore.java
+
       - name: Check tag matches versionName
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -90,6 +106,9 @@ jobs:
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           mappingFile: app/build/outputs/mapping/release/mapping.txt
           track: ${{ inputs.track || 'internal' }}
+          # Solo se puede fijar al crear la release: la API la rechaza despues de
+          # desplegarla. Un push de tag no lleva inputs y cae a 0.
+          inAppUpdatePriority: ${{ inputs.priority || 0 }}
           status: completed
           whatsNewDirectory: distribution/whatsnew
 
