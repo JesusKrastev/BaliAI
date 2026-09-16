@@ -1,0 +1,97 @@
+name: PR → Play Internal
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-play-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Tests + AAB firmado + Play (internal)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Los PR desde forks no reciben secrets: el job se salta en vez de fallar.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    env:
+      ONE_SIGNAL_APP_ID: ${{ secrets.ONE_SIGNAL_APP_ID }}
+      MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
+      REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restaurar google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" | base64 -d > app/google-services.json
+
+      - name: Restaurar keystore de subida
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keystore"
+          printf '%s' "$RELEASE_KEYSTORE" | base64 -d > "$RUNNER_TEMP/keystore/upload.jks"
+
+      # NN en la banda 00-49 para los PR; release-play.yml usa la 50-99, de forma que
+      # los dos workflows nunca puedan generar el mismo versionCode el mismo día.
+      - name: Calcular versionCode (YYYYMMDDNN)
+        run: |
+          NN=$(printf '%02d' $(( GITHUB_RUN_NUMBER % 50 )))
+          echo "CI_VERSION_CODE=$(date -u +%Y%m%d)$NN" >> "$GITHUB_ENV"
+
+      - name: Tests unitarios
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build AAB firmado
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/keystore/upload.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew bundleRelease --stacktrace
+
+      - name: Subir a Play (internal)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.jesuskrastev.bali
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
+          track: internal
+          status: completed
+          whatsNewDirectory: distribution/whatsnew
+
+      - name: Archivar AAB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab-pr-${{ github.event.pull_request.number }}
+          path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 14
+
+      - name: Subir informes de test si algo falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-pr-${{ github.event.pull_request.number }}
+          path: app/build/reports/tests/
+          retention-days: 7
