@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.ui.screens.main
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
@@ -82,9 +83,12 @@ class MainViewModel @Inject constructor(
             authRepository.isLoggedIn,
             hasPremium
         ) { hasCompletedOnboarding, loggedIn, premium ->
+            // Debug builds treat the app as always entitled so the RevenueCat paywall never
+            // blocks manual testing; release keeps the real hard-paywall check.
+            val unlocked = premium || BuildConfig.DEBUG
             when {
                 loggedIn -> AppEntryPoint.HOME
-                hasCompletedOnboarding && !premium -> AppEntryPoint.PAYWALL
+                hasCompletedOnboarding && !unlocked -> AppEntryPoint.PAYWALL
                 hasCompletedOnboarding -> AppEntryPoint.LOGIN
                 else -> AppEntryPoint.GREETINGS
             }

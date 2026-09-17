@@ -51,7 +51,9 @@ import com.jesuskrastev.bali.ui.theme.BaliSecondary
 fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) {
     val scrollState = rememberScrollState()
     var selectedDifficulty by remember { mutableStateOf<GameDifficulty?>(null) }
-    val visibleGames = GameType.entries.filter { selectedDifficulty == null || GAME_DIFFICULTY[it] == selectedDifficulty }
+    val visibleGames = GameType.entries
+        .filter { selectedDifficulty == null || GAME_DIFFICULTY[it] == selectedDifficulty }
+        .sortedBy { GAME_DIFFICULTY[it]?.ordinal ?: GameDifficulty.entries.size }
 
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ArcadeBackdrop(modifier = Modifier.matchParentSize())
@@ -241,11 +243,11 @@ private enum class GameDifficulty(val label: String, val background: Color, val 
 
 /** Maps every mini-game to the difficulty pill shown on its catalogue card. */
 private val GAME_DIFFICULTY: Map<GameType, GameDifficulty> = mapOf(
-    GameType.PUNTOS_CARNE to GameDifficulty.MEDIA,
-    GameType.SENAL to GameDifficulty.MEDIA,
+    GameType.PUNTOS_CARNE to GameDifficulty.DIFICIL,
+    GameType.SENAL to GameDifficulty.FACIL,
     GameType.LEGAL_O_MULTA to GameDifficulty.MEDIA,
     GameType.PELIGRO to GameDifficulty.DIFICIL,
-    GameType.PRIORIDAD_CRUCE to GameDifficulty.DIFICIL,
+    GameType.PRIORIDAD_CRUCE to GameDifficulty.MEDIA,
 )
 
 /** Difficulties that currently have at least one game, in ascending display order. */

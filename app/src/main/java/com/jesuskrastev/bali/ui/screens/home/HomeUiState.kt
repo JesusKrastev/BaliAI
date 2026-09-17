@@ -36,7 +36,6 @@ data class HomeUiState(
     val highestStreak: Int = 0,
     val difficultTopics: List<String> = emptyList(),
     val dailyTip: String = "",
-    val isLoggedIn: Boolean = false,
     val showNoCoinsDialog: Boolean = false,
     val weeklyStreak: List<DailyStreakState> = emptyList(),
     val lastPracticeTimestamp: Long = 0L,

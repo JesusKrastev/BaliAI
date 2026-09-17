@@ -84,7 +84,6 @@ import com.jesuskrastev.bali.R
  * @param onMistakesClick opens the saved-mistakes review
  * @param onExamClick requests the official exam flow, coin-gated via [HomeViewModel.startExam]
  * @param onShopClick opens the coin shop
- * @param onAuthClick navigates to sign-in; used by the logged-out sync banner
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the AI tutor chat
  */
@@ -100,7 +99,6 @@ fun HomeScreen(
     onMistakesClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
     onShopClick: () -> Unit = {},
-    onAuthClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {}
 ) {
@@ -199,13 +197,6 @@ fun HomeScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column {
-                AnimatedVisibility(
-                    visible = !uiState.isLoggedIn,
-                ) {
-                    SyncBanner(
-                        onAction = onAuthClick
-                    )
-                }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.background,
@@ -262,64 +253,6 @@ fun AskBaliFab(onClick: () -> Unit) {
         },
         text = { Text("Pregunta a Bali", fontWeight = FontWeight.Black) }
     )
-}
-
-@Composable
-fun SyncBanner(onAction: () -> Unit) {
-    Surface(
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 72.dp)
-                .clipToBounds()
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(start = 64.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "¡Inicia sesión para sincronizar tu progreso!",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Surface(
-                    onClick = onAction,
-                    color = Color.White,
-                    shape = RoundedCornerShape(12.dp),
-                    shadowElevation = 2.dp
-                ) {
-                    Text(
-                        text = "OK",
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            }
-
-            // Bali mascot peeking diagonally from the corner, smaller size
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(80.dp)
-                    .align(Alignment.CenterStart)
-                    .offset(x = (-25).dp, y = 0.dp)
-                    .rotate(-5f),
-                contentScale = ContentScale.Fit
-            )
-        }
-    }
 }
 
 @Composable

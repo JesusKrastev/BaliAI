@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -383,9 +382,9 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
  * Leading icon badge, label and trailing chevron shared by every settings row — both the ones
  * grouped inside a [SettingsGroup] and the standalone [SettingsActionCard].
  *
- * @param icon leading glyph, shown inside a tinted circular badge
+ * @param icon leading glyph, tinted with [accentColor]
  * @param label row name
- * @param accentColor color applied to the icon and its badge tint
+ * @param accentColor color applied to the icon
  * @param labelColor color applied to the label text
  */
 @Composable
@@ -395,13 +394,10 @@ private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Co
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(accentColor.copy(alpha = 0.12f)),
+            modifier = Modifier.size(44.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(16.dp))
         Text(
@@ -424,7 +420,7 @@ private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Co
  * Standalone full-width action card used for sign-out, kept isolated from the grouped
  * [SettingsSection]s the way native settings pages separate destructive account actions.
  *
- * @param icon leading glyph for the action, shown inside a tinted circular badge
+ * @param icon leading glyph for the action, tinted with the accent color
  * @param label action name
  * @param isDestructive true for destructive actions like signing out — tints the badge, icon
  *   and label with the theme's error color instead of the normal primary/on-surface colors

@@ -1,7 +1,6 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -14,11 +13,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/**
+ * Tappable option card used by the onboarding selection steps.
+ *
+ * Grows with its label instead of using a fixed height, so long answers wrap onto a second
+ * line instead of being clipped on narrow screens.
+ *
+ * @param text option label; a leading emoji is split off and drawn before the label
+ * @param isSelected whether the option is currently chosen, which tints the card
+ * @param onClick invoked when the card is tapped
+ * @param iconEmoji optional emoji shown in a round badge instead of the label's own emoji
+ */
 @Composable
 fun SingleSelectionCard(
     text: String,
@@ -39,32 +49,21 @@ fun SingleSelectionCard(
         label = "border"
     )
 
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.97f else 1f,
-        animationSpec = tween(100),
-        label = "scale"
-    )
-
     Surface(
-        onClick = {
-            onClick()
-        },
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .scale(scale),
-        shape = RoundedCornerShape(50),
+            .heightIn(min = 56.dp),
+        shape = RoundedCornerShape(28.dp),
         color = backgroundColor,
         border = BorderStroke(if (isSelected) 2.dp else 1.5.dp, borderColor),
         shadowElevation = if (isSelected) 4.dp else 1.dp,
         tonalElevation = if (isSelected) 2.dp else 0.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp),
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Emoji badge
             if (iconEmoji != null) {
                 Box(
                     modifier = Modifier
@@ -81,15 +80,23 @@ fun SingleSelectionCard(
                 Spacer(modifier = Modifier.width(12.dp))
             }
 
-            // Option text — split emoji prefix from the rest if no separate iconEmoji
             val (emoji, label) = remember(text) { splitEmojiAndText(text) }
-            if (iconEmoji == null && emoji != null) {
-                Text(text = emoji, fontSize = 20.sp)
+            val inlineEmoji = emoji.takeIf { iconEmoji == null }
+            if (inlineEmoji != null) {
+                // Fixed-width slot so every label starts at the same x, whatever the glyph width.
+                Text(
+                    text = inlineEmoji,
+                    fontSize = 20.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.width(28.dp)
+                )
                 Spacer(modifier = Modifier.width(10.dp))
             }
 
             Text(
-                text = if (iconEmoji == null && emoji != null) label else text,
+                text = if (inlineEmoji != null) label else text,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
@@ -97,7 +104,8 @@ fun SingleSelectionCard(
                 modifier = Modifier.weight(1f)
             )
 
-            // Right chevron
+            Spacer(modifier = Modifier.width(8.dp))
+
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
                 contentDescription = null,
@@ -109,19 +117,20 @@ fun SingleSelectionCard(
     }
 }
 
-/** Extracts a leading emoji from the text string, if present. */
+/**
+ * Splits a leading emoji off an option label.
+ *
+ * Takes everything up to the first space rather than a single code point, so composed emoji
+ * (ZWJ sequences such as 😵‍💫, or ones carrying a variation selector such as 🕊️) stay whole
+ * instead of leaking their tail into the label.
+ *
+ * @param text the option label, e.g. "🎯 Tests adaptados a mis fallos"
+ * @return the emoji (or null when the label does not start with one) and the remaining label
+ */
 private fun splitEmojiAndText(text: String): Pair<String?, String> {
-    if (text.isEmpty()) return Pair(null, text)
-    val codePoint = text.codePointAt(0)
-    val type = Character.getType(codePoint)
-    return if (type == Character.OTHER_SYMBOL.toInt() || type == Character.SURROGATE.toInt() ||
-        Character.isSurrogate(text[0])
-    ) {
-        val emojiEnd = Character.charCount(codePoint)
-        // also skip a trailing space
-        val rest = text.substring(emojiEnd).trimStart()
-        Pair(text.substring(0, emojiEnd), rest)
-    } else {
-        Pair(null, text)
-    }
+    if (text.isEmpty() || ' ' !in text) return null to text
+    val startsWithEmoji = Character.isSurrogate(text[0]) ||
+        Character.getType(text.codePointAt(0)) == Character.OTHER_SYMBOL.toInt()
+    if (!startsWithEmoji) return null to text
+    return text.substringBefore(' ') to text.substringAfter(' ').trim()
 }
