@@ -54,9 +54,15 @@ fun OnboardingScreen(
         return
     }
 
+    // AppNavigation's own Scaffold already reserves the status bar (top) and the
+    // navigation bar (bottom) for this whole screen via NavHost's content padding, so this
+    // inner Scaffold must not reserve system bar insets a second time here — that previously
+    // doubled the top gap and left dead space under the progress bar, and pushed the
+    // "Continuar" button up off the true bottom edge instead of sitting flush like a proper
+    // bottom bar.
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets.safeDrawing,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             OnboardingTopBar(
                 progress = uiState.progress,
@@ -85,9 +91,7 @@ fun OnboardingScreen(
 private fun OnboardingTopBar(progress: Float, visible: Boolean) {
     if (!visible) return
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
@@ -119,7 +123,6 @@ private fun OnboardingBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
-            .navigationBarsPadding()
     ) {
         Button(
             onClick = { viewModel.onEvent(OnboardingEvent.GoToNextStep) },

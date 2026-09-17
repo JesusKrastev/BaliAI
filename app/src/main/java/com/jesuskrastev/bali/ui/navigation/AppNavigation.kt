@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -264,9 +265,6 @@ fun AppNavigation(
                     onShopClick = {
                         navController.navigate(ShopRoute)
                     },
-                    onAuthClick = {
-                        navController.navigate(AuthRoute(restrictNewAccounts = false))
-                    },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
                     },
@@ -304,9 +302,9 @@ fun AppNavigation(
             composable<AuthRoute> { backStackEntry ->
                 val route: AuthRoute = backStackEntry.toRoute()
                 val viewModel: com.jesuskrastev.bali.ui.screens.auth.AuthViewModel = hiltViewModel()
-                val isLoggingIn = viewModel.isLoggingIn.collectAsState().value
-                val errorMsg = viewModel.errorMessage.collectAsState().value
-                val errorEmail = viewModel.errorEmail.collectAsState().value
+                val isLoggingIn = viewModel.isLoggingIn.collectAsStateWithLifecycle().value
+                val errorMsg = viewModel.errorMessage.collectAsStateWithLifecycle().value
+                val errorEmail = viewModel.errorEmail.collectAsStateWithLifecycle().value
                 
                 com.jesuskrastev.bali.ui.screens.auth.AuthScreen(
                     sharedTransitionScope = this@SharedTransitionLayout,

@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.User
@@ -258,8 +259,14 @@ class OnboardingViewModel @Inject constructor(
     private fun persistDataAndShowPaywall() {
         viewModelScope.launch {
             userRepository.insert(_uiState.value.data.toUser())
-            // The paywall reports its own arrival through paywallShown().
-            _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
+            if (BuildConfig.DEBUG) {
+                // Debug builds skip the RevenueCat paywall so it doesn't block manual testing;
+                // release always requires a confirmed purchase here.
+                saveDataAndComplete()
+            } else {
+                // The paywall reports its own arrival through paywallShown().
+                _uiState.update { it.copy(currentStep = OnboardingStep.PaywallPending) }
+            }
         }
     }
 

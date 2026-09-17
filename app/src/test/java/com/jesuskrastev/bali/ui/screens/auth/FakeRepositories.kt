@@ -10,17 +10,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 
-class FakeUserRepository : UserRepository {
+class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepository {
     private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
-    
+    private val _hasCompletedOnboarding = MutableStateFlow(hasCompletedOnboarding)
+
     override fun get(): Flow<User?> = _user
 
     override fun exists(userId: String?): Flow<Boolean> = flowOf(true)
 
-    override fun hasCompletedOnboarding(): Flow<Boolean> = flowOf(true)
+    override fun hasCompletedOnboarding(): Flow<Boolean> = _hasCompletedOnboarding
 
     override suspend fun insert(user: User) {
         _user.value = user
+        // Mirrors UserRepositoryImpl, where hasCompletedOnboarding() reflects whether a
+        // local row exists: inserting the profile is what completes onboarding.
+        _hasCompletedOnboarding.value = true
     }
 
     override suspend fun resetStreak() {
@@ -88,16 +92,19 @@ class FakePathRepository : PathRepository {
     override suspend fun getLastUnlockedNodeOrder(userId: String): Int = 0
 }
 
-class FakeAuthRepository : AuthRepository {
-    override val isLoggedIn: Flow<Boolean> = flowOf(true)
-    override val currentUserFlow: Flow<String?> = flowOf("user_123")
+class FakeAuthRepository(
+    isLoggedIn: Boolean = true,
+    private val currentUserId: String? = "user_123"
+) : AuthRepository {
+    override val isLoggedIn: Flow<Boolean> = flowOf(isLoggedIn)
+    override val currentUserFlow: Flow<String?> = flowOf(currentUserId)
     override suspend fun getGoogleIdTokenAndEmail(context: android.content.Context): Result<Pair<String, String>> {
         return Result.success("token" to "test@example.com")
     }
     override suspend fun signInWithGoogleCredential(idToken: String): Result<Unit> = Result.success(Unit)
     override suspend fun existsInAuth(email: String): Boolean = true
     override suspend fun signOut(context: android.content.Context) {}
-    override suspend fun currentUser(): String? = "user_123"
+    override suspend fun currentUser(): String? = currentUserId
     override suspend fun currentUserEmail(): String? = "test@example.com"
     override suspend fun currentUserPhotoUrl(): String? = null
 }

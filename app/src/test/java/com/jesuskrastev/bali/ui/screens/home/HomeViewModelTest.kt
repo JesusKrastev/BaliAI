@@ -72,13 +72,6 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `isLoggedIn state is correctly reflected`() = runTest {
-        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        assertThat(viewModel.uiState.value.isLoggedIn).isTrue()
-        collectJob.cancel()
-    }
-
-    @Test
     fun `showNoCoinsDialog can be triggered by startExam`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
         // User starts with 500 coins in FakeUserRepository, so 100 coin exam should work.

@@ -110,7 +110,6 @@ class HomeViewModel @Inject constructor(
         testResultRepository.getAverageScore(),
         _showNoCoinsDialog,
         _dailyTip,
-        authRepository.isLoggedIn,
         _pathNodes,
         _isPathLoading,
         _pathError
@@ -121,10 +120,9 @@ class HomeViewModel @Inject constructor(
         val avgScore = flows[3] as Double? ?: 0.0
         val showNoCoinsDialog = flows[4] as Boolean
         val dailyTip = flows[5] as String
-        val isLoggedIn = flows[6] as Boolean
-        val pathNodes = flows[7] as List<*>?
-        val isPathLoading = flows[8] as Boolean
-        val pathError = flows[9] as String?
+        val pathNodes = flows[6] as List<*>?
+        val isPathLoading = flows[7] as Boolean
+        val pathError = flows[8] as String?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -137,8 +135,7 @@ class HomeViewModel @Inject constructor(
 
         if (user == null) {
             HomeUiState(
-                dailyTip = dailyTip, 
-                isLoggedIn = isLoggedIn,
+                dailyTip = dailyTip,
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail
             )
@@ -161,7 +158,6 @@ class HomeViewModel @Inject constructor(
                 highestStreak = user.highestStreak,
                 showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
-                isLoggedIn = isLoggedIn,
                 weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays),
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
