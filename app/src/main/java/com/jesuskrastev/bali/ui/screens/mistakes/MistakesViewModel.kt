@@ -1,8 +1,10 @@
 ﻿package com.jesuskrastev.bali.ui.screens.mistakes
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
@@ -24,6 +26,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -49,7 +53,9 @@ class MistakesViewModel @Inject constructor(
     @QuestionsModel private val gemini: GenerativeModel,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
-    private val incrementCoinsUseCase: IncrementCoinsUseCase
+    private val incrementCoinsUseCase: IncrementCoinsUseCase,
+    private val analytics: AnalyticsTracker,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MistakesUiState())
@@ -65,8 +71,62 @@ class MistakesViewModel @Inject constructor(
     }
 
     init {
-        generateMistakesTest()
+        if (!restoreSession()) {
+            generateMistakesTest()
+        }
     }
+
+    /**
+     * Restores a previously generated review session from [savedStateHandle], if one is
+     * there. This is what lets a process restart mid-review (Android killing the app in
+     * the background, then Navigation replaying the back stack) put the same questions
+     * back on screen instead of paying for a brand new Gemini generation.
+     *
+     * @return true when a session was restored and no generation is needed.
+     */
+    private fun restoreSession(): Boolean {
+        val json = savedStateHandle.get<String>(KEY_SESSION) ?: return false
+        val session = runCatching { jsonContent.decodeFromString<SavedMistakesSession>(json) }
+            .getOrNull() ?: return false
+        if (session.questions.isEmpty()) return false
+
+        sessionStreak = session.sessionStreak
+        startTime = System.currentTimeMillis()
+        _uiState.update {
+            it.copy(
+                questions = session.questions,
+                currentQuestionIndex = session.currentQuestionIndex,
+                selectedAnswers = session.selectedAnswers,
+                isAnswerChecked = session.isAnswerChecked,
+                sessionStreak = session.sessionStreak,
+                isLoading = false,
+                error = null
+            )
+        }
+        return true
+    }
+
+    /** Snapshots the restorable parts of [MistakesUiState] into [savedStateHandle]. */
+    private fun persistSession() {
+        val state = _uiState.value
+        if (state.questions.isEmpty()) return
+        val session = SavedMistakesSession(
+            questions = state.questions,
+            currentQuestionIndex = state.currentQuestionIndex,
+            selectedAnswers = state.selectedAnswers,
+            isAnswerChecked = state.isAnswerChecked,
+            sessionStreak = state.sessionStreak
+        )
+        savedStateHandle[KEY_SESSION] = jsonContent.encodeToString(session)
+    }
+
+    /**
+     * Tells apart a screen's first-ever generation from one triggered by a ViewModel
+     * recreated mid-session with nothing left to restore — i.e. Android killed the
+     * process while a review was in flight or on screen.
+     */
+    private fun determineReason(): String =
+        if (savedStateHandle.get<Boolean>(KEY_GENERATION_STARTED) == true) "process_restart" else "initial"
 
     fun onEvent(event: MistakesEvent) {
         when (event) {
@@ -86,7 +146,7 @@ class MistakesViewModel @Inject constructor(
     private fun retry() {
         sessionStreak = 0
         _uiState.update { it.copy(isLoading = true, error = null, questions = emptyList(), currentQuestionIndex = 0, selectedAnswers = emptyMap(), isAnswerChecked = false, sessionStreak = 0) }
-        generateMistakesTest()
+        generateMistakesTest(reason = "retry")
     }
 
     /**
@@ -98,8 +158,12 @@ class MistakesViewModel @Inject constructor(
      * the prompt asks for exactly one question per item — so without this cap a student
      * with a long history triggers a generation of a hundred-plus questions that costs a
      * fortune and, past the output limit, comes back truncated and unparseable anyway.
+     *
+     * @param reason why this call is happening — `"initial"`/`"process_restart"` (from
+     *   [determineReason]) or `"retry"` — logged alongside the real token cost once the
+     *   response comes back, so cost spikes can be traced to the reason that caused them.
      */
-    private fun generateMistakesTest() {
+    private fun generateMistakesTest(reason: String = determineReason()) {
         viewModelScope.launch {
             try {
                 val recentMistakes = answerRepository.getRecentMistakes().first()
@@ -149,7 +213,18 @@ class MistakesViewModel @Inject constructor(
     
                 """.trimIndent()
 
+                savedStateHandle[KEY_GENERATION_STARTED] = true
                 val response = gemini.generateContent(prompt)
+
+                // Logged as soon as the response is back — tokens are billed the moment
+                // Gemini answers, whether or not the JSON below turns out parseable.
+                val usage = response.usageMetadata
+                analytics.mistakesGenerated(
+                    reason = reason,
+                    inputTokens = usage?.promptTokenCount ?: 0,
+                    outputTokens = usage?.candidatesTokenCount ?: 0
+                )
+
                 val rawText = response.text ?: throw Exception("Sin respuesta de la IA")
 
                 val jsonStartIndex = rawText.indexOf('{')
@@ -161,6 +236,7 @@ class MistakesViewModel @Inject constructor(
 
                 startTime = System.currentTimeMillis()
                 _uiState.update { it.copy(questions = questionUiStates, isLoading = false) }
+                persistSession()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
@@ -170,10 +246,24 @@ class MistakesViewModel @Inject constructor(
     companion object {
         /**
          * How many mistakes a single review session covers. One generated question per
-         * mistake, so this is also the size — and the cost — of the Gemini call.
+         * mistake, so this is also the size — and the cost — of the Gemini call. Lowered
+         * from 30 to 10 (2026-09-20): at 30 this session cost as much as a full paid exam
+         * while being free and regenerated on every screen open.
          */
-        private const val MAX_MISTAKES_PER_REVIEW = 30
+        private const val MAX_MISTAKES_PER_REVIEW = 10
+
+        private const val KEY_SESSION = "mistakes_saved_session"
+        private const val KEY_GENERATION_STARTED = "mistakes_generation_started"
     }
+
+    @Serializable
+    private data class SavedMistakesSession(
+        val questions: List<QuestionUiState>,
+        val currentQuestionIndex: Int,
+        val selectedAnswers: Map<Int, Int>,
+        val isAnswerChecked: Boolean,
+        val sessionStreak: Int
+    )
 
     private fun selectOption(optionIndex: Int) {
         if (_uiState.value.isAnswerChecked) return
@@ -182,6 +272,7 @@ class MistakesViewModel @Inject constructor(
             newAnswers[it.currentQuestionIndex] = optionIndex
             it.copy(selectedAnswers = newAnswers)
         }
+        persistSession()
     }
 
     private fun checkAnswer() {
@@ -204,12 +295,14 @@ class MistakesViewModel @Inject constructor(
             }
             
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
+            persistSession()
         }
     }
 
     private fun nextQuestion() {
         if (_uiState.value.currentQuestionIndex < _uiState.value.questions.size - 1) {
             _uiState.update { it.copy(currentQuestionIndex = it.currentQuestionIndex + 1, isAnswerChecked = false) }
+            persistSession()
         }
     }
 

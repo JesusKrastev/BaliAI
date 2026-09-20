@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.test
 
+import androidx.lifecycle.SavedStateHandle
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
@@ -51,7 +53,9 @@ class TestViewModelTest {
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
-            pathRepository = fakePathRepository
+            pathRepository = fakePathRepository,
+            analytics = mock<AnalyticsTracker>(),
+            savedStateHandle = SavedStateHandle()
         )
     }
 

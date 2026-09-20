@@ -1,8 +1,10 @@
 ﻿package com.jesuskrastev.bali.ui.screens.exam
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
@@ -27,6 +29,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -55,7 +59,9 @@ class ExamViewModel @Inject constructor(
     @QuestionsModel private val gemini: GenerativeModel,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
-    private val incrementCoinsUseCase: IncrementCoinsUseCase
+    private val incrementCoinsUseCase: IncrementCoinsUseCase,
+    private val analytics: AnalyticsTracker,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExamUiState())
@@ -66,6 +72,10 @@ class ExamViewModel @Inject constructor(
     private var sessionStreak: Int = 0
     private var examFinished = false
 
+    /** Wall-clock instant the exam's 30-minute window ends, so a restart can recompute
+     *  the time actually left instead of resetting to a fresh 30 minutes. */
+    private var examEndAtMillis: Long = 0
+
     private val jsonContent = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -73,8 +83,71 @@ class ExamViewModel @Inject constructor(
     }
 
     init {
-        generateExam()
+        if (!restoreSession()) {
+            generateExam()
+        }
     }
+
+    /**
+     * Restores a previously generated exam — questions, progress and the real time left
+     * on the clock — from [savedStateHandle], if one is there. This is what lets a
+     * process restart mid-exam (Android killing the app in the background, then
+     * Navigation replaying the back stack) put the student back where they were instead
+     * of paying for a brand new 30-question generation.
+     *
+     * @return true when a session was restored and no generation is needed.
+     */
+    private fun restoreSession(): Boolean {
+        val json = savedStateHandle.get<String>(KEY_SESSION) ?: return false
+        val session = runCatching { jsonContent.decodeFromString<SavedExamSession>(json) }
+            .getOrNull() ?: return false
+        if (session.questions.isEmpty()) return false
+
+        examEndAtMillis = session.examEndAtMillis
+        sessionStreak = session.sessionStreak
+        startTime = System.currentTimeMillis()
+        val remainingSeconds =
+            ((examEndAtMillis - System.currentTimeMillis()) / 1000).toInt().coerceAtLeast(0)
+
+        _uiState.update {
+            it.copy(
+                questions = session.questions,
+                currentQuestionIndex = session.currentQuestionIndex,
+                selectedAnswers = session.selectedAnswers,
+                isAnswerChecked = session.isAnswerChecked,
+                sessionStreak = session.sessionStreak,
+                isLoading = false,
+                error = null,
+                timeLeftSeconds = remainingSeconds,
+                isTimeUp = remainingSeconds <= 0
+            )
+        }
+        if (remainingSeconds > 0) startTimer()
+        return true
+    }
+
+    /** Snapshots the restorable parts of [ExamUiState] plus the exam deadline into [savedStateHandle]. */
+    private fun persistSession() {
+        val state = _uiState.value
+        if (state.questions.isEmpty()) return
+        val session = SavedExamSession(
+            questions = state.questions,
+            currentQuestionIndex = state.currentQuestionIndex,
+            selectedAnswers = state.selectedAnswers,
+            isAnswerChecked = state.isAnswerChecked,
+            sessionStreak = state.sessionStreak,
+            examEndAtMillis = examEndAtMillis
+        )
+        savedStateHandle[KEY_SESSION] = jsonContent.encodeToString(session)
+    }
+
+    /**
+     * Tells apart a screen's first-ever generation from one triggered by a ViewModel
+     * recreated mid-session with nothing left to restore — i.e. Android killed the
+     * process while an exam was in flight or on screen.
+     */
+    private fun determineReason(): String =
+        if (savedStateHandle.get<Boolean>(KEY_GENERATION_STARTED) == true) "process_restart" else "initial"
 
     fun onEvent(event: ExamEvent) {
         when (event) {
@@ -104,6 +177,7 @@ class ExamViewModel @Inject constructor(
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
+            persistSession()
         }
     }
 
@@ -112,10 +186,18 @@ class ExamViewModel @Inject constructor(
         sessionStreak = 0
         examFinished = false
         _uiState.update { ExamUiState() }
-        generateExam()
+        generateExam(reason = "retry")
     }
 
-    private fun generateExam() {
+    /**
+     * Calls Gemini for a fresh 30-question exam — the single most expensive generation in
+     * the app.
+     *
+     * @param reason why this call is happening — `"initial"`/`"process_restart"` (from
+     *   [determineReason]) or `"retry"` — logged alongside the real token cost once the
+     *   response comes back, so cost spikes can be traced to the reason that caused them.
+     */
+    private fun generateExam(reason: String = determineReason()) {
         viewModelScope.launch {
             try {
                 val user = userRepository.get().first()
@@ -168,14 +250,33 @@ class ExamViewModel @Inject constructor(
                     Genera EXACTAMENTE 30 preguntas.
                 """.trimIndent()
 
+                savedStateHandle[KEY_GENERATION_STARTED] = true
                 val response = gemini.generateContent(prompt)
+
+                // Logged as soon as the response is back — tokens are billed the moment
+                // Gemini answers, whether or not the JSON below turns out parseable.
+                val usage = response.usageMetadata
+                analytics.examGenerated(
+                    reason = reason,
+                    inputTokens = usage?.promptTokenCount ?: 0,
+                    outputTokens = usage?.candidatesTokenCount ?: 0
+                )
+
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
                 startTime = System.currentTimeMillis()
-                _uiState.update { it.copy(questions = questionUiStates, isLoading = false) }
+                examEndAtMillis = System.currentTimeMillis() + EXAM_DURATION_SECONDS * 1000L
+                _uiState.update {
+                    it.copy(
+                        questions = questionUiStates,
+                        isLoading = false,
+                        timeLeftSeconds = EXAM_DURATION_SECONDS
+                    )
+                }
                 startTimer()
+                persistSession()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
@@ -200,6 +301,7 @@ class ExamViewModel @Inject constructor(
             newAnswers[it.currentQuestionIndex] = optionIndex
             it.copy(selectedAnswers = newAnswers)
         }
+        persistSession()
     }
 
     private fun goToQuestion(index: Int) {
@@ -210,6 +312,7 @@ class ExamViewModel @Inject constructor(
                 isAnswerChecked = false
             )
         }
+        persistSession()
     }
 
     private fun nextQuestion() {
@@ -220,6 +323,7 @@ class ExamViewModel @Inject constructor(
                     isAnswerChecked = false
                 )
             }
+            persistSession()
         }
     }
 
@@ -231,6 +335,7 @@ class ExamViewModel @Inject constructor(
                     isAnswerChecked = false
                 )
             }
+            persistSession()
         }
     }
 
@@ -310,4 +415,22 @@ class ExamViewModel @Inject constructor(
         super.onCleared()
         timerJob?.cancel()
     }
+
+    companion object {
+        /** The exam's fixed time limit, matching [ExamUiState]'s default `timeLeftSeconds`. */
+        private const val EXAM_DURATION_SECONDS = 1800
+
+        private const val KEY_SESSION = "exam_saved_session"
+        private const val KEY_GENERATION_STARTED = "exam_generation_started"
+    }
+
+    @Serializable
+    private data class SavedExamSession(
+        val questions: List<QuestionUiState>,
+        val currentQuestionIndex: Int,
+        val selectedAnswers: Map<Int, Int>,
+        val isAnswerChecked: Boolean,
+        val sessionStreak: Int,
+        val examEndAtMillis: Long
+    )
 }

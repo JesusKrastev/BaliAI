@@ -1,8 +1,10 @@
 package com.jesuskrastev.bali.ui.screens.test
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
@@ -26,6 +28,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -69,7 +73,9 @@ class TestViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
-    private val pathRepository: PathRepository
+    private val pathRepository: PathRepository,
+    private val analytics: AnalyticsTracker,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TestUiState())
@@ -88,6 +94,73 @@ class TestViewModel @Inject constructor(
         isLenient = true
         allowTrailingComma = true
     }
+
+    init {
+        restoreSession()
+    }
+
+    /**
+     * Restores a previously generated session (topic/node routing plus questions and
+     * progress) from [savedStateHandle], if one is there. Populating [currentTopic] /
+     * [aiNodeTitle] here is what makes the guard at the top of [setTopic] and
+     * [setAiNodeParams] recognize the restored state and skip calling Gemini again when
+     * `AppNavigation`'s `LaunchedEffect(route)` replays the same route after a process
+     * restart.
+     */
+    private fun restoreSession() {
+        val json = savedStateHandle.get<String>(KEY_SESSION) ?: return
+        val session = runCatching { jsonContent.decodeFromString<SavedTestSession>(json) }
+            .getOrNull() ?: return
+        if (session.questions.isEmpty()) return
+
+        currentTopic = session.currentTopic
+        aiNodeTitle = session.aiNodeTitle
+        aiNodeDescription = session.aiNodeDescription
+        aiNodeId = session.aiNodeId
+        aiNodeType = session.aiNodeType
+        sessionStreak = session.sessionStreak
+        startTime = System.currentTimeMillis()
+        _uiState.update {
+            it.copy(
+                category = session.category,
+                questions = session.questions,
+                currentQuestionIndex = session.currentQuestionIndex,
+                selectedAnswers = session.selectedAnswers,
+                isAnswerChecked = session.isAnswerChecked,
+                sessionStreak = session.sessionStreak,
+                isLoading = false,
+                error = null
+            )
+        }
+    }
+
+    /** Snapshots the restorable parts of [TestUiState] plus the routing fields into [savedStateHandle]. */
+    private fun persistSession() {
+        val state = _uiState.value
+        if (state.questions.isEmpty()) return
+        val session = SavedTestSession(
+            category = state.category,
+            questions = state.questions,
+            currentQuestionIndex = state.currentQuestionIndex,
+            selectedAnswers = state.selectedAnswers,
+            isAnswerChecked = state.isAnswerChecked,
+            sessionStreak = state.sessionStreak,
+            currentTopic = currentTopic,
+            aiNodeTitle = aiNodeTitle,
+            aiNodeDescription = aiNodeDescription,
+            aiNodeId = aiNodeId,
+            aiNodeType = aiNodeType
+        )
+        savedStateHandle[KEY_SESSION] = jsonContent.encodeToString(session)
+    }
+
+    /**
+     * Tells apart a screen's first-ever generation from one triggered by a ViewModel
+     * recreated mid-session with nothing left to restore — i.e. Android killed the
+     * process while a test was in flight or on screen.
+     */
+    private fun determineReason(): String =
+        if (savedStateHandle.get<Boolean>(KEY_GENERATION_STARTED) == true) "process_restart" else "initial"
 
     fun setTopic(topic: String?) {
         if (currentTopic == topic && _uiState.value.questions.isNotEmpty()) return
@@ -149,6 +222,7 @@ class TestViewModel @Inject constructor(
                 error = null
             )
         }
+        persistSession()
     }
 
     fun onEvent(event: TestEvent) {
@@ -184,11 +258,18 @@ class TestViewModel @Inject constructor(
         // Respect node type on retry
         when (aiNodeType) {
             "LESSON" -> loadStaticQuestions(aiNodeId)
-            else -> generateGeminiTest()
+            else -> generateGeminiTest(reason = "retry")
         }
     }
 
-    private fun generateGeminiTest() {
+    /**
+     * Calls Gemini for a fresh 10-question set.
+     *
+     * @param reason why this call is happening — `"initial"`/`"process_restart"` (from
+     *   [determineReason]) or `"retry"` — logged alongside the real token cost once the
+     *   response comes back, so cost spikes can be traced to the reason that caused them.
+     */
+    private fun generateGeminiTest(reason: String = determineReason()) {
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
@@ -252,7 +333,18 @@ class TestViewModel @Inject constructor(
                     Genera EXACTAMENTE 10 preguntas e indica en "selectedCategory" la categoría elegida.
                     """.trimIndent()
 
+                savedStateHandle[KEY_GENERATION_STARTED] = true
                 val response = gemini.generateContent(prompt)
+
+                // Logged as soon as the response is back — tokens are billed the moment
+                // Gemini answers, whether or not the JSON below turns out parseable.
+                val usage = response.usageMetadata
+                analytics.testGenerated(
+                    reason = reason,
+                    inputTokens = usage?.promptTokenCount ?: 0,
+                    outputTokens = usage?.candidatesTokenCount ?: 0
+                )
+
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val jsonStartIndex = rawText.indexOf('{')
@@ -275,6 +367,7 @@ class TestViewModel @Inject constructor(
                         isLoading = false
                     )
                 }
+                persistSession()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
@@ -313,6 +406,7 @@ class TestViewModel @Inject constructor(
             newAnswers[it.currentQuestionIndex] = optionIndex
             it.copy(selectedAnswers = newAnswers)
         }
+        persistSession()
     }
 
     private fun checkAnswer() {
@@ -323,6 +417,7 @@ class TestViewModel @Inject constructor(
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
+            persistSession()
         }
     }
 
@@ -335,6 +430,7 @@ class TestViewModel @Inject constructor(
                     isAnswerChecked = false
                 )
             }
+            persistSession()
         }
     }
 
@@ -444,4 +540,24 @@ class TestViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
     }
+
+    companion object {
+        private const val KEY_SESSION = "test_saved_session"
+        private const val KEY_GENERATION_STARTED = "test_generation_started"
+    }
+
+    @Serializable
+    private data class SavedTestSession(
+        val category: String,
+        val questions: List<QuestionUiState>,
+        val currentQuestionIndex: Int,
+        val selectedAnswers: Map<Int, Int>,
+        val isAnswerChecked: Boolean,
+        val sessionStreak: Int,
+        val currentTopic: String?,
+        val aiNodeTitle: String?,
+        val aiNodeDescription: String?,
+        val aiNodeId: String?,
+        val aiNodeType: String?
+    )
 }

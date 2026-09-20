@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.exam
 
+import androidx.lifecycle.SavedStateHandle
+import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
@@ -39,7 +41,9 @@ class ExamViewModelTest {
             gemini = mock(),
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
-            incrementCoinsUseCase = fakeIncrementCoinsUseCase
+            incrementCoinsUseCase = fakeIncrementCoinsUseCase,
+            analytics = mock<AnalyticsTracker>(),
+            savedStateHandle = SavedStateHandle()
         )
     }
 
