@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.data.remote.firestore.dao
 
 import android.util.Log
 import com.jesuskrastev.bali.BuildConfig
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -49,6 +50,40 @@ class FirestoreUserDao @Inject constructor(
 
     suspend fun updateFields(userId: String, updates: Map<String, Any>) {
         collection.document(userId).update(updates).await()
+    }
+
+    /**
+     * Atomically adds [amount] to the user's coin balance using Firestore's server-side
+     * increment operator — no read is involved, so two concurrent calls can't race each
+     * other. `set(merge = true)` is used instead of `update` so this also works the very
+     * first time, before the user's document exists yet, instead of throwing NOT_FOUND.
+     */
+    suspend fun incrementCoins(userId: String, amount: Int) {
+        collection.document(userId)
+            .set(mapOf("coins" to FieldValue.increment(amount.toLong())), SetOptions.merge())
+            .await()
+    }
+
+    /**
+     * Atomically subtracts [amount] from the user's coin balance inside a Firestore
+     * transaction: the balance is read and checked, and the write only happens if it was
+     * enough — all as one indivisible operation. If another write lands on the document
+     * in between, Firestore retries this transaction against the fresh value automatically,
+     * so a concurrent spend can't succeed twice off the same starting balance.
+     *
+     * @return true if the balance was sufficient and the subtraction applied, false otherwise.
+     */
+    suspend fun decrementCoinsIfEnough(userId: String, amount: Int): Boolean {
+        val docRef = collection.document(userId)
+        return firestore.runTransaction { transaction ->
+            val current = transaction.get(docRef).getLong("coins") ?: 0L
+            if (current < amount) {
+                false
+            } else {
+                transaction.update(docRef, "coins", current - amount)
+                true
+            }
+        }.await()
     }
 
     // --- Test Results Operations ---

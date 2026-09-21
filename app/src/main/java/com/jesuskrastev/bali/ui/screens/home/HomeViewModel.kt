@@ -99,7 +99,7 @@ class HomeViewModel @Inject constructor(
                 _dailyTip.value = tips.random()
             }
         } catch (e: Exception) {
-            _dailyTip.value = "Conduce con precauciÃ³n y respeta las seÃ±ales."
+            _dailyTip.value = "Conduce con precaución y respeta las señales."
         }
     }
 
@@ -112,7 +112,9 @@ class HomeViewModel @Inject constructor(
         _dailyTip,
         _pathNodes,
         _isPathLoading,
-        _pathError
+        _pathError,
+        authRepository.currentUserPhotoUrlFlow,
+        authRepository.currentUserEmailFlow
     ) { flows ->
         val user = flows[0] as User?
         val totalTests = flows[1] as Int
@@ -123,15 +125,14 @@ class HomeViewModel @Inject constructor(
         val pathNodes = flows[6] as List<*>?
         val isPathLoading = flows[7] as Boolean
         val pathError = flows[8] as String?
+        val profilePictureUrl = flows[9] as String?
+        val userEmail = flows[10] as String?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
-        
+
         @Suppress("UNCHECKED_CAST")
         val typedPathNodes = (pathNodes ?: emptyList<LessonNode>()) as List<LessonNode>
-
-        val profilePictureUrl = authRepository.currentUserPhotoUrl()
-        val userEmail = authRepository.currentUserEmail()
 
         if (user == null) {
             HomeUiState(

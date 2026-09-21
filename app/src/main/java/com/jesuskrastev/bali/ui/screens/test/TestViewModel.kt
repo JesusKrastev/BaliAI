@@ -198,7 +198,7 @@ class TestViewModel @Inject constructor(
         val staticQuestions = LessonQuestionBank.getQuestionsForNode(nodeId)
 
         if (staticQuestions.isEmpty()) {
-            // No static questions for this node â†’ fall back to Gemini
+            // No static questions for this node → fall back to Gemini
             generateGeminiTest()
             return
         }
@@ -216,7 +216,7 @@ class TestViewModel @Inject constructor(
         startTime = System.currentTimeMillis()
         _uiState.update {
             it.copy(
-                category = aiNodeTitle ?: "LecciÃ³n",
+                category = aiNodeTitle ?: "Lección",
                 questions = questionUiStates,
                 isLoading = false,
                 error = null
@@ -278,7 +278,7 @@ class TestViewModel @Inject constructor(
                 val totalTests = testResultRepository.count()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
                 val difficultTopics =
-                    user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno especÃ­fico"
+                    user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
                 val studentLevel = user?.level ?: 1
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val historyContext = if (lastTests.isNotEmpty()) {
@@ -294,41 +294,41 @@ class TestViewModel @Inject constructor(
 
                 val topicInstruction = when {
                     aiNodeTitle != null && (aiNodeType == "REVIEW" || aiNodeType == "EXAM") -> """
-                        Tu misiÃ³n es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÃ“N" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
+                        Tu misión es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÓN" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
                         $sectionFailuresContext
-                        INSTRUCCIÃ“N CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado mÃ¡s.
-                        El 40% restante cubre el resto de la secciÃ³n para una revisiÃ³n completa.
+                        INSTRUCCIÓN CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado más.
+                        El 40% restante cubre el resto de la sección para una revisión completa.
                     """.trimIndent()
-                    aiNodeTitle != null -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. DescripciÃ³n: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
-                    currentTopic != null -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
-                    else -> "Tu misiÃ³n es generar una SESIÃ“N DE PRÃCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categorÃ­a de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que mÃ¡s le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, MecÃ¡nica, DocumentaciÃ³n, Usuarios de la vÃ­a, SeÃ±ales, Marcas viales."
+                    aiNodeTitle != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
+                    currentTopic != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
+                    else -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
                 }
 
                 val prompt = """
-                    Eres un Profesor Experto de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a.
+                    Eres un Profesor Experto de la DGT (Dirección General de Tráfico) en España.
                     $topicInstruction
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos y sutiles).
-                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones mÃ¡s didÃ¡cticas paso a paso).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos y sutiles).
+                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones más didácticas paso a paso).
                     - Experiencia previa: $experience.
                     
                     REGLAS DE LA PREGUNTA:
-                    - Estilo DGT oficial: Preguntas directas, a veces con situaciones hipotÃ©ticas.
+                    - Estilo DGT oficial: Preguntas directas, a veces con situaciones hipotéticas.
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta. Solo una es correcta.
-                    - Las respuestas incorrectas deben ser creÃ­bles.
-                    - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara y lÃ³gica. Intenta darle un toque pedagÃ³gico adaptado a su nivel.
+                    - Las respuestas incorrectas deben ser creíbles.
+                    - EXPLICACIÓN: Máximo 20 palabras. Debe ser clara y lógica. Intenta darle un toque pedagógico adaptado a su nivel.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triÃ¡ngulos ya no son obligatorios en autopista/autovÃ­a), lÃ­mites de velocidad a 30 km/h en vÃ­as urbanas de un Ãºnico carril, nuevas normativas de VMP (patinetes elÃ©ctricos) y las seÃ±ales de trÃ¡fico de nueva creaciÃ³n. Cero informaciÃ³n obsoleta.
-                    - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sÃ³lo", o "como norma general" para poner a prueba la atenciÃ³n del alumno.
+                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡ESTRICTAMENTE OBLIGATORIO!):
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triángulos ya no son obligatorios en autopista/autovía), límites de velocidad a 30 km/h en vías urbanas de un único carril, nuevas normativas de VMP (patinetes eléctricos) y las señales de tráfico de nueva creación. Cero información obsoleta.
+                    - TRAMPAS TÍPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sólo", o "como norma general" para poner a prueba la atención del alumno.
                     
-                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
-                    - Usa imÃ¡genes SOLO si la pregunta describe una situaciÃ³n visual o una seÃ±al fÃ­sica.
+                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
+                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física.
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
                     - Codigos ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol), usa null.
+                    - Si la pregunta es puramente teórica (ej: tasa de alcohol), usa null.
                     
                     Genera EXACTAMENTE 10 preguntas e indica en "selectedCategory" la categoría elegida.
                     """.trimIndent()
@@ -349,13 +349,13 @@ class TestViewModel @Inject constructor(
 
                 val jsonStartIndex = rawText.indexOf('{')
                 val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato invÃ¡lido")
+                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato inválido")
 
                 val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
                 val root = jsonContent.parseToJsonElement(jsonString).jsonObject
 
                 val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic
-                ?: "PrÃ¡ctica General"
+                ?: "Práctica General"
                 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
 
@@ -387,7 +387,7 @@ class TestViewModel @Inject constructor(
                 .sortedByDescending { it.value.size }
                 .take(5)
                 .joinToString("\n") { (questionText, answers) ->
-                    "- FallÃ³ ${answers.size} veces en: '${questionText.take(80)}'"
+                    "- Falló ${answers.size} veces en: '${questionText.take(80)}'"
                 }
 
             """
@@ -487,10 +487,11 @@ class TestViewModel @Inject constructor(
             // 3. Increment streak
             newWeekSessions = incrementStreakUseCase()
 
-            // 4. Update path ONLY if coming from a path node and score >= 70%
+            // 4. Update path if coming from a path node: always record the attempt on the
+            // current node, but only unlock the next one once the score clears the bar.
             if (aiNodeId != null) {
 
-                // 4a. Mark current node as COMPLETED and WAIT for confirmation
+                // 4a. Mark current node as COMPLETED (with its real score) and WAIT for confirmation
                 pathRepository.updateNodeStatus(
                     userId,
                     aiNodeId!!,
@@ -502,7 +503,7 @@ class TestViewModel @Inject constructor(
                 val allNodes = pathRepository.getPathNodes(userId).first()
                 val currentNode = allNodes.find { it.id == aiNodeId }
 
-                if (currentNode != null) {
+                if (currentNode != null && accuracy >= PASSING_ACCURACY) {
                     // Find the next LOCKED node with immediately higher orderIndex
                     val nextLockedNode = allNodes
                         .filter { it.orderIndex > currentNode.orderIndex }
@@ -544,6 +545,9 @@ class TestViewModel @Inject constructor(
     companion object {
         private const val KEY_SESSION = "test_saved_session"
         private const val KEY_GENERATION_STARTED = "test_generation_started"
+
+        /** Minimum accuracy percentage required to unlock the next node on the learning path. */
+        private const val PASSING_ACCURACY = 70
     }
 
     @Serializable

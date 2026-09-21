@@ -24,7 +24,19 @@ interface UserRepository {
     suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>)
     suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, lastPracticeTimestamp: Long, practiceDays: List<Long>)
     suspend fun updateXp(xp: Int, level: Int)
-    suspend fun updateCoins(coins: Int)
+
+    /** Atomically adds [amount] coins to the user's balance. */
+    suspend fun incrementCoins(amount: Int)
+
+    /**
+     * Atomically spends [amount] coins from the user's balance if there's enough, in one
+     * indivisible read-check-write so two concurrent spends can't both succeed off the
+     * same starting balance.
+     *
+     * @return true if the balance was sufficient and the coins were spent, false otherwise.
+     */
+    suspend fun decrementCoinsIfEnough(amount: Int): Boolean
+
     suspend fun updateStreakFreezes(count: Int)
     suspend fun updateHighestStreak(highestStreak: Int)
     suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit>

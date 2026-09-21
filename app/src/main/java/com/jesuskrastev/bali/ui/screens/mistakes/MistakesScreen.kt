@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.TestContentView
@@ -34,7 +35,7 @@ fun MistakesScreen(
     onFinishTest: (TestSummary) -> Unit,
     viewModel: MistakesViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {

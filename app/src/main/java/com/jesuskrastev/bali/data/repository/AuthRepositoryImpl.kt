@@ -13,6 +13,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.jesuskrastev.bali.R
 import com.onesignal.OneSignal
@@ -21,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,28 +32,27 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
 
     private val auth = FirebaseAuth.getInstance()
 
-    override val isLoggedIn: Flow<Boolean> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser != null) }
+    /**
+     * The signed-in Firebase user, re-emitted on every sign-in/sign-out. Backs all the
+     * reactive properties below so they share one [FirebaseAuth.AuthStateListener]
+     * instead of each registering their own.
+     */
+    private val authState: Flow<FirebaseUser?> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser) }
         auth.addAuthStateListener(listener)
         awaitClose { auth.removeAuthStateListener(listener) }
     }
+
+    override val isLoggedIn: Flow<Boolean> = authState.map { it != null }
+
+    override val currentUserFlow: Flow<String?> = authState.map { it?.uid }
+
+    override val currentUserPhotoUrlFlow: Flow<String?> = authState.map { it?.photoUrl?.toString() }
+
+    override val currentUserEmailFlow: Flow<String?> = authState.map { it?.email }
 
     override suspend fun currentUser(): String? {
         return auth.currentUser?.uid
-    }
-
-    override val currentUserFlow: Flow<String?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser?.uid) }
-        auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
-    }
-
-    override suspend fun currentUserPhotoUrl(): String? {
-        return auth.currentUser?.photoUrl?.toString()
-    }
-
-    override suspend fun currentUserEmail(): String? {
-        return auth.currentUser?.email
     }
 
     override suspend fun getGoogleIdTokenAndEmail(context: Context): Result<Pair<String, String>> {

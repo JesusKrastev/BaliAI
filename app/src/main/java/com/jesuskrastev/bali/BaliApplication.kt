@@ -13,11 +13,14 @@ import com.google.firebase.perf.FirebasePerformance
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
+import com.posthog.PostHogInterface
 import com.revenuecat.purchases.LogLevel
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesAreCompletedBy
 import com.revenuecat.purchases.PurchasesConfiguration
+import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 import okhttp3.OkHttpClient
 
 @HiltAndroidApp
@@ -26,6 +29,10 @@ class BaliApplication : Application(), ImageLoaderFactory {
     companion object {
         const val NOTIFICATION_CHANNEL_ID = "reminders"
     }
+
+    /** Lazy so PostHog is only created after the Robolectric guard in [onCreate]. */
+    @Inject
+    lateinit var posthog: Lazy<PostHogInterface>
 
     override fun newImageLoader(): ImageLoader {
         val okHttpClient = OkHttpClient.Builder()
@@ -47,7 +54,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
         super.onCreate()
 
         // Skip heavy SDK initialization in Robolectric tests
-        if (isRobolectric()) {
+        if (RobolectricDetector.isRobolectric()) {
             return
         }
 
@@ -67,6 +74,20 @@ class BaliApplication : Application(), ImageLoaderFactory {
                 .diagnosticsEnabled(true)
                 .build(),
         )
+        linkRevenueCatToPostHog()
+    }
+
+    /**
+     * Tells RevenueCat which PostHog person this install is (the `$posthogUserId` subscriber
+     * attribute), so purchase events from its PostHog integration land on the same person as
+     * the in-app events instead of on a separate `$RCAnonymousID` one.
+     *
+     * Only tags the subscriber: it cannot change purchases or entitlements. Resolving the
+     * lazy client here also creates PostHog at process start, rather than on the first
+     * screen that injects an analytics tracker.
+     */
+    private fun linkRevenueCatToPostHog() {
+        Purchases.sharedInstance.setPostHogUserId(posthog.get().distinctId())
     }
 
     /**
@@ -92,18 +113,6 @@ class BaliApplication : Application(), ImageLoaderFactory {
                 description = "Recordatorios de estudio y logros"
             }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
-    }
-
-    private fun isRobolectric(): Boolean {
-        return try {
-            val isRoboClassPresent = Class.forName("org.robolectric.Robolectric") != null
-            if (isRoboClassPresent) return true
-            false
-        } catch (e: Exception) {
-            val fingerprint = android.os.Build.FINGERPRINT ?: ""
-            fingerprint.contains("robolectric", ignoreCase = true) ||
-            android.os.Build.DEVICE.contains("robolectric", ignoreCase = true)
         }
     }
 }

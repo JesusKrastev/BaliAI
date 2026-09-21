@@ -8,7 +8,7 @@ object LevelCalculator {
     private const val GROWTH_FACTOR = 1.4
 
     /**
-     * Calcula el XP necesario para alcanzar un nivel especÃ­fico
+     * Calcula el XP necesario para alcanzar un nivel específico
      */
     fun xpForLevel(level: Int): Int {
         return when (level) {

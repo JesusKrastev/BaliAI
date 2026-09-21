@@ -10,6 +10,7 @@ import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
 import com.onesignal.OneSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -128,7 +129,7 @@ class MainViewModel @Inject constructor(
                     migrationManager.executePendingMigrations(currentUserUid)
                 } catch (e: Exception) {
                     _migrationError.value = e.message ?: "Error desconocido durante la inicialización de la base de datos."
-                    e.printStackTrace()
+                    FirebaseCrashlytics.getInstance().recordException(e)
                 } finally {
                     _isMigrating.value = false
                 }

@@ -33,16 +33,19 @@ class ShopViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
+    private val _isProcessing = MutableStateFlow(false)
 
     val uiState: StateFlow<ShopUiState> = combine(
         userRepository.get(),
-        _selectedItem
-    ) { user, selected ->
+        _selectedItem,
+        _isProcessing
+    ) { user, selected, isProcessing ->
         user?.let {
             ShopUiState(
                 coinsCount = it.coins,
                 streakFreezes = it.streakFreezes,
-                selectedItem = selected
+                selectedItem = selected,
+                isProcessing = isProcessing
             )
         } ?: ShopUiState()
     }.stateIn(
@@ -61,15 +64,28 @@ class ShopViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Buys a streak freezer for 120 coins, capped at 2 owned at once.
+     *
+     * Guarded by [_isProcessing] so a second tap while a purchase is already in flight is
+     * ignored instead of racing it — two concurrent calls could otherwise both pass the
+     * `streakFreezes < 2` check before either write lands, charging twice for one freezer.
+     */
     private fun purchaseStreakFreezer() {
+        if (_isProcessing.value) return
         viewModelScope.launch {
-            val user = userRepository.get().first() ?: return@launch
-            if (user.streakFreezes >= 2) return@launch
+            _isProcessing.value = true
+            try {
+                val user = userRepository.get().first() ?: return@launch
+                if (user.streakFreezes >= 2) return@launch
 
-            val success = decrementCoinsUseCase(120)
-            if (success) {
-                userRepository.updateStreakFreezes(user.streakFreezes + 1)
-                _selectedItem.value = null
+                val success = decrementCoinsUseCase(120)
+                if (success) {
+                    userRepository.updateStreakFreezes(user.streakFreezes + 1)
+                    _selectedItem.value = null
+                }
+            } finally {
+                _isProcessing.value = false
             }
         }
     }

@@ -35,7 +35,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 10, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 13, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
@@ -132,8 +132,28 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
-- `BaliApplication.isRobolectric()` guards skip SDK initialization (OneSignal, Mixpanel, RevenueCat) in unit tests. NEVER remove this guard — those SDKs crash under Robolectric.
+- `RobolectricDetector.isRobolectric()` (root package) guards skip SDK initialization (OneSignal, Mixpanel, PostHog, RevenueCat) in unit tests — called from `BaliApplication.onCreate()` and from the Mixpanel/PostHog Hilt modules. NEVER remove this guard, and never reimplement the check inline (e.g. `Build.FINGERPRINT == "robolectric"`) instead of calling it — those SDKs crash under Robolectric.
 - `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date plus a two-digit counter for that day's builds, so several builds can be uploaded per day. NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
 - The `lintVitalAnalyze/Report/Release` tasks are explicitly disabled in `build.gradle.kts` due to a KSP/Lint bug — do not re-enable them.
 - All API keys are injected via `BuildConfig` fields resolved by the `secret(key, default)` helper in `app/build.gradle.kts`, which reads `local.properties` first and falls back to environment variables (that is how CI supplies them). NEVER hardcode keys in source files.
 - Release signing is driven by `RELEASE_KEYSTORE_PATH` / `RELEASE_STORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD` through the same `secret()` helper. When `RELEASE_KEYSTORE_PATH` is absent the `release` build type falls back to the debug keystore so local `bundleRelease` still works — that fallback artifact is NOT uploadable to Play.
+
+## Pending: Code Review Sweep (started 2026-09-20)
+
+A full-codebase refactor/bug-fix pass is in progress (requested by Jesús). Already reviewed and fixed: `domain/`, `data/`, `di/`, most ViewModels, `ui/navigation/`, the games arcade (`ui/screens/games/`), the full onboarding flow (`ui/screens/onboarding/`), `ui/components/`, and the streak/greetings/coins/result screens. Migrations (`data/migration/migrations/`) are intentionally excluded — historical/sensitive, not to be touched.
+
+**Still to review:**
+- `ui/screens/home/HomeScreen.kt` — not read in full (~900 lines)
+- `ui/screens/settings/SettingsScreen.kt` — ViewModel reviewed, Screen not
+- `ui/screens/auth/AuthScreen.kt` — ViewModel reviewed, Screen not
+- `ui/screens/suggestions/SuggestionsScreen.kt` — only a mechanical `collectAsState` fix applied
+- `ui/screens/paywall/PaywallScreen.kt`, `CustomerCenterLauncher.kt`
+- `ui/screens/exam/ExamScreen.kt`, `ui/screens/test/TestScreen.kt`, `ui/screens/mistakes/MistakesScreen.kt` — ViewModels reviewed, Screens not
+- `ui/theme/Type.kt`, `Color.kt`, `Gradients.kt`
+
+**Flagged during review, not fixed (need a product/design decision, not a guess):**
+- Streak freezes have no visual feedback: `StreakStatus.FROZEN` is fully implemented in the UI (`HomeScreen`, `StreakScreen`, `LessonStreakScreen`) but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
+- `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
+- `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.
+
+Delete this section once the sweep is done.

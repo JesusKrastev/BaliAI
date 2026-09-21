@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.data.repository
 
-import com.google.firebase.auth.FirebaseAuth
 import com.jesuskrastev.bali.data.local.room.dao.AnswerDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
@@ -11,7 +10,6 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext

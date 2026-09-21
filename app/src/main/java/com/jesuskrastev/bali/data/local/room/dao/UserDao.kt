@@ -27,8 +27,21 @@ interface UserDao {
     @Query("UPDATE users SET currentStreak = 0")
     suspend fun resetStreak()
 
-    @Query("UPDATE users SET coins = :coins")
-    suspend fun updateCoins(coins: Int)
+    /** Atomically adds [amount] to the local user's coin balance in one SQL statement. */
+    @Query("UPDATE users SET coins = coins + :amount")
+    suspend fun incrementCoins(amount: Int)
+
+    /**
+     * Atomically subtracts [amount] from the local user's coin balance, but only if the
+     * row's current balance is at least [amount]. The condition is evaluated by SQLite
+     * against the live row, not a value read earlier by the caller, so two overlapping
+     * calls can't both succeed off the same starting balance.
+     *
+     * @return the number of rows updated: 1 if the balance was sufficient and the
+     *   subtraction applied, 0 if it was insufficient and nothing changed.
+     */
+    @Query("UPDATE users SET coins = coins - :amount WHERE coins >= :amount")
+    suspend fun decrementCoinsIfEnough(amount: Int): Int
 
     @Query("UPDATE users SET streakFreezes = :count")
     suspend fun updateStreakFreezes(count: Int)

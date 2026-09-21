@@ -14,13 +14,7 @@ object StreakUiHelper {
      */
     fun generateWeeklyStreak(practiceDays: List<Long>): List<DailyStreakState> {
         val currentTimestamp = System.currentTimeMillis()
-        val calendar = Calendar.getInstance()
-        calendar.timeInMillis = currentTimestamp
-        
-        // Start from Monday
-        calendar.firstDayOfWeek = Calendar.MONDAY
-        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-        val startOfMonday = dateTimeHelper.getStartOfDay(calendar.timeInMillis)
+        val startOfMonday = dateTimeHelper.getStartOfWeek(currentTimestamp)
 
         val daysOfWeek = listOf("L", "M", "X", "J", "V", "S", "D")
         

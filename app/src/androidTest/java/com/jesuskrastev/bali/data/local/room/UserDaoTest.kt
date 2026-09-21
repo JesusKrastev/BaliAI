@@ -78,17 +78,47 @@ class UserDaoTest {
     }
 
     @Test
-    fun userCoinsCanBeUpdated() = runTest {
+    fun userCoinsCanBeIncremented() = runTest {
         val user = UserEntity(
             id = "user_123",
             coins = 50
         )
 
         userDao.insert(user)
-        userDao.updateCoins(100)
+        userDao.incrementCoins(50)
 
         val retrieved = userDao.get().first()
         assertThat(retrieved?.coins).isEqualTo(100)
+    }
+
+    @Test
+    fun decrementCoinsIfEnoughSucceedsAndDeductsWhenBalanceIsSufficient() = runTest {
+        val user = UserEntity(
+            id = "user_123",
+            coins = 100
+        )
+
+        userDao.insert(user)
+        val rowsUpdated = userDao.decrementCoinsIfEnough(100)
+
+        assertThat(rowsUpdated).isEqualTo(1)
+        val retrieved = userDao.get().first()
+        assertThat(retrieved?.coins).isEqualTo(0)
+    }
+
+    @Test
+    fun decrementCoinsIfEnoughFailsAndLeavesBalanceUntouchedWhenInsufficient() = runTest {
+        val user = UserEntity(
+            id = "user_123",
+            coins = 50
+        )
+
+        userDao.insert(user)
+        val rowsUpdated = userDao.decrementCoinsIfEnough(100)
+
+        assertThat(rowsUpdated).isEqualTo(0)
+        val retrieved = userDao.get().first()
+        assertThat(retrieved?.coins).isEqualTo(50)
     }
 
     @Test

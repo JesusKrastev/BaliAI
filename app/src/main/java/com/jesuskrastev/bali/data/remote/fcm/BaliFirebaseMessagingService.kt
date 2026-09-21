@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.data.remote.fcm
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -25,6 +26,7 @@ class BaliFirebaseMessagingService : FirebaseMessagingService() {
             .collection("users")
             .document(userId)
             .set(mapOf("fcmToken" to token), SetOptions.merge())
+            .addOnFailureListener { FirebaseCrashlytics.getInstance().recordException(it) }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.di
 
 import android.content.Context
 import com.jesuskrastev.bali.BuildConfig
+import com.jesuskrastev.bali.RobolectricDetector
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.mixpanel.android.util.MPLog
 import dagger.Module
@@ -20,7 +21,7 @@ object MixpanelModule {
     fun provideMixpanelAPI(
         @ApplicationContext context: Context
     ): MixpanelAPI {
-        if (android.os.Build.FINGERPRINT == "robolectric") {
+        if (RobolectricDetector.isRobolectric()) {
             return MixpanelAPI.getInstance(context, "test_token", false)
         }
         if (BuildConfig.DEBUG) {

@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.data.remote
 
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -9,14 +10,20 @@ import kotlinx.coroutines.tasks.await
 class RemoteConfigProvider @Inject constructor(
     private val remoteConfig: FirebaseRemoteConfig
 ) {
+    /**
+     * Fetches the latest Remote Config values and activates them for this session.
+     * A failure (e.g. offline) is reported to Crashlytics and otherwise ignored, so
+     * callers keep working off whatever values were last activated.
+     */
     suspend fun fetchAndActivate() {
         try {
             remoteConfig.fetchAndActivate().await()
         } catch (e: Exception) {
-            e.printStackTrace()
+            FirebaseCrashlytics.getInstance().recordException(e)
         }
     }
 
+    /** Returns the configured weekly session goal, defaulting to 5 when unset. */
     fun getWeeklyGoal(): Int {
         return remoteConfig.getLong("weekly_goal").toInt().let { if (it == 0) 5 else it }
     }

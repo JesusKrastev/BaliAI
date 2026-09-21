@@ -67,7 +67,7 @@ android {
         targetSdk = 36
         // Format   o YYYYMMDDNN: fecha de publicación + nº de build de ese día.
         // En CI lo inyecta el workflow vía CI_VERSION_CODE; en local se usa el valor base.
-        versionCode = secret("CI_VERSION_CODE", "2026091100").toInt()
+        versionCode = secret("CI_VERSION_CODE", "2026091700").toInt()
         versionName = "1.1.9"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"

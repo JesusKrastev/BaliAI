@@ -28,12 +28,14 @@ class SettingsViewModel @Inject constructor(
     /** Combines the local user profile with the live auth session into [SettingsUiState]. */
     val uiState: StateFlow<SettingsUiState> = combine(
         userRepository.get(),
-        authRepository.isLoggedIn
-    ) { user, isLoggedIn ->
+        authRepository.isLoggedIn,
+        authRepository.currentUserEmailFlow,
+        authRepository.currentUserPhotoUrlFlow
+    ) { user, isLoggedIn, userEmail, profilePictureUrl ->
         SettingsUiState(
             userName = user?.name ?: "Futuro Conductor",
-            userEmail = authRepository.currentUserEmail(),
-            profilePictureUrl = authRepository.currentUserPhotoUrl(),
+            userEmail = userEmail,
+            profilePictureUrl = profilePictureUrl,
             isLoggedIn = isLoggedIn
         )
     }.stateIn(

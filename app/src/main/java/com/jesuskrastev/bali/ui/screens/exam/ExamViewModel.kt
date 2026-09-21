@@ -202,7 +202,7 @@ class ExamViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics ?: "Ninguno especÃ­fico (distribuciÃ³n estÃ¡ndar)"
+                val difficultTopics = user?.difficultTopics ?: "Ninguno específico (distribución estándar)"
                 val studentLevel = user?.level
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val daysToExam = user?.examDateMillis?.let {
@@ -211,41 +211,41 @@ class ExamViewModel @Inject constructor(
                 }
                 val totalTests = testResultRepository.count()
                 val examUrgency = if (daysToExam != null && daysToExam in 1..15) {
-                    "Â¡El examen es en $daysToExam dÃ­as! SÃ© estricto y pon preguntas de alta probabilidad de fallo."
+                    "¡El examen es en $daysToExam días! Sé estricto y pon preguntas de alta probabilidad de fallo."
                 } else {
-                    "Modo simulacro estÃ¡ndar."
+                    "Modo simulacro estándar."
                 }
 
                 val prompt = """
-                    Eres el Examinador Jefe de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a. Tu misiÃ³n es generar un EXAMEN OFICIAL COMPLETO y riguroso de EXACTAMENTE 30 preguntas.
+                    Eres el Examinador Jefe de la DGT (Dirección General de Tráfico) en España. Tu misión es generar un EXAMEN OFICIAL COMPLETO y riguroso de EXACTAMENTE 30 preguntas.
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos y sutiles).
-                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones mÃ¡s didÃ¡cticas paso a paso. Si son muchos, asume que tiene experiencia y usa un tono mÃ¡s exigente).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos y sutiles).
+                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones más didácticas paso a paso. Si son muchos, asume que tiene experiencia y usa un tono más exigente).
                     - Experiencia previa: $experience.
-                    - Temas que mÃ¡s le cuestan: $difficultTopics. (IMPORTANTE: AsegÃºrate de que varias preguntas del examen ataquen estos puntos dÃ©biles especÃ­ficos para que practique).
+                    - Temas que más le cuestan: $difficultTopics. (IMPORTANTE: Asegúrate de que varias preguntas del examen ataquen estos puntos débiles específicos para que practique).
                     - Urgencia: $examUrgency
                     
-                    REGLAS DE DISTRIBUCIÃ“N (ESTRICTAS PARA 30 PREGUNTAS):
+                    REGLAS DE DISTRIBUCIÓN (ESTRICTAS PARA 30 PREGUNTAS):
                     - Debe ser un simulacro exacto del examen real para el permiso $license.
-                    - Variedad obligatoria. Distribuye las preguntas asÃ­: SeÃ±ales (aprox. 6), Normativa y Velocidad (aprox. 6), Seguridad Vial y Accidentes (aprox. 5), Maniobras e Intersecciones (aprox. 5), El Conductor, fatiga y Alcohol/Drogas (aprox. 5), MecÃ¡nica bÃ¡sica y Mantenimiento (aprox. 3).
-                    - Si los "Temas que mÃ¡s le cuestan" encajan en alguna de estas categorÃ­as, aumenta la dificultad de esas preguntas especÃ­ficas.
+                    - Variedad obligatoria. Distribuye las preguntas así: Señales (aprox. 6), Normativa y Velocidad (aprox. 6), Seguridad Vial y Accidentes (aprox. 5), Maniobras e Intersecciones (aprox. 5), El Conductor, fatiga y Alcohol/Drogas (aprox. 5), Mecánica básica y Mantenimiento (aprox. 3).
+                    - Si los "Temas que más le cuestan" encajan en alguna de estas categorías, aumenta la dificultad de esas preguntas específicas.
                     
                     REGLAS DE LA PREGUNTA Y OPCIONES:
-                    - Estilo DGT oficial: Lenguaje tÃ©cnico, preciso y con situaciones hipotÃ©ticas ("Circula por una vÃ­a...", "Como norma general...").
+                    - Estilo DGT oficial: Lenguaje técnico, preciso y con situaciones hipotéticas ("Circula por una vía...", "Como norma general...").
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta (no pongas solo "A", "B" o "C"). Solo una es correcta.
-                    - Las respuestas incorrectas (distractores) deben ser muy creÃ­bles y usar trampas tÃ­picas de la DGT (ej. usar absolutos como "siempre" o "nunca" para confundir).
-                    - EXPLICACIÃ“N: MÃ¡ximo 20 palabras. Debe ser clara, pedagÃ³gica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difÃ­ciles.
+                    - Las respuestas incorrectas (distractores) deben ser muy creíbles y usar trampas típicas de la DGT (ej. usar absolutos como "siempre" o "nunca" para confundir).
+                    - EXPLICACIÓN: Máximo 20 palabras. Debe ser clara, pedagógica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difíciles.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡MUY IMPORTANTE!):
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16 en lugar de triÃ¡ngulos en autopista, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
+                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡MUY IMPORTANTE!):
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente (ej. baliza V-16 en lugar de triángulos en autopista, límites de 30 km/h en vías urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
                     
-                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
-                    - Usa imÃ¡genes SOLO si la pregunta describe una situaciÃ³n visual o una seÃ±al fÃ­sica. (MÃ¡ximo 10-12 imÃ¡genes en todo el examen para no saturar).
+                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
+                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física. (Máximo 10-12 imágenes en todo el examen para no saturar).
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, mecÃ¡nica), usa null.
+                    - Códigos válidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
+                    - Si la pregunta es puramente teórica (ej: tasa de alcohol, mecánica), usa null.
                     
                     Genera EXACTAMENTE 30 preguntas.
                 """.trimIndent()

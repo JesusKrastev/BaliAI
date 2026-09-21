@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,7 +28,7 @@ fun ShopScreen(
     onBackClick: () -> Unit,
     viewModel: ShopViewModel
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState()
 
     Scaffold(
@@ -103,6 +104,7 @@ fun ShopScreen(
             ) {
                 PurchaseConfirmationContent(
                     item = uiState.selectedItem!!,
+                    isProcessing = uiState.isProcessing,
                     onConfirm = {
                         val event = when (uiState.selectedItem!!) {
                             ShopItem.StreakFreezer -> ShopEvent.PurchaseStreakFreezer
@@ -118,6 +120,7 @@ fun ShopScreen(
 @Composable
 fun PurchaseConfirmationContent(
     item: ShopItem,
+    isProcessing: Boolean,
     onConfirm: () -> Unit
 ) {
     Column(
@@ -179,27 +182,36 @@ fun PurchaseConfirmationContent(
 
         Button(
             onClick = onConfirm,
+            enabled = !isProcessing,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp),
             shape = RoundedCornerShape(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "CONFIRMAR COMPRA",
-                    fontWeight = FontWeight.ExtraBold
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = LocalContentColor.current,
+                    strokeWidth = 2.dp
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.coin),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = price.toString(),
-                    fontWeight = FontWeight.Black
-                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "CONFIRMAR COMPRA",
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Image(
+                        painter = painterResource(id = R.drawable.coin),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = price.toString(),
+                        fontWeight = FontWeight.Black
+                    )
+                }
             }
         }
     }

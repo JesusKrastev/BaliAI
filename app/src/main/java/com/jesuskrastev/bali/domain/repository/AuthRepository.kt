@@ -30,10 +30,18 @@ interface AuthRepository {
     
     /** Imperatively returns the current user's UID or null. */
     suspend fun currentUser(): String?
-    
-    /** Imperatively returns the current user's profile photo URL or null. */
-    suspend fun currentUserPhotoUrl(): String?
-    
-    /** Imperatively returns the current user's email address or null. */
-    suspend fun currentUserEmail(): String?
+
+    /**
+     * Emits the current user's profile photo URL, re-emitting on every sign-in/sign-out
+     * so reactive screens (e.g. a `combine()`-built UI state) stay in sync. Null when
+     * signed out or when the account has no photo.
+     */
+    val currentUserPhotoUrlFlow: Flow<String?>
+
+    /**
+     * Emits the current user's email address, re-emitting on every sign-in/sign-out so
+     * reactive screens (e.g. a `combine()`-built UI state) stay in sync. Null when
+     * signed out.
+     */
+    val currentUserEmailFlow: Flow<String?>
 }

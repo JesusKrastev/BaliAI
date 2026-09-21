@@ -170,7 +170,7 @@ class MistakesViewModel @Inject constructor(
                     .sortedByDescending { it.date }
                     .take(MAX_MISTAKES_PER_REVIEW)
                 if (recentMistakes.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false, error = "Â¡Felicidades! No tienes errores pendientes por repasar.") }
+                    _uiState.update { it.copy(isLoading = false, error = "¡Felicidades! No tienes errores pendientes por repasar.") }
                     return@launch
                 }
 
@@ -183,33 +183,33 @@ class MistakesViewModel @Inject constructor(
                 val totalTests = testResultRepository.count()
 
                 val prompt = """
-                    Eres un Profesor Experto y Tutor Personal de la DGT (DirecciÃ³n General de TrÃ¡fico) en EspaÃ±a. 
+                    Eres un Profesor Experto y Tutor Personal de la DGT (Dirección General de Tráfico) en España. 
                     Tu alumno ha fallado recientemente estas preguntas en sus tests:
                     $mistakesContext
     
-                    Tu misiÃ³n es generar una SESIÃ“N DE REPASO de EXACTAMENTE ${recentMistakes.size} preguntas, enfocada EXCLUSIVAMENTE en corregir estos conceptos.
+                    Tu misión es generar una SESIÓN DE REPASO de EXACTAMENTE ${recentMistakes.size} preguntas, enfocada EXCLUSIVAMENTE en corregir estos conceptos.
                     
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÃ“N):
+                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
                     - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores mÃ¡s complejos).
+                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos).
                     - Total de tests realizados: $totalTests.
                     
                     REGLAS DE LA PREGUNTA (REPASO DE ERRORES):
                     - Genera EXACTAMENTE UNA pregunta por cada concepto fallado en la lista proporcionada.
-                    - REFORMULA la pregunta y las opciones para que NO sean idÃ©nticas a las originales, pero evalÃºen la misma norma o situaciÃ³n. Obliga al alumno a pensar, no a memorizar la respuesta correcta anterior.
-                    - Estilo DGT oficial: Lenguaje tÃ©cnico, preciso.
+                    - REFORMULA la pregunta y las opciones para que NO sean idénticas a las originales, pero evalúen la misma norma o situación. Obliga al alumno a pensar, no a memorizar la respuesta correcta anterior.
+                    - Estilo DGT oficial: Lenguaje técnico, preciso.
                     - 3 opciones por pregunta con el TEXTO REAL de la respuesta (nada de "A", "B", "C"). Solo una es correcta.
-                    - EXPLICACIÃ“N: MÃ¡ximo 25 palabras. Al ser un test de repaso, la explicaciÃ³n debe ser muy didÃ¡ctica, aclarando la "trampa" o el concepto que el alumno suele confundir.
+                    - EXPLICACIÓN: Máximo 25 palabras. Al ser un test de repaso, la explicación debe ser muy didáctica, aclarando la "trampa" o el concepto que el alumno suele confundir.
                     
-                    REGLAS DE CALIDAD Y ACTUALIZACIÃ“N (Â¡ESTRICTAMENTE OBLIGATORIO!):
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de trÃ¡fico espaÃ±ola mÃ¡s reciente (ej. baliza V-16, lÃ­mites de 30 km/h en vÃ­as urbanas de un carril, nueva normativa de patinetes VMP).
-                    - TRAMPAS TÃPICAS DGT: Haz que las respuestas incorrectas atraigan el error tÃ­pico que el alumno cometiÃ³ antes.
+                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡ESTRICTAMENTE OBLIGATORIO!):
+                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente (ej. baliza V-16, límites de 30 km/h en vías urbanas de un carril, nueva normativa de patinetes VMP).
+                    - TRAMPAS TÍPICAS DGT: Haz que las respuestas incorrectas atraigan el error típico que el alumno cometió antes.
                     
-                    REGLAS DE IMÃGENES (SISTEMA FILEPATH):
-                    - Usa imÃ¡genes SOLO si la pregunta reformulada describe una situaciÃ³n visual o una seÃ±al fÃ­sica.
+                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
+                    - Usa imágenes SOLO si la pregunta reformulada describe una situación visual o una señal física.
                     - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - CÃ³digos vÃ¡lidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teÃ³rica (ej: tasa de alcohol, documentaciÃ³n), usa null.
+                    - Códigos válidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
+                    - Si la pregunta es puramente teórica (ej: tasa de alcohol, documentación), usa null.
     
                 """.trimIndent()
 
@@ -229,7 +229,7 @@ class MistakesViewModel @Inject constructor(
 
                 val jsonStartIndex = rawText.indexOf('{')
                 val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON invÃ¡lido devuelto por la IA")
+                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON inválido devuelto por la IA")
 
 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)

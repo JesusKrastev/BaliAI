@@ -117,9 +117,16 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateXp(xp, level) }
     )
 
-    override suspend fun updateCoins(coins: Int) = updateField(
-        fields = mapOf("coins" to coins),
-        localAction = { userDao.updateCoins(coins) }
+    /** See [UserRepository.incrementCoins]. */
+    override suspend fun incrementCoins(amount: Int) = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.incrementCoins(userId, amount) },
+        actionLocal = { userDao.incrementCoins(amount) }
+    )
+
+    /** See [UserRepository.decrementCoinsIfEnough]. */
+    override suspend fun decrementCoinsIfEnough(amount: Int): Boolean = withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.decrementCoinsIfEnough(userId, amount) },
+        actionLocal = { userDao.decrementCoinsIfEnough(amount) == 1 }
     )
 
     override suspend fun updateStreakFreezes(count: Int) = updateField(

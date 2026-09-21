@@ -17,7 +17,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -29,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.data.update.InAppUpdateManager
@@ -69,10 +69,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BaliTheme {
-                val entryPoint by viewModel.entryPoint.collectAsState()
-                val updateState by viewModel.updateState.collectAsState()
-                val isMigrating by viewModel.isMigrating.collectAsState()
-                val migrationError by viewModel.migrationError.collectAsState()
+                val entryPoint by viewModel.entryPoint.collectAsStateWithLifecycle()
+                val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+                val isMigrating by viewModel.isMigrating.collectAsStateWithLifecycle()
+                val migrationError by viewModel.migrationError.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
                 val activity = androidx.activity.compose.LocalActivity.current!!
 

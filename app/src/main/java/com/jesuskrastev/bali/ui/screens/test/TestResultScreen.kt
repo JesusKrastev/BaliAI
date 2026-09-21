@@ -25,7 +25,6 @@ import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.review.InAppReviewEffect
 
 fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, String> {
-    val minutes = durationSeconds / 60
     return when {
         accuracy == 100 -> Pair(
             "¡Perfección absoluta! \uD83C\uDFAF",

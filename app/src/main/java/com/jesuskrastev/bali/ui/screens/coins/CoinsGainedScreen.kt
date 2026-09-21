@@ -114,7 +114,7 @@ fun CoinsGainedScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Text(
-                    text = "Recolecta tokens y cámbialo por power ups, energias y más.",
+                    text = "Recolecta monedas y cámbialas por congeladores de racha y más.",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
                     color = Color.Gray,

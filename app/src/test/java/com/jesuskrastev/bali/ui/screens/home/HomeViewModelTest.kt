@@ -76,7 +76,7 @@ class HomeViewModelTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
         // User starts with 500 coins in FakeUserRepository, so 100 coin exam should work.
         // Let's set coins to 0 to trigger the dialog.
-        fakeUserRepository.updateCoins(0)
+        fakeUserRepository.setCoinsForTest(0)
         assertThat(viewModel.uiState.value.showNoCoinsDialog).isFalse()
         viewModel.startExam {}
         assertThat(viewModel.uiState.value.showNoCoinsDialog).isTrue()

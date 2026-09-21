@@ -43,8 +43,20 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _user.update { it?.copy(xp = xp, level = level) }
     }
 
-    override suspend fun updateCoins(coins: Int) {
-        _user.update { it?.copy(coins = coins) }
+    override suspend fun incrementCoins(amount: Int) {
+        _user.update { it?.copy(coins = it.coins + amount) }
+    }
+
+    override suspend fun decrementCoinsIfEnough(amount: Int): Boolean {
+        val current = _user.value?.coins ?: return false
+        if (current < amount) return false
+        _user.update { it?.copy(coins = current - amount) }
+        return true
+    }
+
+    /** Test-only helper to set the balance directly, bypassing the real increment/decrement contract. */
+    fun setCoinsForTest(amount: Int) {
+        _user.update { it?.copy(coins = amount) }
     }
 
     override suspend fun updateStreakFreezes(count: Int) {
@@ -105,8 +117,8 @@ class FakeAuthRepository(
     override suspend fun existsInAuth(email: String): Boolean = true
     override suspend fun signOut(context: android.content.Context) {}
     override suspend fun currentUser(): String? = currentUserId
-    override suspend fun currentUserEmail(): String? = "test@example.com"
-    override suspend fun currentUserPhotoUrl(): String? = null
+    override val currentUserEmailFlow: Flow<String?> = flowOf("test@example.com")
+    override val currentUserPhotoUrlFlow: Flow<String?> = flowOf(null)
 }
 
 data class GameCompletedEvent(val gameId: String, val score: Int, val totalRounds: Int, val durationSeconds: Int)

@@ -41,18 +41,18 @@ open class GenerateNextPathNodesUseCase @Inject constructor(
         val startOrderIndex = lastOrderIndex + 1
 
         val prompt = """
-            Eres un Sistema Experto de CreaciÃ³n de Curriculums para la DGT en EspaÃ±a.
-            Tu misiÃ³n es generar los prÃ³ximos $count Nodos (Lecciones) para un alumno.
+            Eres un Sistema Experto de Creación de Curriculums para la DGT en España.
+            Tu misión es generar los próximos $count Nodos (Lecciones) para un alumno.
             
             CONTEXTO DEL ALUMNO:
             - Nivel actual: $studentLevel
-            - Temas mÃ¡s difÃ­ciles reportados: $difficultTopics
+            - Temas más difíciles reportados: $difficultTopics
             
             REGLAS:
-            - Estos nodos deben ser progresivos. Si su nivel es bajo (1-3), enfÃ³cate en lo bÃ¡sico (DocumentaciÃ³n, SeÃ±ales, Velocidad). Si es alto, mete temas mÃ¡s complejos.
-            - Intercala temas donde tiene mÃ¡s fallos.
-            - Los tÃ­tulos deben ser MUY cortos (ej: "Prioridades", "Velocidad", "SeÃ±ales de Peligro").
-            - Las descripciones deben motivar y explicar brevemente de quÃ© tratarÃ¡ (max 10-15 palabras).
+            - Estos nodos deben ser progresivos. Si su nivel es bajo (1-3), enfócate en lo básico (Documentación, Señales, Velocidad). Si es alto, mete temas más complejos.
+            - Intercala temas donde tiene más fallos.
+            - Los títulos deben ser MUY cortos (ej: "Prioridades", "Velocidad", "Señales de Peligro").
+            - Las descripciones deben motivar y explicar brevemente de qué tratará (max 10-15 palabras).
             
             Devuelve exactamente $count nodos.
         """.trimIndent()
@@ -62,20 +62,20 @@ open class GenerateNextPathNodesUseCase @Inject constructor(
 
         val jsonStartIndex = rawText.indexOf('{')
         val jsonEndIndex = rawText.lastIndexOf('}')
-        if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON invÃ¡lido desde AI")
+        if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON inválido desde AI")
 
         val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
         val root = jsonContent.parseToJsonElement(jsonString).jsonObject
         
-        val nodesArray = root["nodes"]?.jsonArray ?: throw Exception("No se encontrÃ³ el array nodes")
+        val nodesArray = root["nodes"]?.jsonArray ?: throw Exception("No se encontró el array nodes")
 
         val generatedNodes = nodesArray.mapIndexed { index, element ->
             val obj = element.jsonObject
             LessonNode(
                 id = UUID.randomUUID().toString(),
                 orderIndex = startOrderIndex + index,
-                title = obj["title"]?.jsonPrimitive?.content ?: "PrÃ¡ctica DGT",
-                description = obj["description"]?.jsonPrimitive?.content ?: "SesiÃ³n generada automÃ¡ticamente",
+                title = obj["title"]?.jsonPrimitive?.content ?: "Práctica DGT",
+                description = obj["description"]?.jsonPrimitive?.content ?: "Sesión generada automáticamente",
                 status = if (index == 0) NodeStatus.UNLOCKED else NodeStatus.LOCKED,
                 scorePercentage = null
             )

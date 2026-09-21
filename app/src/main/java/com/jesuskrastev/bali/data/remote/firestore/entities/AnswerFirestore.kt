@@ -1,7 +1,6 @@
 package com.jesuskrastev.bali.data.remote.firestore.entities
 
 import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.Exclude
 
 data class AnswerFirestore(
     @DocumentId val id: String = "",

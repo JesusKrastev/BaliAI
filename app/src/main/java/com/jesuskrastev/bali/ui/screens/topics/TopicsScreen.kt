@@ -74,7 +74,7 @@ fun TopicsScreen(
                 )
             }
 
-            items(dgtTopics) { topic ->
+            items(dgtTopics, key = { it.id }) { topic ->
                 TopicCard(topic = topic, onClick = { onTopicClick(topic.title) })
             }
         }
