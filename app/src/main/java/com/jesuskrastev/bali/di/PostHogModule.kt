@@ -27,10 +27,11 @@ object PostHogModule {
      * a single Activity, so the SDK could only ever see one screen; navigation reports them
      * explicitly through [AnalyticsTracker] instead.
      *
-     * Session replay is on in screenshot mode, the only mode that works with Jetpack Compose.
-     * Text inputs and images are masked, Logcat capture is off, and the resolution and colour
-     * depth are lowered to keep the cost on low-end devices small. Screens showing a name, an
-     * email or chat text mask those elements further with the `replayMask` modifier.
+     * Session replay is on in release builds only, so development runs don't eat into the
+     * monthly recording quota. It uses screenshot mode, the only mode that works with Jetpack
+     * Compose. Text inputs and images are masked, Logcat capture is off, and the resolution and
+     * colour depth are lowered to keep the cost on low-end devices small. Screens showing a
+     * name, an email or chat text mask those elements further with the `replayMask` modifier.
      *
      * Every event, the SDK's own included, carries the `environment` property so debug traffic
      * can be filtered out. Under Robolectric the client is opted out and replay is not
@@ -51,7 +52,7 @@ object PostHogModule {
         ).apply {
             captureApplicationLifecycleEvents = true
             captureScreenViews = false
-            sessionReplay = !isRobolectric
+            sessionReplay = !isRobolectric && !BuildConfig.DEBUG
             sessionReplayConfig.apply {
                 screenshot = true
                 screenshotScale = 0.5f
