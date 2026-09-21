@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
+import com.jesuskrastev.bali.ui.util.replayMask
 
 /**
  * Google sign-in gate: a gradient hero with the mascot above a rounded sign-in panel, styled
@@ -392,6 +393,7 @@ private fun AuthUnknownAccountScreen(email: String, onBackClick: () -> Unit) {
             val initial = if (email.isNotBlank()) email.first().uppercase() else "?"
             Text(
                 text = initial,
+                modifier = Modifier.replayMask(),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -402,6 +404,7 @@ private fun AuthUnknownAccountScreen(email: String, onBackClick: () -> Unit) {
 
         Text(
             text = email,
+            modifier = Modifier.replayMask(),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onBackground

@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
 
 /**
@@ -242,7 +243,7 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
             AsyncImage(
                 model = uiState.profilePictureUrl,
                 contentDescription = "Foto de perfil",
-                modifier = Modifier.size(56.dp).clip(CircleShape),
+                modifier = Modifier.size(56.dp).clip(CircleShape).replayMask(),
                 contentScale = ContentScale.Crop
             )
         } else {
@@ -267,9 +268,15 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
 
         if (uiState.isLoggedIn) {
             Column {
-                Text(uiState.userName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                Text(
+                    uiState.userName,
+                    modifier = Modifier.replayMask(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black
+                )
                 Text(
                     uiState.userEmail ?: "",
+                    modifier = Modifier.replayMask(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )

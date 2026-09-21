@@ -162,7 +162,10 @@ private fun OnboardingBody(
                 message = uiState.mascotMessage,
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                maskMessage = uiState.data.name.let { name ->
+                    !name.isNullOrBlank() && uiState.mascotMessage.contains(name, ignoreCase = true)
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))

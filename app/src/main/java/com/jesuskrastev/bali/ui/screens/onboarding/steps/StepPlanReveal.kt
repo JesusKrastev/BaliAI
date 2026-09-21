@@ -47,6 +47,7 @@ import com.jesuskrastev.bali.ui.screens.onboarding.Testimonial
 import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
 import com.jesuskrastev.bali.ui.screens.onboarding.optionLabel
 import com.jesuskrastev.bali.ui.theme.BaliTheme
+import com.jesuskrastev.bali.ui.util.replayMask
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -133,6 +134,7 @@ private fun PlanHero(name: String?, targetDate: Date) {
 
     Text(
         text = name?.let { "$it, tu plan está listo" } ?: "Tu plan está listo",
+        modifier = Modifier.replayMask(enabled = !name.isNullOrBlank()),
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.ExtraBold,
         color = MaterialTheme.colorScheme.onBackground,

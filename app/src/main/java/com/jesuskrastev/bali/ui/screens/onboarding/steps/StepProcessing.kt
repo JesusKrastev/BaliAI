@@ -34,6 +34,7 @@ import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
 import com.jesuskrastev.bali.ui.screens.onboarding.components.ProcessingTaskRow
 import com.jesuskrastev.bali.ui.screens.onboarding.examCountdownLabel
 import com.jesuskrastev.bali.ui.theme.BaliTheme
+import com.jesuskrastev.bali.ui.util.replayMask
 import java.util.concurrent.TimeUnit
 
 private val RING_SIZE = 148.dp
@@ -87,6 +88,7 @@ fun StepProcessing(progress: Float, data: OnboardingData) {
         Text(
             text = data.name?.let { "Lo estamos armando solo para ti, $it" }
                 ?: "Lo estamos armando solo para ti",
+            modifier = Modifier.replayMask(enabled = !data.name.isNullOrBlank()),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center

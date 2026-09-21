@@ -26,15 +26,27 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.util.replayMask
 import kotlinx.coroutines.delay
 
+/**
+ * Shows the mascot with a typewriter speech bubble carrying the current step's line.
+ *
+ * @param message the line to type out; `|` pairs mark the words to highlight
+ * @param sharedTransitionScope scope used to animate the mascot between screens
+ * @param animatedVisibilityScope visibility scope of the destination hosting this header
+ * @param modifier modifier applied to the whole row
+ * @param maskMessage when true the bubble text is hidden from session replay, for lines that
+ *   contain what the user typed, such as their name
+ */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MascotHeader(
     message: String,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedVisibilityScope,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maskMessage: Boolean = false
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val fullAnnotatedMessage = remember(message) { message.highlightPipes(primaryColor) }
@@ -83,7 +95,9 @@ fun MascotHeader(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(start = 24.dp, top = 12.dp, end = 16.dp, bottom = 12.dp)
+                modifier = Modifier
+                    .padding(start = 24.dp, top = 12.dp, end = 16.dp, bottom = 12.dp)
+                    .replayMask(maskMessage)
             )
         }
     }

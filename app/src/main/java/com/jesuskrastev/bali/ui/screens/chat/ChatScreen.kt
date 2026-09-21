@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.domain.model.ChatMessage
 import com.jesuskrastev.bali.domain.model.ChatRole
 
@@ -334,7 +335,7 @@ private fun ChatBubble(message: ChatMessage) {
         ) {
             Text(
                 text = rememberFormattedAnswer(message.content),
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp).replayMask(),
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 20.sp,
                 color = if (isUser) {
