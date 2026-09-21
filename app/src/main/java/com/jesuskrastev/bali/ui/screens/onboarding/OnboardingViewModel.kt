@@ -234,6 +234,7 @@ class OnboardingViewModel @Inject constructor(
         val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
 
         if (currentIndex == stepsOrder.lastIndex) {
+            analyticsTracker.onboardingFlowCompleted(_uiState.value.data.toAnalyticsProfile())
             persistDataAndShowPaywall()
             return
         }
@@ -284,6 +285,27 @@ class OnboardingViewModel @Inject constructor(
         lastPracticeTimestamp = 0,
         currentStreak = 0
     )
+
+    /**
+     * Picks the answers worth segmenting analytics by.
+     *
+     * Only options the user tapped are included, never [OnboardingData.name], so the profile
+     * carries nothing that identifies the person.
+     *
+     * @return the answered questions keyed by their analytics property name
+     */
+    private fun OnboardingData.toAnalyticsProfile(): Map<String, String> = buildMap {
+        experience?.let { put("experience", it) }
+        theoryBlocker?.let { put("theory_blocker", it) }
+        concern?.let { put("concern", it) }
+        readiness?.let { put("readiness", it) }
+        motivation?.let { put("motivation", it) }
+        futureImpact?.let { put("future_impact", it) }
+        examTiming?.let { put("exam_timing", it) }
+        province?.let { put("province", it) }
+        weeklyStudy?.let { put("weekly_study", it) }
+        learningPreference?.let { put("learning_preference", it) }
+    }
 
     /** Moves back one step, if the current one is not the first. */
     private fun goToPreviousStep() {

@@ -1,0 +1,76 @@
+package com.jesuskrastev.bali.data.analytics
+
+import android.os.Bundle
+import com.google.common.truth.Truth.assertThat
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.mixpanel.android.mpmetrics.MixpanelAPI
+import com.posthog.PostHogInterface
+import org.json.JSONObject
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
+import org.mockito.kotlin.inOrder
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+@Config(sdk = [34])
+@RunWith(RobolectricTestRunner::class)
+class AnalyticsTrackerTest {
+
+    private val firebase = mock<FirebaseAnalytics>()
+    private val mixpanel = mock<MixpanelAPI>()
+    private val posthog = mock<PostHogInterface>()
+    private val tracker = AnalyticsTracker(firebase, mixpanel, posthog)
+    private val environment = AnalyticsTracker.currentEnvironment()
+
+    @Test
+    fun `every event carries the environment it was sent from`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.onboardingStarted()
+
+        verify(firebase).logEvent(eq("onboarding_started"), bundle.capture())
+        assertThat(bundle.firstValue.getString(AnalyticsTracker.KEY_ENVIRONMENT)).isEqualTo(environment)
+    }
+
+    @Test
+    fun `a screen view goes to all three tools tagged with the environment`() {
+        tracker.screenViewed("Home")
+
+        verify(firebase).logEvent(eq(FirebaseAnalytics.Event.SCREEN_VIEW), any())
+        verify(mixpanel).track(eq("screen_viewed"), any<JSONObject>())
+        verify(posthog).screen("Home", mapOf(AnalyticsTracker.KEY_ENVIRONMENT to environment))
+    }
+
+    @Test
+    fun `finishing the onboarding keeps the answers on every later event`() {
+        tracker.onboardingFlowCompleted(mapOf("exam_timing" to "soon", "experience" to "first"))
+
+        verify(posthog).register("exam_timing", "soon")
+        verify(posthog).register("experience", "first")
+        verify(mixpanel).registerSuperProperties(any())
+    }
+
+    @Test
+    fun `finishing the onboarding without answers registers nothing`() {
+        tracker.onboardingFlowCompleted()
+
+        verify(posthog, never()).register(any(), any())
+        verify(mixpanel, never()).registerSuperProperties(any())
+    }
+
+    @Test
+    fun `signing out registers the environment again after the reset`() {
+        tracker.resetUser()
+
+        inOrder(posthog) {
+            verify(posthog).reset()
+            verify(posthog).register(AnalyticsTracker.KEY_ENVIRONMENT, environment)
+        }
+    }
+}

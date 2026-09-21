@@ -20,9 +20,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -175,20 +176,30 @@ data class TestResultRoute(
     val newWeekSessions: Int = -1
 )
 
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
 /**
- * Hosts every app destination and applies the hard-paywall-to-login handoff.
+ * Hosts every app destination, applies the hard-paywall-to-login handoff and reports each
+ * destination change to analytics as a screen view.
  *
  * @param modifier modifier applied to the navigation host
  * @param navController controller used for typed navigation
  * @param startDestination destination selected from onboarding and authentication state
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
 fun AppNavigation(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController(),
     startDestination: Any = GreetingsRoute
 ) {
+    val screenTracking: ScreenTrackingViewModel = hiltViewModel()
+    DisposableEffect(navController) {
+        val listener = NavController.OnDestinationChangedListener { _, destination, _ ->
+            screenTracking.onDestinationChanged(destination.route)
+        }
+        navController.addOnDestinationChangedListener(listener)
+        onDispose { navController.removeOnDestinationChangedListener(listener) }
+    }
+
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentDestination?.let { destination ->
