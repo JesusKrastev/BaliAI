@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.jesuskrastev.bali.ui.util.LegalLinks
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
 
@@ -129,14 +130,14 @@ fun SettingsScreen(
                     icon = Icons.Rounded.Security,
                     label = "Política de privacidad",
                     onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://baliaipage.vercel.app/privacidad.html")))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LegalLinks.PRIVACY)))
                     }
                 ),
                 SettingsRowSpec(
                     icon = Icons.Rounded.Description,
                     label = "Términos y condiciones",
                     onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://baliaipage.vercel.app/terminos.html")))
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LegalLinks.TERMS)))
                     }
                 )
             )

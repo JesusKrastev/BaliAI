@@ -23,16 +23,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
+import com.jesuskrastev.bali.ui.util.LegalLinks
 import com.jesuskrastev.bali.ui.util.replayMask
 
 /**
@@ -249,14 +252,17 @@ private fun AuthPanel(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val linkStyles = TextLinkStyles(
+            style = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        )
         Text(
             text = buildAnnotatedString {
                 append("Al continuar, aceptas nuestros ")
-                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)) {
+                withLink(LinkAnnotation.Url(LegalLinks.TERMS, linkStyles)) {
                     append("Términos y Condiciones")
                 }
                 append(" y la ")
-                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)) {
+                withLink(LinkAnnotation.Url(LegalLinks.PRIVACY, linkStyles)) {
                     append("Política de Privacidad")
                 }
                 append(".")
