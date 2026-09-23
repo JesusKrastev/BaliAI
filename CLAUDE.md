@@ -2,6 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🧠 Brain — long-term memory for this project
+
+Decisions, past mistakes and cross-repo contracts live outside this repo, in the Obsidian vault at
+`G:\Mi unidad\Obsidian\Claude`. This file says *what* the project is; the vault says *why it is
+that way*, *what already went wrong* and *what is still open*.
+
+**At the start of a work session, read exactly these three things — nothing else:**
+
+1. `G:\Mi unidad\Obsidian\Claude\00-INDEX.md` — the map and the protocol.
+2. `G:\Mi unidad\Obsidian\Claude\01-Proyectos\BaliAI\BaliAI.md` — this project's card.
+3. `grep -i "BaliAI" "G:\Mi unidad\Obsidian\Claude\03-Sync\SYNC-PENDIENTES.md"` — work queued for
+   this repo by changes made in BaliAIPage.
+
+Everything else (`BaliAI-decisiones.md`, `BaliAI-errores.md`, `02-Contratos/`, `04-Ideas/`) is
+opened **on demand and with `grep` first** — never read whole. That restraint is the point: the
+vault is designed so a session loads ~1.5k tokens of memory, not 50k.
+
+**Before finishing a session with real changes**, write back: one line in `BaliAI-estado.md`, plus a
+line in `BaliAI-decisiones.md` or `BaliAI-errores.md` if you decided something or hit a trap worth
+remembering. Formats are in `_plantillas\plantilla-linea-log.md`.
+
+**If you touch data collection, SDKs, permissions, pricing, the paywall or any user-facing feature**,
+it probably has to reach the landing site (BaliAIPage): update the matching file in
+`02-Contratos\` and queue a line in `03-Sync\SYNC-PENDIENTES.md`. Do **not** edit the other repo
+from here — see `03-Sync\SYNC-reglas.md`.
+
 ## Project Overview
 
 Bali AI is a native Android app for Spanish DGT driving exam preparation, featuring AI-powered explanations (Gemini), gamification (XP, streaks, coins), and cloud sync via Firebase.
@@ -105,6 +131,8 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 
 **Repository auth-routing**: repositories expose a `withAuthRouting { userId -> … }` helper. When a `userId` is present (user authenticated), operations target Firestore; otherwise they fall back to Room. Writes dual-write to both stores so local state stays consistent offline.
 
+**System bar insets**: `AppNavigation`'s `Scaffold` pads the whole `NavHost` for the status bar, the bottom navigation bar (or the nav-bar inset when there is none) and *consumes* those insets (`consumeWindowInsets`). Screens therefore must NOT add their own `statusBarsPadding()` / `navigationBarsPadding()` for those bars, nor override `contentWindowInsets` / `TopAppBar(windowInsets = …)` to zero — inner `Scaffold`s, `TopAppBar`s and bottom bars already see them as consumed. Only `imePadding()` is still the screen's job. Applying insets in both places is what caused the doubled padding above every `TopAppBar`.
+
 ## Workflow Rules
 
 - Run `./gradlew test` before committing changes to `domain/` or `data/`.
@@ -138,22 +166,14 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - All API keys are injected via `BuildConfig` fields resolved by the `secret(key, default)` helper in `app/build.gradle.kts`, which reads `local.properties` first and falls back to environment variables (that is how CI supplies them). NEVER hardcode keys in source files.
 - Release signing is driven by `RELEASE_KEYSTORE_PATH` / `RELEASE_STORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD` through the same `secret()` helper. When `RELEASE_KEYSTORE_PATH` is absent the `release` build type falls back to the debug keystore so local `bundleRelease` still works — that fallback artifact is NOT uploadable to Play.
 
-## Pending: Code Review Sweep (started 2026-09-20)
+## Open product decisions (from the 2026-09 code review sweep)
 
-A full-codebase refactor/bug-fix pass is in progress (requested by Jesús). Already reviewed and fixed: `domain/`, `data/`, `di/`, most ViewModels, `ui/navigation/`, the games arcade (`ui/screens/games/`), the full onboarding flow (`ui/screens/onboarding/`), `ui/components/`, and the streak/greetings/coins/result screens. Migrations (`data/migration/migrations/`) are intentionally excluded — historical/sensitive, not to be touched.
+The sweep of the whole codebase is finished (migrations were intentionally excluded). These findings were **not** fixed because they need a product/design decision, not a guess. Delete each line once decided.
 
-**Still to review:**
-- `ui/screens/home/HomeScreen.kt` — not read in full (~900 lines)
-- `ui/screens/settings/SettingsScreen.kt` — ViewModel reviewed, Screen not
-- `ui/screens/auth/AuthScreen.kt` — ViewModel reviewed, Screen not
-- `ui/screens/suggestions/SuggestionsScreen.kt` — only a mechanical `collectAsState` fix applied
-- `ui/screens/paywall/PaywallScreen.kt`, `CustomerCenterLauncher.kt`
-- `ui/screens/exam/ExamScreen.kt`, `ui/screens/test/TestScreen.kt`, `ui/screens/mistakes/MistakesScreen.kt` — ViewModels reviewed, Screens not
-- `ui/theme/Type.kt`, `Color.kt`, `Gradients.kt`
-
-**Flagged during review, not fixed (need a product/design decision, not a guess):**
-- Streak freezes have no visual feedback: `StreakStatus.FROZEN` is fully implemented in the UI (`HomeScreen`, `StreakScreen`, `LessonStreakScreen`) but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
+- **Free practice is unreachable.** The Topics and Mistakes screens were deleted (nothing linked to them), which leaves `TestRoute()` without a node (free practice) and `TestRoute.topic` / `TestViewModel.setTopic` as dead paths: `TestRoute` is only navigated to from Home's learning-path nodes. Remove them (plus `TestViewModelTest`'s `setTopic` test and `ScreenNameTest`'s route string) or give free practice a new entry point.
+- **No subscription-management entry.** `CustomerCenterLauncher` is not used anywhere; Settings has no "manage subscription" row.
+- Streak freezes have no visual feedback: `StreakStatus.FROZEN` is implemented in `StreakScreen` / `LessonStreakScreen` but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
+- The learning-path node popup (`FloatingNodePopup` in `HomeScreen.kt`) shows a flat "+20 XP" / "+6 XP". Those are the *maximum* practice values from `IncrementXpUseCase` (≥95% accuracy; repeat = ×0.3), not what the user will necessarily earn.
+- `SectionHeaderCard` prints "SECCIÓN n, UNIDAD n" using the same index for both numbers.
 - `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
 - `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.
-
-Delete this section once the sweep is done.
