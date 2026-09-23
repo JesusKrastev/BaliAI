@@ -68,7 +68,7 @@ android {
         // Format   o YYYYMMDDNN: fecha de publicación + nº de build de ese día.
         // En CI lo inyecta el workflow vía CI_VERSION_CODE; en local se usa el valor base.
         versionCode = secret("CI_VERSION_CODE", "2026091700").toInt()
-        versionName = "1.1.9"
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${secret("ONE_SIGNAL_APP_ID")}\"")
