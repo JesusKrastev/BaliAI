@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.ui.screens.test
 
-import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -40,7 +39,64 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 
+/**
+ * Title content shared by the quiz top bars (practice, mistakes review, exam): an optional
+ * "N SEGUIDAS" streak label above a rounded progress bar, followed by any [footer] content.
+ *
+ * @param currentIndex zero-based index of the question being answered
+ * @param totalQuestions number of questions in the session; must be greater than zero
+ * @param sessionStreak consecutive correct answers in this session
+ * @param isAnswerChecked true once the current answer has been checked; the streak label only
+ *   shows then, and only from two correct answers in a row
+ * @param footer extra content drawn under the progress bar (for example the exam timer)
+ */
+@Composable
+fun QuizProgressTitle(
+    currentIndex: Int,
+    totalQuestions: Int,
+    sessionStreak: Int,
+    isAnswerChecked: Boolean,
+    footer: @Composable ColumnScope.() -> Unit = {}
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        if (sessionStreak >= 2 && isAnswerChecked) {
+            Text(
+                text = "$sessionStreak SEGUIDAS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+        LinearProgressIndicator(
+            progress = { (currentIndex + 1).toFloat() / totalQuestions },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp)
+                .clip(RoundedCornerShape(6.dp)),
+            strokeCap = StrokeCap.Round,
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        footer()
+    }
+}
+
+/**
+ * Free-practice quiz screen: a close button and progress bar on top, and the question flow
+ * (loading, error and content states) below.
+ *
+ * @param onBackClick closes the quiz
+ * @param onFinishTest receives the summary once the last question is answered
+ * @param viewModel owner of the quiz state
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TestScreen(
@@ -55,32 +111,12 @@ fun TestScreen(
             TopAppBar(
                 title = {
                     if (!uiState.isLoading && uiState.questions.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            if (uiState.sessionStreak >= 2 && uiState.isAnswerChecked) {
-                                Text(
-                                    text = "${uiState.sessionStreak} SEGUIDAS",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                            LinearProgressIndicator(
-                                progress = { (uiState.currentQuestionIndex + 1).toFloat() / uiState.questions.size },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(12.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                strokeCap = StrokeCap.Round,
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        }
+                        QuizProgressTitle(
+                            currentIndex = uiState.currentQuestionIndex,
+                            totalQuestions = uiState.questions.size,
+                            sessionStreak = uiState.sessionStreak,
+                            isAnswerChecked = uiState.isAnswerChecked
+                        )
                     }
                 },
                 navigationIcon = {
@@ -127,6 +163,7 @@ fun TestScreen(
     }
 }
 
+/** Full-screen loading state shown while the AI prepares the questions: a bobbing mascot and a spinner. */
 @Composable
 fun LoadingView() {
     val infiniteTransition = rememberInfiniteTransition(label = "loading")
@@ -211,6 +248,12 @@ fun LoadingView() {
     }
 }
 
+/**
+ * Full-screen error state with a retry button.
+ *
+ * @param message explanation shown under the "¡Ups! Algo salió mal" title
+ * @param onRetry invoked when the retry button is tapped
+ */
 @Composable
 fun ErrorView(message: String, onRetry: () -> Unit) {
     Column(
@@ -251,6 +294,15 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
     }
 }
 
+/**
+ * One question of the quiz: its text, optional image, answer options and, once checked, the
+ * explanation, with the check/next button pinned at the bottom.
+ *
+ * @param uiState quiz state; must contain at least one question
+ * @param onOptionSelect invoked with the index of the tapped option while the answer is unchecked
+ * @param onCheckClick invoked when the "Comprobar" button is tapped
+ * @param onNextClick invoked when the "Siguiente" / "Finalizar práctica" button is tapped
+ */
 @Composable
 fun TestContentView(
     uiState: TestUiState,
@@ -292,7 +344,6 @@ fun TestContentView(
 
             if (currentQuestion.imageUrl != null) {
                 item {
-                    Log.d("TestContentView", "Imagen URL: ${currentQuestion.imageUrl}")
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(currentQuestion.imageUrl)
@@ -361,6 +412,16 @@ fun TestContentView(
     }
 }
 
+/**
+ * Selectable answer option that reflects the check result once the answer has been verified.
+ *
+ * @param modifier layout modifier applied to the card
+ * @param text answer text
+ * @param isSelected true when this option is the user's current choice
+ * @param isCorrect null before checking; afterwards whether this option is the correct one
+ * @param wasSelectedAndIncorrect true when the user picked this option and it was wrong
+ * @param onClick invoked when the card is tapped
+ */
 @Composable
 fun OptionCard(
     modifier: Modifier = Modifier,
@@ -371,14 +432,14 @@ fun OptionCard(
     onClick: () -> Unit
 ) {
     val borderColor = when {
-        isCorrect == true -> Color(0xFF22C55E)
+        isCorrect == true -> BaliAccentGreen
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error
         isSelected -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.outlineVariant
     }
 
     val containerColor = when {
-        isCorrect == true -> Color(0xFF22C55E).copy(alpha = 0.1f)
+        isCorrect == true -> BaliAccentGreen.copy(alpha = 0.1f)
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surface
@@ -412,7 +473,7 @@ fun OptionCard(
             ) {
                 if (isSelected || isCorrect == true) {
                     Icon(
-                        imageVector = if (isCorrect == true) Icons.Rounded.Check else if (wasSelectedAndIncorrect) Icons.Rounded.Close else Icons.Rounded.Check,
+                        imageVector = if (wasSelectedAndIncorrect) Icons.Rounded.Close else Icons.Rounded.Check,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
@@ -430,6 +491,12 @@ fun OptionCard(
     }
 }
 
+/**
+ * Feedback card shown after checking an answer: correct/incorrect header plus the explanation.
+ *
+ * @param isCorrect whether the user's answer was correct
+ * @param explanation AI-provided explanation of the correct answer
+ */
 @Composable
 fun ExplanationCard(isCorrect: Boolean, explanation: String) {
     Surface(
@@ -437,22 +504,22 @@ fun ExplanationCard(isCorrect: Boolean, explanation: String) {
             .fillMaxWidth()
             .padding(top = 8.dp),
         shape = RoundedCornerShape(20.dp),
-        color = if (isCorrect) Color(0xFF22C55E).copy(alpha = 0.1f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-        border = BorderStroke(1.dp, if (isCorrect) Color(0xFF22C55E).copy(alpha = 0.5f) else MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+        color = if (isCorrect) BaliAccentGreen.copy(alpha = 0.1f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+        border = BorderStroke(1.dp, if (isCorrect) BaliAccentGreen.copy(alpha = 0.5f) else MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = if (isCorrect) Icons.Rounded.CheckCircle else Icons.Rounded.Info,
                     contentDescription = null,
-                    tint = if (isCorrect) Color(0xFF22C55E) else MaterialTheme.colorScheme.error
+                    tint = if (isCorrect) BaliAccentGreen else MaterialTheme.colorScheme.error
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = if (isCorrect) "¡Correcto!" else "No es correcto",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCorrect) Color(0xFF22C55E) else MaterialTheme.colorScheme.error
+                    color = if (isCorrect) BaliAccentGreen else MaterialTheme.colorScheme.error
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))

@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,8 +39,21 @@ import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.OptionCard
+import com.jesuskrastev.bali.ui.screens.test.QuizProgressTitle
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
+import java.util.Locale
 
+/** Remaining exam time, in seconds, under which the timer turns to the error color. */
+private const val LOW_TIME_WARNING_SECONDS = 300
+
+/**
+ * Official-exam screen: a timed quiz with a question-review grid, previous/next navigation and
+ * a confirmation dialog before leaving (which discards all progress).
+ *
+ * @param onBackClick leaves the exam after the user confirms
+ * @param onFinishExam receives the summary once the exam is finished
+ * @param viewModel owner of the exam state and timer
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExamScreen(
@@ -58,39 +73,17 @@ fun ExamScreen(
             TopAppBar(
                 title = {
                     if (!uiState.isLoading && uiState.questions.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
-                            horizontalAlignment = Alignment.Start
+                        QuizProgressTitle(
+                            currentIndex = uiState.currentQuestionIndex,
+                            totalQuestions = uiState.questions.size,
+                            sessionStreak = uiState.sessionStreak,
+                            isAnswerChecked = uiState.isAnswerChecked
                         ) {
-                            if (uiState.sessionStreak >= 2 && uiState.isAnswerChecked) {
-                                Text(
-                                    text = "${uiState.sessionStreak} SEGUIDAS",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Black,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                            
-                            LinearProgressIndicator(
-                                progress = { (uiState.currentQuestionIndex + 1).toFloat() / uiState.questions.size },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(12.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                strokeCap = StrokeCap.Round,
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            
                             Spacer(modifier = Modifier.height(4.dp))
-                            
                             Text(
                                 text = formatTime(uiState.timeLeftSeconds),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (uiState.timeLeftSeconds < 300) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (uiState.timeLeftSeconds < LOW_TIME_WARNING_SECONDS) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(start = 8.dp)
                             )
@@ -169,6 +162,12 @@ fun ExamScreen(
     }
 }
 
+/**
+ * Body of the exam: the current question, its optional image and its answer options.
+ *
+ * @param uiState exam state; must contain at least one question
+ * @param onOptionSelect invoked with the index of the tapped option while the answer is unchecked
+ */
 @Composable
 fun ExamContent(
     uiState: ExamUiState,
@@ -235,6 +234,18 @@ fun ExamContent(
     }
 }
 
+/**
+ * Bottom action bar: "COMPROBAR" before an answer is checked, then previous/next (or finish on
+ * the last question) afterwards.
+ *
+ * @param currentIndex zero-based index of the current question
+ * @param totalCount number of questions in the exam
+ * @param isAnswerChecked true once the current answer has been checked
+ * @param onCheck checks the selected answer
+ * @param onPrevious goes back one question
+ * @param onNext advances one question
+ * @param onFinish finishes the exam on the last question
+ */
 @Composable
 fun ExamBottomBar(
     currentIndex: Int,
@@ -272,7 +283,7 @@ fun ExamBottomBar(
                     modifier = Modifier.weight(1f).height(56.dp),
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(Icons.Rounded.ArrowBack, null)
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, null)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Anterior")
                 }
@@ -294,7 +305,7 @@ fun ExamBottomBar(
                     ) {
                         Text("Siguiente")
                         Spacer(modifier = Modifier.width(8.dp))
-                        Icon(Icons.Rounded.ArrowForward, null)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
                     }
                 }
             }
@@ -302,6 +313,16 @@ fun ExamBottomBar(
     }
 }
 
+/**
+ * Full-screen overlay listing every question as a numbered tile, highlighting the current one
+ * and the ones already answered.
+ *
+ * @param questionsCount number of questions in the exam
+ * @param selectedAnswers selected option per answered question index
+ * @param currentIndex zero-based index of the current question
+ * @param onQuestionClick jumps to the tapped question
+ * @param onDismiss closes the overlay
+ */
 @Composable
 fun QuestionReviewGrid(
     questionsCount: Int,
@@ -368,8 +389,6 @@ fun QuestionReviewGrid(
     }
 }
 
-private fun formatTime(seconds: Int): String {
-    val m = seconds / 60
-    val s = seconds % 60
-    return String.format("%02d:%02d", m, s)
-}
+/** Formats [seconds] as `mm:ss`. */
+private fun formatTime(seconds: Int): String =
+    String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)

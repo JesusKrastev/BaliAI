@@ -28,6 +28,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
+/** Coins charged to start an official exam; also quoted in Home's "not enough coins" dialog. */
+internal const val EXAM_COST_COINS = 100
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
@@ -182,7 +185,7 @@ class HomeViewModel @Inject constructor(
 
     fun startExam(onSuccess: () -> Unit) {
         viewModelScope.launch {
-            val success = decrementCoinsUseCase(100)
+            val success = decrementCoinsUseCase(EXAM_COST_COINS)
             if (success) {
                 onSuccess()
             } else {

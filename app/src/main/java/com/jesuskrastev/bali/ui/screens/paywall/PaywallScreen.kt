@@ -72,10 +72,8 @@ fun PaywallScreen(
     // Show restore messages in a snackbar
     LaunchedEffect(restoreMessage) {
         restoreMessage?.let {
-            scope.launch {
-                snackbarHostState.showSnackbar(it)
-                viewModel.clearRestoreMessage()
-            }
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearRestoreMessage()
         }
     }
 

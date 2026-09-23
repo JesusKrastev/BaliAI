@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.settings
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.BorderStroke
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,6 +59,30 @@ import com.jesuskrastev.bali.BuildConfig
  * builds run under a ".debug"-suffixed id ([app/build.gradle.kts]) that has no Play listing.
  */
 private const val PLAY_STORE_PACKAGE = "com.jesuskrastev.bali"
+
+/**
+ * Starts [intent], swallowing the failure when no installed app can handle it (no mail client,
+ * no browser) instead of crashing the settings screen.
+ *
+ * @param intent intent to launch
+ * @return true if an activity was started, false if none could handle it
+ */
+private fun Context.startActivityOrFalse(intent: Intent): Boolean =
+    try {
+        startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    }
+
+/**
+ * Opens [url] in the default handler, ignoring the case where nothing can open it.
+ *
+ * @param url absolute URL or URI to view
+ */
+private fun Context.openLink(url: String) {
+    startActivityOrFalse(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
 
 /**
  * Settings destination exposed by the persistent bottom navigation. Hosts the account section
@@ -106,17 +132,18 @@ fun SettingsScreen(
                             data = Uri.parse("mailto:appbali@gmail.com")
                             putExtra(Intent.EXTRA_SUBJECT, "Error en Bali")
                         }
-                        context.startActivity(emailIntent)
+                        context.startActivityOrFalse(emailIntent)
                     }
                 ),
                 SettingsRowSpec(
                     icon = Icons.Rounded.Star,
                     label = "Valorar la app",
                     onClick = {
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$PLAY_STORE_PACKAGE")))
-                        } catch (e: ActivityNotFoundException) {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$PLAY_STORE_PACKAGE")))
+                        val openedInPlayStore = context.startActivityOrFalse(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$PLAY_STORE_PACKAGE"))
+                        )
+                        if (!openedInPlayStore) {
+                            context.openLink("https://play.google.com/store/apps/details?id=$PLAY_STORE_PACKAGE")
                         }
                     }
                 )
@@ -129,16 +156,12 @@ fun SettingsScreen(
                 SettingsRowSpec(
                     icon = Icons.Rounded.Security,
                     label = "Política de privacidad",
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LegalLinks.PRIVACY)))
-                    }
+                    onClick = { context.openLink(LegalLinks.PRIVACY) }
                 ),
                 SettingsRowSpec(
                     icon = Icons.Rounded.Description,
                     label = "Términos y condiciones",
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LegalLinks.TERMS)))
-                    }
+                    onClick = { context.openLink(LegalLinks.TERMS) }
                 )
             )
         )
@@ -268,18 +291,22 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
         Spacer(modifier = Modifier.width(16.dp))
 
         if (uiState.isLoggedIn) {
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
                     uiState.userName,
                     modifier = Modifier.replayMask(),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     uiState.userEmail ?: "",
                     modifier = Modifier.replayMask(),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         } else {

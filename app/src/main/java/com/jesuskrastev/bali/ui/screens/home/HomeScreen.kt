@@ -1,36 +1,26 @@
 package com.jesuskrastev.bali.ui.screens.home
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,19 +29,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -61,51 +46,40 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.LessonNode
+import com.jesuskrastev.bali.domain.model.NodeStatus
+import com.jesuskrastev.bali.domain.model.NodeType
+import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 
 /**
  * Renders the home dashboard: streak/coins status, the AI-tutor entry point, and the
  * scrollable learning-path graph. The account menu that used to open from here as a side
  * drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
- * @param sharedTransitionScope shared-element scope carried from the navigation host's layout
- * @param animatedVisibilityScope animated-visibility scope for shared-element transitions
  * @param viewModel supplies [HomeUiState] and drives path generation / exam coin gating
- * @param onStudyClick starts a free-practice test
  * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type name
- * @param onTopicsClick opens the topics picker
- * @param onMistakesClick opens the saved-mistakes review
- * @param onExamClick requests the official exam flow, coin-gated via [HomeViewModel.startExam]
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the AI tutor chat
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope,
     viewModel: HomeViewModel,
-    onStudyClick: () -> Unit = {},
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
-    onTopicsClick: () -> Unit = {},
-    onMistakesClick: () -> Unit = {},
-    onExamClick: () -> Unit = {},
     onShopClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showLevelLockedDialog by remember { mutableStateOf(false) }
 
-    // Diálogo de falta de monedas
     if (uiState.showNoCoinsDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissNoCoinsDialog() },
@@ -125,7 +99,7 @@ fun HomeScreen(
             },
             text = {
                 Text(
-                    "Necesitas 100 monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
+                    "Necesitas $EXAM_COST_COINS monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
                     textAlign = TextAlign.Center
                 )
             },
@@ -143,73 +117,19 @@ fun HomeScreen(
         )
     }
 
-    // Diálogo de nivel bloqueado
-    if (showLevelLockedDialog) {
-        AlertDialog(
-            onDismissRequest = { showLevelLockedDialog = false },
-            title = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "🔒",
-                            fontSize = 32.sp,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("¡Nivel insuficiente!", fontWeight = FontWeight.Black)
-                }
-            },
-            text = {
-                Text(
-                    "Todavía no tienes suficiente experiencia para el examen oficial. ¡Sigue practicando hasta llegar al nivel 7!",
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { showLevelLockedDialog = false },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("¡A ENTRENAR!", fontWeight = FontWeight.Bold)
-                }
-            },
-            shape = RoundedCornerShape(32.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
-
-    // AppNavigation's own Scaffold already reserves the status bar (top) and the
-    // persistent bottom bar's height (bottom) for this whole screen via NavHost's
-    // content padding, so this inner Scaffold must not reserve system bar insets a
-    // second time here — that previously doubled the top gap and left dead space
-    // above the bottom bar.
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            Column {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    UserStatusRow(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        streak = uiState.streak,
-                        coinsCount = uiState.coinsCount,
-                        onCoinsClick = onShopClick,
-                        onStreakClick = { onStreakClick() }
-                    )
-                }
-            }
+            UserStatusRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                streak = uiState.streak,
+                coinsCount = uiState.coinsCount,
+                onCoinsClick = onShopClick,
+                onStreakClick = onStreakClick
+            )
         },
         floatingActionButton = {
             AskBaliFab(onClick = onChatClick)
@@ -255,205 +175,6 @@ fun AskBaliFab(onClick: () -> Unit) {
     )
 }
 
-@Composable
-fun DailyTipCard(tip: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f))
-    ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            // Adorno visual en la esquina
-            Canvas(modifier = Modifier.size(80.dp).align(Alignment.BottomEnd).offset(x = 10.dp, y = 10.dp)) {
-                drawCircle(
-                    color = Color(0xFF3B82F6).copy(alpha = 0.05f),
-                    radius = size.minDimension / 2
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .fillMaxWidth()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Surface(
-                        color = Color(0xFFFACC15), // Color Bali (Amarillo)
-                        shape = CircleShape,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.Black,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Column {
-                        Text(
-                            text = "CONSEJO DEL DÍA",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.secondary,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = "Bali AI",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "“$tip”",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeight = 24.sp,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun PremiumBanner(
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope,
-    onClick: () -> Unit
-) {
-    val premiumGradient = Brush.horizontalGradient(
-        colors = listOf(
-            Color(0xFFFF6B35),
-            Color(0xFFFFB037)
-        )
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(160.dp),
-        shape = RoundedCornerShape(32.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        onClick = onClick
-    ) {
-        Box(modifier = Modifier.background(premiumGradient)) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.15f),
-                    radius = 120.dp.toPx(),
-                    center = Offset(size.width * 0.9f, size.height * 0.2f)
-                )
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.1f),
-                    radius = 60.dp.toPx(),
-                    center = Offset(size.width * 0.1f, size.height * 0.8f)
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1.2f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = R.drawable.crown),
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(Color.White),
-                            modifier = Modifier.size(20.dp).rotate(-15f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "BALI PREMIUM",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Aprueba a la primera",
-                        color = Color.White,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        lineHeight = 28.sp
-                    )
-
-                    Text(
-                        text = "Tu éxito no puede esperar",
-                        color = Color.White.copy(alpha = 0.9f),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Surface(
-                        color = Color.White,
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.wrapContentSize()
-                    ) {
-                        Text(
-                            text = "LO QUIERO",
-                            color = Color(0xFFFF6B35),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-
-                Box(modifier = Modifier.weight(0.8f), contentAlignment = Alignment.CenterEnd) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "float")
-                    val floatOffset by infiniteTransition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = -12f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(2000, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "float"
-                    )
-
-                    with(sharedTransitionScope) {
-                        Image(
-                            painter = painterResource(id = R.drawable.bali),
-                            contentDescription = "Mascota Bali Premium",
-                            modifier = Modifier
-                                .size(120.dp)
-                                .offset(y = floatOffset.dp)
-                                .sharedElement(
-                                    rememberSharedContentState(key = "bali_mascot"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                ),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
 /**
  * Shows the streak and coins pills anchored to the top of Home.
  *
@@ -476,494 +197,101 @@ fun UserStatusRow(
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-
-            // Streak
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onStreakClick() },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.streak_icon),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "$streak",
-                        fontWeight = FontWeight.Black,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-
-            // Coins with clickable visual cue
-            Surface(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onCoinsClick() },
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Image(
-                        modifier = Modifier.size(24.dp),
-                        contentScale = ContentScale.Fit,
-                        painter = painterResource(id = R.drawable.coin),
-                        contentDescription = null,
-                    )
-                    Text(
-                        text = "$coinsCount",
-                        fontWeight = FontWeight.Black,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                    Icon(
-                        imageVector = Icons.Rounded.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WeeklyChallengeCard(
-    title: String,
-    subtitle: String,
-    onStartClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(200.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = Color(0xFF1A1A1A)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val dotRadius = 1.dp.toPx()
-                val spacing = 20.dp.toPx()
-                for (x in 0..size.width.toInt() step spacing.toInt()) {
-                    for (y in 0..size.height.toInt() step spacing.toInt()) {
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.05f),
-                            radius = dotRadius,
-                            center = Offset(x.toFloat(), y.toFloat())
-                        )
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Surface(
-                        color = Color(0xFFFACC15),
-                        shape = RoundedCornerShape(50),
-                        modifier = Modifier.wrapContentSize()
-                    ) {
-                        Text(
-                            text = "RETO SEMANAL",
-                            color = Color.Black,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                    
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.7f),
-                        modifier = Modifier.fillMaxWidth(0.7f)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            color = Color(0xFFFACC15).copy(alpha = 0.2f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("🔥", fontSize = 12.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "12k+ Alumnos activos",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                    }
-
-                    Button(
-                        onClick = onStartClick,
-                        enabled = false,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFACC15),
-                            contentColor = Color.Black,
-                            disabledContainerColor = Color(0xFFFACC15).copy(alpha = 0.5f),
-                            disabledContentColor = Color.Black.copy(alpha = 0.5f)
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 20.dp)
-                    ) {
-                        Text("Próximamente", fontWeight = FontWeight.Black)
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 20.dp, end = 20.dp)
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .offset(x = 0.dp, y = 0.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.White
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.Warning,
-                            contentDescription = null,
-                            tint = Color(0xFFEF4444),
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-                
-                Surface(
-                    modifier = Modifier
-                        .size(45.dp)
-                        .offset(x = (-20).dp, y = 40.dp),
-                    shape = CircleShape,
-                    color = Color(0xFF3B82F6)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.Navigation,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun QuickStatsRow(streak: Int, accuracy: Int, totalTests: Int) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StatBox(modifier = Modifier.weight(1f), label = "Racha", value = "${streak}d", emoji = "🔥")
-        StatBox(modifier = Modifier.weight(1f), label = "Precisión", value = "$accuracy%", emoji = "🎯")
-        StatBox(modifier = Modifier.weight(1f), label = "Tests", value = "$totalTests", emoji = "📊")
-    }
-}
-
-@Composable
-fun StatBox(modifier: Modifier, label: String, value: String, emoji: String) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = emoji,
-                fontSize = 20.sp,
-                modifier = Modifier.padding(bottom = 4.dp)
+        StatusPill(onClick = onStreakClick, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp), spacing = 4.dp) {
+            Image(
+                painter = painterResource(id = R.drawable.streak_icon),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
             )
             Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black
+                text = "$streak",
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+
+        StatusPill(onClick = onCoinsClick, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp), spacing = 6.dp) {
+            Image(
+                modifier = Modifier.size(24.dp),
+                contentScale = ContentScale.Fit,
+                painter = painterResource(id = R.drawable.coin),
+                contentDescription = null,
             )
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "$coinsCount",
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.labelLarge
+            )
+            Icon(
+                imageVector = Icons.Rounded.Add,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
             )
         }
     }
 }
 
+/**
+ * Rounded, tappable pill used by [UserStatusRow] for each status counter.
+ *
+ * @param onClick invoked when the pill is tapped
+ * @param contentPadding padding between the pill's border and its content
+ * @param spacing horizontal gap between the content items
+ * @param content row content laid out inside the pill
+ */
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 4.dp)
-    )
-}
-
-@Composable
-fun HomeCard(
-    title: String,
-    subtitle: String,
-    emoji: String,
-    actionText: String,
-    actionIcon: Int? = null,
-    isLocked: Boolean = false,
-    onClick: () -> Unit
+private fun StatusPill(
+    onClick: () -> Unit,
+    contentPadding: PaddingValues,
+    spacing: Dp,
+    content: @Composable RowScope.() -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().alpha(if (isLocked) 0.7f else 1f),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant, 
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = emoji,
-                    fontSize = 24.sp
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            OutlinedButton(
-                onClick = onClick,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(
-                    width = 1.dp, 
-                    color = if (isLocked) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) 
-                            else MaterialTheme.colorScheme.outline
-                )
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = actionText,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isLocked) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary
-                    )
-                    if (actionIcon != null) {
-                        Spacer(Modifier.width(4.dp))
-                        Image(
-                            painter = painterResource(id = R.drawable.coin),
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun WeeklyStreakTable(
-    weeklyStreak: List<DailyStreakState>,
-    currentStreak: Int,
-    freezersAvailable: Int,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Tu Semana",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Icon(
-                    imageVector = Icons.Rounded.ChevronRight,
-                    contentDescription = "Ver Calendario",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                weeklyStreak.forEach { day ->
-                    StreakDayItem(day)
-                }
-            }
-            
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-            
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Racha actual: ${currentStreak} días \uD83D\uDD25",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Congeladores: $freezersAvailable \u2744\uFE0F",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun StreakDayItem(day: DailyStreakState) {
-    val isToday = day.isToday
-    
-    val backgroundColor = when (day.status) {
-        StreakStatus.COMPLETED -> Color(0xFFFACC15).copy(alpha = 0.2f)
-        StreakStatus.FROZEN -> Color(0xFF60A5FA).copy(alpha = 0.2f)
-        StreakStatus.FAILED, StreakStatus.FUTURE -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    
-    val contentColor = when (day.status) {
-        StreakStatus.COMPLETED -> Color(0xFFF59E0B)
-        StreakStatus.FROZEN -> Color(0xFF60A5FA)
-        StreakStatus.FAILED, StreakStatus.FUTURE -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-
-    val icon = when (day.status) {
-        StreakStatus.COMPLETED -> "\uD83D\uDD25"
-        StreakStatus.FROZEN -> "\u2744\uFE0F"
-        else -> ""
-    }
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text = day.dayOfWeek,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            modifier = Modifier.padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            content = content
         )
-        
-        Surface(
-            shape = CircleShape,
-            color = backgroundColor,
-            modifier = Modifier.size(36.dp),
-            border = if (isToday) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (icon.isNotEmpty()) {
-                    Text(text = icon, fontSize = 16.sp, modifier = Modifier.offset(y = (-1).dp))
-                } else {
-                    Text(
-                        text = day.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = contentColor
-                    )
-                }
-            }
-        }
     }
 }
 
+/** Horizontal zigzag offsets applied to consecutive path nodes, indexed by `unitIndex % 4`. */
+private val PathZigzagOffsets = listOf(0.dp, 60.dp, 0.dp, (-60).dp)
+
+/** Amber outline drawn around the currently unlocked path node. */
+private val UnlockedNodeBorder = Color(0xFFF59E0B)
+
+/**
+ * Scrollable learning path: sticky section headers, zigzag-laid-out lesson nodes and a popup
+ * anchored to the tapped node. Shows a loading state while the first nodes are generated and
+ * renders nothing when there are no nodes and nothing is loading.
+ *
+ * @param modifier layout modifier applied to the container
+ * @param pathNodes every node of the path, in display order
+ * @param isPathLoading true while new nodes are being generated
+ * @param onNodeClick invoked when the popup's action button is tapped for a node
+ * @param onGenerateClick requests a new batch of nodes once the whole path is completed
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LearningPathGraph(
     modifier: Modifier = Modifier,
-    pathNodes: List<com.jesuskrastev.bali.domain.model.LessonNode>,
+    pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
-    onNodeClick: (com.jesuskrastev.bali.domain.model.LessonNode) -> Unit,
+    onNodeClick: (LessonNode) -> Unit,
     onGenerateClick: () -> Unit
 ) {
-    // Loading state — empty + loading
-    if (pathNodes.isEmpty() && isPathLoading) {
-        PathLoadingState()
-        return
-    }
-
-    // Empty state — no nodes, not loading
     if (pathNodes.isEmpty()) {
+        if (isPathLoading) PathLoadingState(modifier)
         return
     }
 
@@ -991,106 +319,96 @@ fun LearningPathGraph(
     Box(modifier = modifier.onGloballyPositioned { containerCoords = it }) {
         LazyColumn(
             state = listState,
+            horizontalAlignment = Alignment.CenterHorizontally,
             // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
         ) {
-        sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
-            val sectionNodes = nodesBySection[sectionKey].orEmpty()
-            if (sectionNodes.isEmpty()) return@forEachIndexed
+            sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
+                val sectionNodes = nodesBySection[sectionKey].orEmpty()
+                if (sectionNodes.isEmpty()) return@forEachIndexed
 
-            // Breathing room before every section after the first — a regular scrolling item
-            // rather than padding baked into the sticky header, so it scrolls away instead of
-            // showing up as a stuck gap once the header pins to the top.
-            if (sectionIdx > 0) {
-                item(key = "section_gap_$sectionKey") {
-                    Spacer(modifier = Modifier.height(32.dp))
+                // Breathing room before every section after the first — a regular scrolling item
+                // rather than padding baked into the sticky header, so it scrolls away instead of
+                // showing up as a stuck gap once the header pins to the top.
+                if (sectionIdx > 0) {
+                    item(key = "section_gap_$sectionKey") {
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
                 }
-            }
 
-            // Sticky section header
-            stickyHeader(key = "section_$sectionKey") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(top = 16.dp, bottom = 16.dp)
-                ) {
-                    SectionHeaderCard(
-                        sectionIndex = sectionKey,
-                        sectionTitle = sectionNodes.first().sectionTitle,
-                        completedCount = sectionNodes.count { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED },
-                        totalCount = sectionNodes.size
+                stickyHeader(key = "section_$sectionKey") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(vertical = 16.dp)
+                    ) {
+                        SectionHeaderCard(
+                            sectionIndex = sectionKey,
+                            sectionTitle = sectionNodes.first().sectionTitle,
+                            completedCount = sectionNodes.count { it.status == NodeStatus.COMPLETED },
+                            totalCount = sectionNodes.size
+                        )
+                    }
+                }
+
+                itemsIndexed(sectionNodes, key = { _, node -> node.id }) { nodeIdx, node ->
+                    if (nodeIdx > 0) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // Exam nodes always sit centered; the rest follow the zigzag.
+                    val xOffset = if (node.nodeType == NodeType.EXAM) {
+                        0.dp
+                    } else {
+                        PathZigzagOffsets[node.unitIndex % PathZigzagOffsets.size]
+                    }
+
+                    PathNodeItem(
+                        node = node,
+                        offset = xOffset,
+                        onSelect = {
+                            selectedNodeId = if (selectedNodeId == node.id) null else node.id
+                        },
+                        onPositioned = { coords ->
+                            nodeCoordsMap[node.id] = coords
+                        }
                     )
                 }
             }
 
-            // Nodes in this section
-            itemsIndexed(sectionNodes, key = { _, node -> node.id }) { nodeIdx, node ->
-                if (nodeIdx > 0) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                // Zigzag offset — EXAM nodes always centered
-                val xOffset = if (node.nodeType == com.jesuskrastev.bali.domain.model.NodeType.EXAM) {
-                    0.dp
-                } else {
-                    when (node.unitIndex % 4) {
-                        0 -> 0.dp
-                        1 -> 60.dp
-                        2 -> 0.dp
-                        3 -> (-60).dp
-                        else -> 0.dp
-                    }
-                }
-
-                PathNodeItem(
-                    node = node,
-                    offset = xOffset,
-                    isSelected = selectedNodeId == node.id,
-                    onSelect = {
-                        selectedNodeId = if (selectedNodeId == node.id) null else node.id
-                    },
-                    onPositioned = { coords ->
-                        nodeCoordsMap[node.id] = coords
-                    }
-                )
-            }
-        }
-
-        // "Generate more" button when all nodes are completed
-        if (pathNodes.isNotEmpty() && pathNodes.all { it.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED }) {
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-                if (isPathLoading) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                } else {
-                    OutlinedButton(
-                        onClick = onGenerateClick,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("GENERAR MÁS LECCIONES", fontWeight = FontWeight.Bold)
+            if (pathNodes.all { it.status == NodeStatus.COMPLETED }) {
+                item(key = "generate_more") {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    if (isPathLoading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        OutlinedButton(
+                            onClick = onGenerateClick,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("GENERAR MÁS LECCIONES", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
-        }
 
-        // Floating popup overlay
-        val selectedNode = pathNodes.find { it.id == selectedNodeId }
-        val selectedNodeCoord = if (selectedNodeId != null) nodeCoordsMap[selectedNodeId!!] else null
-        
-        if (selectedNode != null && selectedNodeCoord != null && containerCoords != null) {
+        val selectedId = selectedNodeId
+        val selectedNode = pathNodes.find { it.id == selectedId }
+        val selectedNodeCoords = selectedId?.let { nodeCoordsMap[it] }
+        val currentContainerCoords = containerCoords
+
+        if (selectedNode != null && selectedNodeCoords != null && currentContainerCoords != null) {
             FloatingNodePopup(
                 node = selectedNode,
-                nodeCoords = selectedNodeCoord,
-                containerCoords = containerCoords!!,
+                nodeCoords = selectedNodeCoords,
+                containerCoords = currentContainerCoords,
                 onActionClick = {
                     selectedNodeId = null
                     onNodeClick(selectedNode)
                 },
-                onDismiss = {
-                    selectedNodeId = null
-                }
+                onDismiss = { selectedNodeId = null }
             )
         }
     }
@@ -1098,6 +416,14 @@ fun LearningPathGraph(
 
 // ─── Section Header ─────────────────────────────────────────────────────────
 
+/**
+ * Card that heads a section of the path: its label, title and completion progress.
+ *
+ * @param sectionIndex zero-based index of the section, shown one-based
+ * @param sectionTitle name of the section
+ * @param completedCount number of completed nodes in the section
+ * @param totalCount total number of nodes in the section
+ */
 @Composable
 fun SectionHeaderCard(
     sectionIndex: Int,
@@ -1134,7 +460,7 @@ fun SectionHeaderCard(
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                color = Color(0xFFFACC15),
+                color = BaliAccentYellow,
                 trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.25f),
             )
             Spacer(modifier = Modifier.height(6.dp))
@@ -1149,21 +475,27 @@ fun SectionHeaderCard(
 
 // ─── Path Node Item ─────────────────────────────────────────────────────────
 
+/**
+ * One circular lesson node on the learning path. Unlocked nodes get a golden fill and a
+ * rotating glow arc, locked nodes are dimmed and not tappable.
+ *
+ * @param node lesson the node represents
+ * @param offset horizontal shift that produces the path's zigzag
+ * @param onSelect invoked when an unlocked or completed node is tapped
+ * @param onPositioned reports the node's layout coordinates so a popup can anchor to it
+ */
 @Composable
 fun PathNodeItem(
-    node: com.jesuskrastev.bali.domain.model.LessonNode,
-    offset: androidx.compose.ui.unit.Dp,
-    isSelected: Boolean,
+    node: LessonNode,
+    offset: Dp,
     onSelect: () -> Unit,
     onPositioned: (LayoutCoordinates) -> Unit = {}
 ) {
-    val isLocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.LOCKED
-    val isUnlocked = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.UNLOCKED
-    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
-    val isExam = node.nodeType == com.jesuskrastev.bali.domain.model.NodeType.EXAM
+    val isLocked = node.status == NodeStatus.LOCKED
+    val isUnlocked = node.status == NodeStatus.UNLOCKED
+    val isCompleted = node.status == NodeStatus.COMPLETED
     val context = LocalContext.current
 
-    // Rotating glow animation for UNLOCKED nodes
     val rotation = if (isUnlocked) {
         val infiniteTransition = rememberInfiniteTransition(label = "node_rotate")
         infiniteTransition.animateFloat(
@@ -1178,13 +510,7 @@ fun PathNodeItem(
         0f
     }
 
-    val bgColor = when {
-        isCompleted -> MaterialTheme.colorScheme.surfaceVariant
-        isUnlocked -> Color(0xFFFACC15)   // Amarillo Bali
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-
-    val nodeBorder: BorderStroke? = null // Sin borde dorado en ningún nodo
+    val bgColor = if (isUnlocked) BaliAccentYellow else MaterialTheme.colorScheme.surfaceVariant
 
     // Resolve drawable icon
     val resId = remember(node.iconResName) {
@@ -1203,7 +529,7 @@ fun PathNodeItem(
                 Canvas(modifier = Modifier.size(86.dp)) {
                     drawArc(
                         brush = Brush.sweepGradient(
-                            listOf(Color(0xFFFACC15), Color.Transparent, Color(0xFFFACC15))
+                            listOf(BaliAccentYellow, Color.Transparent, BaliAccentYellow)
                         ),
                         startAngle = rotation,
                         sweepAngle = 270f,
@@ -1223,7 +549,7 @@ fun PathNodeItem(
                 shape = CircleShape,
                 color = bgColor,
                 shadowElevation = if (isUnlocked) 12.dp else 0.dp,
-                border = if (isUnlocked) BorderStroke(3.dp, Color(0xFFF59E0B)) else nodeBorder
+                border = if (isUnlocked) BorderStroke(3.dp, UnlockedNodeBorder) else null
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     if (resId != 0) {
@@ -1240,32 +566,40 @@ fun PathNodeItem(
                             imageVector = Icons.Rounded.MenuBook,
                             contentDescription = null,
                             modifier = Modifier.size(32.dp),
-                            tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant
-                                   else if (isCompleted) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                   else Color.White
+                            tint = when {
+                                isLocked -> MaterialTheme.colorScheme.onSurfaceVariant
+                                isCompleted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                else -> Color.White
+                            }
                         )
                     }
-
-
                 }
             }
         }
-
-
     }
 }
 
 // ─── Floating Node Popup ───────────────────────────────────────────────────
 
+/**
+ * Speech-bubble popup shown below a tapped node, with the lesson title, description and the
+ * action button that starts (or reviews) it. Positioned in the container's coordinate space.
+ *
+ * @param node lesson the popup describes
+ * @param nodeCoords layout coordinates of the tapped node
+ * @param containerCoords layout coordinates of the container the popup is positioned against
+ * @param onActionClick invoked when the start/review button is tapped
+ * @param onDismiss invoked when the popup is dismissed without taking the action
+ */
 @Composable
 private fun FloatingNodePopup(
-    node: com.jesuskrastev.bali.domain.model.LessonNode,
+    node: LessonNode,
     nodeCoords: LayoutCoordinates,
     containerCoords: LayoutCoordinates,
     onActionClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val isCompleted = node.status == com.jesuskrastev.bali.domain.model.NodeStatus.COMPLETED
+    val isCompleted = node.status == NodeStatus.COMPLETED
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
     val density = LocalDensity.current
 
@@ -1291,10 +625,7 @@ private fun FloatingNodePopup(
     val relativeNodeX = nodePos.x - containerPos.x
     val relativeNodeY = nodePos.y - containerPos.y
 
-    // Popup dimensions in px (aprox)
     val popupWidthPx = with(density) { 260.dp.toPx() }
-    val popupHeightPx = with(density) { 160.dp.toPx() } // Estimado para el offset inicial
-    val triangleHeightPx = with(density) { 12.dp.toPx() }
     val spacingPx = with(density) { 8.dp.toPx() }
 
     // Centrar sobre el nodo
@@ -1377,11 +708,16 @@ private fun FloatingNodePopup(
     }
 }
 
-
 // ─── Loading State ──────────────────────────────────────────────────────────
 
+/**
+ * Placeholder shown while the first learning-path nodes are being generated: the bobbing
+ * mascot above a short message and an indeterminate progress bar.
+ *
+ * @param modifier layout modifier applied to the centered column
+ */
 @Composable
-fun PathLoadingState() {
+fun PathLoadingState(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "mascot_float")
     val offsetY by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1394,9 +730,10 @@ fun PathLoadingState() {
     )
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
