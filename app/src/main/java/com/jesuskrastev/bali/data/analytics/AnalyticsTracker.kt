@@ -419,7 +419,7 @@ open class AnalyticsTracker @Inject constructor(
     /** Tracks that the user wiped their conversation with the AI tutor. */
     open fun chatCleared() = log("chat_cleared")
 
-    // ── AI GENERATION (test / exam / mistakes) ─────────────────────────────
+    // ── AI GENERATION (test / exam) ────────────────────────────────────
 
     /**
      * Tracks a practice-test generation call to Gemini.
@@ -448,21 +448,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun examGenerated(reason: String, inputTokens: Int, outputTokens: Int) =
         log("exam_generated") {
-            putString("reason", reason)
-            putInt("input_tokens", inputTokens)
-            putInt("output_tokens", outputTokens)
-        }
-
-    /**
-     * Tracks a mistakes-review generation call to Gemini.
-     *
-     * @param reason why the call happened: `"initial"`, `"process_restart"` or `"retry"` —
-     *   see [testGenerated]
-     * @param inputTokens prompt tokens billed for the call, from the response's usage metadata
-     * @param outputTokens response tokens billed for the call, from the response's usage metadata
-     */
-    open fun mistakesGenerated(reason: String, inputTokens: Int, outputTokens: Int) =
-        log("mistakes_generated") {
             putString("reason", reason)
             putInt("input_tokens", inputTokens)
             putInt("output_tokens", outputTokens)

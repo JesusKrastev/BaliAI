@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -68,8 +69,6 @@ import com.jesuskrastev.bali.ui.screens.home.HomeViewModel
 import com.jesuskrastev.bali.ui.screens.games.GamePlayScreen
 import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
-import com.jesuskrastev.bali.ui.screens.mistakes.MistakesScreen
-import com.jesuskrastev.bali.ui.screens.mistakes.MistakesViewModel
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
@@ -78,7 +77,6 @@ import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
 import com.jesuskrastev.bali.ui.screens.test.TestViewModel
-import com.jesuskrastev.bali.ui.screens.topics.TopicsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
@@ -121,12 +119,6 @@ data class TestRoute(
 
 @Serializable
 object ExamRoute
-
-@Serializable
-object TopicsRoute
-
-@Serializable
-object MistakesRoute
 
 @Serializable
 object ShopRoute
@@ -221,8 +213,12 @@ fun AppNavigation(
                 }
             },
         ) { contentPadding ->
+            // consumeWindowInsets is what stops each screen's own Scaffold/TopAppBar/bottom bar
+            // from applying the status and navigation bar insets a second time on top of this padding.
             NavHost(
-                modifier = modifier.padding(contentPadding),
+                modifier = modifier
+                    .padding(contentPadding)
+                    .consumeWindowInsets(contentPadding),
                 navController = navController,
                 startDestination = startDestination
             ) {
@@ -247,12 +243,7 @@ fun AppNavigation(
                 val viewModel: HomeViewModel = hiltViewModel()
 
                 HomeScreen(
-                    sharedTransitionScope = this@SharedTransitionLayout,
-                    animatedVisibilityScope = this@composable,
                     viewModel = viewModel,
-                    onStudyClick = {
-                        navController.navigate(TestRoute())
-                    },
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
                             viewModel.startExam {
@@ -260,17 +251,6 @@ fun AppNavigation(
                             }
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
-                        }
-                    },
-                    onTopicsClick = {
-                        navController.navigate(TopicsRoute)
-                    },
-                    onMistakesClick = {
-                        navController.navigate(MistakesRoute)
-                    },
-                    onExamClick = {
-                        viewModel.startExam {
-                            navController.navigate(ExamRoute)
                         }
                     },
                     onShopClick = {
@@ -344,52 +324,11 @@ fun AppNavigation(
                 )
             }
 
-            composable<TopicsRoute> {
-                TopicsScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    },
-                    onTopicClick = { topicName ->
-                        navController.navigate(TestRoute(topic = topicName))
-                    }
-                )
-            }
-
             composable<ShopRoute> {
                 val viewModel: ShopViewModel = hiltViewModel()
                 ShopScreen(
                     onBackClick = {
                         navController.popBackStack()
-                    },
-                    viewModel = viewModel
-                )
-            }
-
-            composable<MistakesRoute> {
-                val viewModel: MistakesViewModel = hiltViewModel()
-                MistakesScreen(
-                    onBackClick = {
-                        navController.popBackStack()
-                    },
-                    onFinishTest = { result ->
-                        navController.navigate(
-                            TestResultRoute(
-                                score = result.score,
-                                total = result.total,
-                                xpGained = result.xpGained,
-                                durationSeconds = result.durationSeconds,
-                                accuracy = result.accuracy,
-                                baseXp = result.baseXp,
-                                bonusPerfection = result.bonusPerfection,
-                                bonusFast = result.bonusFast,
-                                bonusStreak = result.bonusStreak,
-                                leveledUp = result.leveledUp,
-                                coinsGained = result.coinsGained,
-                                newWeekSessions = result.newWeekSessions
-                            )
-                        ) {
-                            popUpTo(MistakesRoute) { inclusive = true }
-                        }
                     },
                     viewModel = viewModel
                 )
