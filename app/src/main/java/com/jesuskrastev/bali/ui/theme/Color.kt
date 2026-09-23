@@ -23,7 +23,6 @@ val BaliBackground = Color(0xFFF8FAFC) // Casi blanco, muy limpio
 val BaliSurface = Color(0xFFFFFFFF)
 val BaliGrayLight = Color(0xFFE2E8F0)
 val BaliGrayMedium = Color(0xFF64748B)
-val BaliGrayDark = Color(0xFF1E293B)
 
 // Dark Theme Neutrals
 val BaliDarkBackground = Color(0xFF020617)

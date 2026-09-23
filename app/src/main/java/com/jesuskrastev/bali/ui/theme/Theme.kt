@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -9,12 +8,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color.Companion.White
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = BaliPrimary,
@@ -54,6 +49,15 @@ private val LightColorScheme = lightColorScheme(
     onError = White
 )
 
+/**
+ * Applies the Bali Material3 color scheme and typography. System bar appearance is not set
+ * here: `MainActivity` calls `enableEdgeToEdge()`, which already follows the system light/dark
+ * mode, and `Window.statusBarColor` is ignored once the app draws edge to edge.
+ *
+ * @param darkTheme whether to use the dark color scheme; follows the system by default
+ * @param dynamicColor whether to use Material You colors on Android 12+ instead of the Bali palette
+ * @param content UI that receives the theme
+ */
 @Composable
 fun BaliTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -67,15 +71,6 @@ fun BaliTheme(
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
-    }
-
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-        }
     }
 
     MaterialTheme(
