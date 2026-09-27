@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PurchasesError
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,11 +20,23 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /**
+ * Outcome of a paywall close attempt: either the screen should really exit (the user bought or
+ * genuinely walked away), or a win-back offer should be shown in its place instead.
+ */
+sealed interface PaywallCloseOutcome {
+    data class Exit(val hasPremium: Boolean) : PaywallCloseOutcome
+    data object ShowWinback : PaywallCloseOutcome
+}
+
+/**
  * Owns the paywall's subscription state and its analytics.
  *
  * Besides the shown/closed/purchased/backgrounded events it receives the RevenueCat paywall's
  * own callbacks, relayed by [PaywallAnalyticsListener], and reports how far each visitor got:
  * tapped a plan, backed out of the Google Play sheet, hit an error, or bought.
+ *
+ * When the user closes the paywall without buying, [onCloseAttempt] offers a one-time win-back
+ * discount (see [winbackOffering]) instead of letting the screen exit immediately.
  */
 @HiltViewModel
 class SubscriptionViewModel @Inject constructor(
@@ -37,8 +50,21 @@ class SubscriptionViewModel @Inject constructor(
     /** Plan of the purchase in flight; the cancel, error and completion callbacks don't carry it. */
     private var pendingPlan: AnalyticsTracker.PaywallPlan? = null
 
+    /** Result of the fire-and-forget win-back prefetch kicked off in [init], if it resolved. */
+    private var prefetchedWinback: Offering? = null
+
+    /** True once the win-back offer has been shown, so it is never offered a second time. */
+    private var winbackAlreadyOffered = false
+
+    /** Null shows the main/current offering, as before; non-null switches [PaywallScreen] to it. */
+    private val _winbackOffering = MutableStateFlow<Offering?>(null)
+    val winbackOffering: StateFlow<Offering?> = _winbackOffering.asStateFlow()
+
     init {
         analyticsTracker.paywallShown()
+        viewModelScope.launch {
+            prefetchedWinback = subscriptionRepository.getOffering(WINBACK_OFFERING_ID).getOrNull()
+        }
     }
 
     // Emits true if the user has the 'premium' entitlement active
@@ -94,11 +120,12 @@ class SubscriptionViewModel @Inject constructor(
     private var isAway = false
 
     /**
-     * Tracks how the user left the paywall.
+     * Tracks how the user left the paywall. Only called from [onCloseAttempt], once the close
+     * is final (a confirmed purchase, or a decline with no win-back left to offer).
      *
      * @param purchased true if the entitlement was active by the time they dismissed
      */
-    fun onPaywallDismissed(purchased: Boolean) {
+    private fun onPaywallDismissed(purchased: Boolean) {
         isResolved = true
         if (purchased) analyticsTracker.paywallPurchased() else analyticsTracker.paywallClosed()
     }
@@ -189,7 +216,7 @@ class SubscriptionViewModel @Inject constructor(
      *
      * @return true only when RevenueCat confirms the premium entitlement; false on any failure
      */
-    suspend fun checkPremiumNow(): Boolean {
+    private suspend fun checkPremiumNow(): Boolean {
         return subscriptionRepository.getCustomerInfo().fold(
             onSuccess = { customerInfo ->
                 subscriptionRepository.hasPremiumEntitlement(customerInfo)
@@ -197,10 +224,47 @@ class SubscriptionViewModel @Inject constructor(
             onFailure = { false }
         )
     }
+
+    /**
+     * Decides what happens when the user tries to leave the paywall without having bought yet.
+     *
+     * The first attempt switches [winbackOffering] to a discounted offer instead of letting the
+     * screen exit; the caller re-composes onto it and calls this again on the next attempt. Any
+     * later attempt (or the first one, if no win-back offer is available) is the real exit.
+     *
+     * @return [PaywallCloseOutcome.ShowWinback] to stay on screen showing the win-back offer, or
+     *   [PaywallCloseOutcome.Exit] once the caller should honor the close
+     */
+    suspend fun onCloseAttempt(): PaywallCloseOutcome {
+        val isPremiumNow = checkPremiumNow()
+        if (isPremiumNow) {
+            onPaywallDismissed(true)
+            if (_winbackOffering.value != null) analyticsTracker.paywallWinbackPurchased()
+            return PaywallCloseOutcome.Exit(true)
+        }
+
+        if (!winbackAlreadyOffered) {
+            winbackAlreadyOffered = true
+            val winback = prefetchedWinback
+                ?: subscriptionRepository.getOffering(WINBACK_OFFERING_ID).getOrNull()
+            if (winback != null) {
+                _winbackOffering.value = winback
+                analyticsTracker.paywallWinbackShown()
+                return PaywallCloseOutcome.ShowWinback
+            }
+        }
+
+        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackClosed()
+        onPaywallDismissed(false)
+        return PaywallCloseOutcome.Exit(false)
+    }
 }
 
 /** Store prices are reported in micro-units: 4.99 arrives as 4,990,000. */
 private const val MICROS_PER_UNIT = 1_000_000.0
+
+/** RevenueCat identifier of the discounted offering shown once a paywall is closed unbought. */
+private const val WINBACK_OFFERING_ID = "winback_monthly_discount"
 
 /** Maps a RevenueCat package to the non-identifying [AnalyticsTracker.PaywallPlan] sent with paywall events. */
 private fun Package.toPaywallPlan() = AnalyticsTracker.PaywallPlan(

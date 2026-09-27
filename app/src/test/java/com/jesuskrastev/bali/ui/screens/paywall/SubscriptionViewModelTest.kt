@@ -1,9 +1,11 @@
 package com.jesuskrastev.bali.ui.screens.paywall
 
+import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PresentedOfferingContext
 import com.revenuecat.purchases.PurchasesError
@@ -13,6 +15,7 @@ import com.revenuecat.purchases.models.Price
 import com.revenuecat.purchases.models.StoreProduct
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.any
@@ -21,6 +24,7 @@ import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 
 class SubscriptionViewModelTest {
@@ -128,19 +132,75 @@ class SubscriptionViewModelTest {
 
         verify(analytics).paywallRestoreFailed(eq("NetworkError"), eq("onboarding"))
     }
+
+    @Test
+    fun `closing the paywall for the first time offers the win-back discount instead of exiting`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.ShowWinback)
+        verify(analytics).paywallWinbackShown()
+        verify(analytics, never()).paywallClosed(any())
+    }
+
+    @Test
+    fun `closing the win-back offer too finally exits without showing it again`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+        viewModel.onCloseAttempt() // first close: shows the win-back offer
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
+        verify(analytics).paywallWinbackClosed()
+        verify(analytics).paywallClosed(any())
+    }
+
+    @Test
+    fun `closing with no win-back offer available exits on the first attempt`() = runTest {
+        val viewModel = viewModel() // repository.winbackOffering stays null
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
+        verify(analytics, never()).paywallWinbackShown()
+        verify(analytics, never()).paywallWinbackClosed()
+        verify(analytics).paywallClosed(any())
+    }
+
+    @Test
+    fun `buying the win-back offer reports both the generic and the win-back purchase`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+        viewModel.onCloseAttempt() // first close: shows the win-back offer
+        repository.premium = true
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(true))
+        verify(analytics).paywallWinbackPurchased()
+        verify(analytics).paywallPurchased(any())
+    }
 }
 
 private class FakeSubscriptionRepository : SubscriptionRepository {
 
     var premium = false
+    var winbackOffering: Offering? = null
+
+    private val customerInfo = mock<CustomerInfo>()
 
     override fun customerInfoStream(): Flow<CustomerInfo> = emptyFlow()
 
-    override suspend fun getCustomerInfo(): Result<CustomerInfo> =
-        Result.failure(IllegalStateException("not needed by these tests"))
+    override suspend fun getCustomerInfo(): Result<CustomerInfo> = Result.success(customerInfo)
 
     override suspend fun restorePurchases(): Result<CustomerInfo> =
         Result.failure(IllegalStateException("not needed by these tests"))
 
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = premium
+
+    override suspend fun getOffering(identifier: String): Result<Offering?> =
+        Result.success(winbackOffering)
 }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -33,7 +34,10 @@ import kotlinx.coroutines.launch
  * Displays the RevenueCat paywall and reports whether premium is active on dismissal.
  *
  * The caller owns the hard-paywall policy: a false result must keep this composable on
- * screen, while a true result may advance to the mandatory login gate.
+ * screen, while a true result may advance to the mandatory login gate. A close attempt without
+ * a purchase does not call [onDismissResult] straight away: [viewModel] switches this composable
+ * to a one-time win-back offer first (see [SubscriptionViewModel.onCloseAttempt]), and only a
+ * later close of that offer resolves to a real [onDismissResult] call.
  *
  * The paywall's purchase and restore callbacks are relayed to [viewModel], so analytics can
  * tell who tapped a plan and who backed out at the Google Play sheet.
@@ -49,6 +53,7 @@ fun PaywallScreen(
     val hasPremium by viewModel.hasPremium.collectAsStateWithLifecycle()
     val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val restoreMessage by viewModel.restoreMessage.collectAsStateWithLifecycle()
+    val winbackOffering by viewModel.winbackOffering.collectAsStateWithLifecycle()
     
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -87,21 +92,27 @@ fun PaywallScreen(
                 .padding(paddingValues)
                 .background(Color.Black)
         ) {
-            // Using the default full-screen Paywall from Purchases UI
-            Paywall(
-                options = PaywallOptions.Builder(
-                    dismissRequest = {
-                        scope.launch {
-                            val isPremiumNow = viewModel.checkPremiumNow()
-                            viewModel.onPaywallDismissed(isPremiumNow)
-                            onDismissResult(isPremiumNow)
+            // Using the default full-screen Paywall from Purchases UI. Keyed on the win-back
+            // offering so switching to it remounts a fresh Paywall instance instead of relying
+            // on the composable to react to an in-place options change.
+            key(winbackOffering) {
+                Paywall(
+                    options = PaywallOptions.Builder(
+                        dismissRequest = {
+                            scope.launch {
+                                when (val outcome = viewModel.onCloseAttempt()) {
+                                    is PaywallCloseOutcome.Exit -> onDismissResult(outcome.hasPremium)
+                                    PaywallCloseOutcome.ShowWinback -> Unit
+                                }
+                            }
                         }
-                    }
+                    )
+                        .setShouldDisplayDismissButton(true)
+                        .setListener(paywallListener)
+                        .apply { winbackOffering?.let { setOffering(it) } }
+                        .build()
                 )
-                    .setShouldDisplayDismissButton(true)
-                    .setListener(paywallListener)
-                    .build()
-            )
+            }
         }
     }
 }

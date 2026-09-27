@@ -359,6 +359,32 @@ open class AnalyticsTracker @Inject constructor(
         }
 
     /**
+     * Tracks that the one-time win-back discount offer was shown, after the user closed the
+     * main paywall without buying.
+     */
+    open fun paywallWinbackShown() = log("paywall_winback_shown")
+
+    /**
+     * Tracks that the user left the paywall having bought the win-back offer. Flushes
+     * immediately, like [paywallPurchased].
+     */
+    open fun paywallWinbackPurchased() {
+        log("paywall_winback_purchased")
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /**
+     * Tracks that the user also closed the win-back offer without buying. Flushes immediately,
+     * like [paywallClosed].
+     */
+    open fun paywallWinbackClosed() {
+        log("paywall_winback_closed")
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /**
      * Adds the properties every paywall purchase event shares.
      *
      * @param plan the plan the event refers to; its properties are skipped when null

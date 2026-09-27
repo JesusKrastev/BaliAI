@@ -9,6 +9,7 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAuthRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
 import androidx.lifecycle.viewModelScope
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.cancel
@@ -31,6 +32,7 @@ private class FakeSubscriptionRepository(private val hasPremium: Boolean) : Subs
     override suspend fun getCustomerInfo(): Result<CustomerInfo> = Result.success(customerInfo)
     override suspend fun restorePurchases(): Result<CustomerInfo> = Result.success(customerInfo)
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = hasPremium
+    override suspend fun getOffering(identifier: String): Result<Offering?> = Result.success(null)
 }
 
 /** No-op [FirestoreMigrationManager]; entry-point resolution never reaches it when signed out. */

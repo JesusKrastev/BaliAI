@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.domain.repository
 import com.jesuskrastev.bali.domain.model.User
 import kotlinx.coroutines.flow.Flow
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
 
 interface SubscriptionRepository {
     /**
@@ -24,4 +25,11 @@ interface SubscriptionRepository {
      * Helper to verify if the 'premium' entitlement is active on the given [CustomerInfo].
      */
     fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean
+
+    /**
+     * Fetches a specific offering by its RevenueCat identifier, for paywalls that are not the
+     * current/default offering (e.g. a win-back offer). Success wraps null when no offering
+     * with that identifier exists.
+     */
+    suspend fun getOffering(identifier: String): Result<Offering?>
 }
