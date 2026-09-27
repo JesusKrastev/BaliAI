@@ -444,19 +444,24 @@ class TestViewModel @Inject constructor(
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
         var newWeekSessions = -1
 
+        val userId = userRepository.get().first()?.id ?: ""
+        // Read the node's status BEFORE this attempt overwrites it below — repeating an
+        // already-COMPLETED node earns reduced XP (see IncrementXpUseCase's isRepeat handling).
+        val isRepeat = aiNodeId?.let { nodeId ->
+            pathRepository.getPathNodes(userId).first().find { it.id == nodeId }?.status == NodeStatus.COMPLETED
+        } ?: false
+
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
             correctAnswers = correct,
             totalQuestions = state.questions.size,
-            durationSeconds = durationSeconds
+            durationSeconds = durationSeconds,
+            isRepeat = isRepeat
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
 
         withContext(Dispatchers.IO) {
-            val user = userRepository.get().first()
-            val userId = user?.id ?: ""
-
             // 1. Save test result
             val testId = testResultRepository.insert(
                 TestResult(

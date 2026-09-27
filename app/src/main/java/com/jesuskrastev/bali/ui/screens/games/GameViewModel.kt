@@ -65,6 +65,9 @@ class GameViewModel @Inject constructor(
 
     private var sessionStartMs = 0L
 
+    /** Game types already rewarded once this ViewModel's lifetime — replaying one earns reduced XP. */
+    private val rewardedGames = mutableSetOf<GameType>()
+
     /** Starts a fresh five-round session for [game], resetting score and rewards. */
     @AddTrace(name = "start_dgt_minigame")
     fun startSession(game: GameType) {
@@ -98,11 +101,14 @@ class GameViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - sessionStartMs) / 1000).toInt().coerceAtLeast(1)
         val accuracy = ((finalScore.toFloat() / ROUNDS_PER_SESSION) * 100).toInt()
 
+        // add() returns false when `game` was already rewarded, i.e. this is a replay.
+        val isRepeat = !rewardedGames.add(game)
         val xpEarned = incrementXpUseCase(
             mode = TestMode.PRACTICE,
             correctAnswers = finalScore,
             totalQuestions = ROUNDS_PER_SESSION,
             durationSeconds = durationSeconds,
+            isRepeat = isRepeat,
         )
         val coinsGained = incrementCoinsUseCase(accuracy)
         incrementStreakUseCase()

@@ -357,11 +357,17 @@ class ExamViewModel @Inject constructor(
         val isPassed = correct >= 27
         var newWeekSessions = -1
 
+        // Every EXAM path node opens this same generic simulator (no specific node is tracked
+        // here), so "repeat" means "not this user's first official exam" rather than "this exact
+        // content again" — otherwise a 100-coin exam would silently pay full XP every time.
+        val isRepeat = testResultRepository.get().first().any { it.category == OFFICIAL_EXAM_CATEGORY }
+
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
             correctAnswers = correct,
             totalQuestions = state.questions.size,
-            durationSeconds = durationSeconds
+            durationSeconds = durationSeconds,
+            isRepeat = isRepeat
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
@@ -369,7 +375,7 @@ class ExamViewModel @Inject constructor(
         withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
                 TestResult(
-                    category = "Examen Oficial",
+                    category = OFFICIAL_EXAM_CATEGORY,
                     score = correct,
                     total = state.questions.size,
                     date = Date(),
@@ -422,6 +428,9 @@ class ExamViewModel @Inject constructor(
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"
+
+        /** [TestResult.category] used for every official-exam attempt, win or lose. */
+        private const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
     }
 
     @Serializable

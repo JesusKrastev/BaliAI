@@ -440,7 +440,7 @@ fun SectionHeaderCard(
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Text(
-                text = "SECCIÓN ${sectionIndex + 1}, UNIDAD ${sectionIndex + 1}",
+                text = "SECCIÓN ${sectionIndex + 1}",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.sp,
@@ -581,6 +581,15 @@ fun PathNodeItem(
 
 // ─── Floating Node Popup ───────────────────────────────────────────────────
 
+/** Top XP tier a lesson/review node can award — mirrors IncrementXpUseCase.calculateBaseXp's PRACTICE ceiling. */
+private const val MAX_PRACTICE_XP = 20
+
+/** Top XP tier an exam node can award — mirrors IncrementXpUseCase.calculateBaseXp's EXAM ceiling. */
+private const val MAX_EXAM_XP = 30
+
+/** Multiplier IncrementXpUseCase applies to base XP when isRepeat is true. */
+private const val REPEAT_XP_FACTOR = 0.3
+
 /**
  * Speech-bubble popup shown below a tapped node, with the lesson title, description and the
  * action button that starts (or reviews) it. Positioned in the container's coordinate space.
@@ -600,6 +609,15 @@ private fun FloatingNodePopup(
     onDismiss: () -> Unit
 ) {
     val isCompleted = node.status == NodeStatus.COMPLETED
+    // Actual reward depends on accuracy/speed/streak, known only after the attempt — promise a
+    // ceiling, not a fixed number, so this stays true regardless of how the user performs.
+    // Exam nodes skip the repeat discount: ExamViewModel's isRepeat tracks "any prior official
+    // exam", not this specific node, so this node's own completion isn't the trigger there.
+    val maxXp = when {
+        node.nodeType == NodeType.EXAM -> MAX_EXAM_XP
+        isCompleted -> (MAX_PRACTICE_XP * REPEAT_XP_FACTOR).toInt()
+        else -> MAX_PRACTICE_XP
+    }
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
     val density = LocalDensity.current
 
@@ -697,7 +715,7 @@ private fun FloatingNodePopup(
                         )
                     ) {
                         Text(
-                            text = if (isCompleted) "REPASAR  ⚡ +6 XP" else "EMPEZAR  ⚡ +20 XP",
+                            text = if (isCompleted) "REPASAR  ⚡ hasta +$maxXp XP" else "EMPEZAR  ⚡ hasta +$maxXp XP",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )

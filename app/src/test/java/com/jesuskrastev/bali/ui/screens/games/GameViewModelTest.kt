@@ -105,6 +105,19 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `replaying the same game earns less XP than the first completion`() = runTest {
+        viewModel.startSession(GameType.SENAL)
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+        val firstXp = viewModel.uiState.value.rewards!!.xpEarned.xpGained
+
+        viewModel.replay()
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+        val secondXp = viewModel.uiState.value.rewards!!.xpEarned.xpGained
+
+        assertThat(secondXp).isLessThan(firstXp)
+    }
+
+    @Test
     fun `abandonSession logs the round reached only when the session was not finished`() = runTest {
         viewModel.startSession(GameType.SENAL)
         viewModel.recordRound(won = true)
