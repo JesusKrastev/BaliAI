@@ -183,18 +183,76 @@ class SubscriptionViewModelTest {
         verify(analytics).paywallWinbackPurchased()
         verify(analytics).paywallPurchased(any())
     }
+
+    @Test
+    fun `a purchase detected automatically is reported without waiting for a close attempt`() {
+        val viewModel = viewModel()
+
+        viewModel.onPremiumConfirmed()
+
+        verify(analytics).paywallPurchased(any())
+    }
+
+    @Test
+    fun `a purchase detected automatically after the win-back was shown reports both purchases`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+        viewModel.onCloseAttempt() // first close: shows the win-back offer
+
+        viewModel.onPremiumConfirmed()
+
+        verify(analytics).paywallWinbackPurchased()
+        verify(analytics).paywallPurchased(any())
+    }
+
+    @Test
+    fun `a purchase already detected automatically is not reported again by a later close attempt`() = runTest {
+        repository.premium = true
+        val viewModel = viewModel()
+        viewModel.onPremiumConfirmed()
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(true))
+        verify(analytics).paywallPurchased(any())
+    }
+
+    @Test
+    fun `a failed premium check during close is treated as not premium instead of crashing`() = runTest {
+        repository.customerInfoFailure = IllegalStateException("network down")
+        val viewModel = viewModel()
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
+        verify(analytics).paywallClosed(any())
+    }
+
+    @Test
+    fun `a failed win-back fetch exits instead of crashing`() = runTest {
+        repository.offeringFailure = IllegalStateException("offering not found")
+        val viewModel = viewModel()
+
+        val outcome = viewModel.onCloseAttempt()
+
+        assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
+        verify(analytics, never()).paywallWinbackShown()
+    }
 }
 
 private class FakeSubscriptionRepository : SubscriptionRepository {
 
     var premium = false
     var winbackOffering: Offering? = null
+    var customerInfoFailure: Throwable? = null
+    var offeringFailure: Throwable? = null
 
     private val customerInfo = mock<CustomerInfo>()
 
     override fun customerInfoStream(): Flow<CustomerInfo> = emptyFlow()
 
-    override suspend fun getCustomerInfo(): Result<CustomerInfo> = Result.success(customerInfo)
+    override suspend fun getCustomerInfo(): Result<CustomerInfo> =
+        customerInfoFailure?.let { Result.failure(it) } ?: Result.success(customerInfo)
 
     override suspend fun restorePurchases(): Result<CustomerInfo> =
         Result.failure(IllegalStateException("not needed by these tests"))
@@ -202,5 +260,5 @@ private class FakeSubscriptionRepository : SubscriptionRepository {
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = premium
 
     override suspend fun getOffering(identifier: String): Result<Offering?> =
-        Result.success(winbackOffering)
+        offeringFailure?.let { Result.failure(it) } ?: Result.success(winbackOffering)
 }

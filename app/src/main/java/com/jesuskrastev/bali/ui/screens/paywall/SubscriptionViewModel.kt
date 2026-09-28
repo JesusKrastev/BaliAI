@@ -2,6 +2,8 @@ package com.jesuskrastev.bali.ui.screens.paywall
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.jesuskrastev.bali.RobolectricDetector
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.revenuecat.purchases.CustomerInfo
@@ -33,10 +35,15 @@ sealed interface PaywallCloseOutcome {
  *
  * Besides the shown/closed/purchased/backgrounded events it receives the RevenueCat paywall's
  * own callbacks, relayed by [PaywallAnalyticsListener], and reports how far each visitor got:
- * tapped a plan, backed out of the Google Play sheet, hit an error, or bought.
+ * tapped a plan, backed out of the Google Play sheet, hit an error, or bought. Every failure
+ * along the way (a purchase or restore error, a failed premium check, a failed offering fetch)
+ * is also sent to Crashlytics as a non-fatal via [recordPaywallError], so a broken paywall shows
+ * up there instead of only as a drop in the funnel.
  *
  * When the user closes the paywall without buying, [onCloseAttempt] offers a one-time win-back
- * discount (see [winbackOffering]) instead of letting the screen exit immediately.
+ * discount (see [winbackOffering]) instead of letting the screen exit immediately. A successful
+ * purchase doesn't need the user to close anything at all: [PaywallScreen] observes [hasPremium]
+ * and calls [onPremiumConfirmed] the moment it flips to true.
  */
 @HiltViewModel
 class SubscriptionViewModel @Inject constructor(
@@ -63,7 +70,7 @@ class SubscriptionViewModel @Inject constructor(
     init {
         analyticsTracker.paywallShown()
         viewModelScope.launch {
-            prefetchedWinback = subscriptionRepository.getOffering(WINBACK_OFFERING_ID).getOrNull()
+            prefetchedWinback = fetchWinbackOffering()
         }
     }
 
@@ -101,6 +108,7 @@ class SubscriptionViewModel @Inject constructor(
                 },
                 onFailure = { error ->
                     _restoreMessage.value = "Error al restaurar: ${error.localizedMessage ?: "Desconocido"}"
+                    recordPaywallError("restore purchases failed", error)
                 }
             )
 
@@ -120,14 +128,31 @@ class SubscriptionViewModel @Inject constructor(
     private var isAway = false
 
     /**
-     * Tracks how the user left the paywall. Only called from [onCloseAttempt], once the close
-     * is final (a confirmed purchase, or a decline with no win-back left to offer).
+     * Tracks how the paywall was resolved, exactly once — a confirmed purchase or a final
+     * decline. Called from [onCloseAttempt] (closing while premium is active, or declining with
+     * no win-back left to offer) and from [onPremiumConfirmed] (a purchase detected without any
+     * close attempt). A second call for the same paywall is a no-op either way.
      *
-     * @param purchased true if the entitlement was active by the time they dismissed
+     * @param purchased true if the entitlement was active by the time this resolved
      */
     private fun onPaywallDismissed(purchased: Boolean) {
+        if (isResolved) return
         isResolved = true
         if (purchased) analyticsTracker.paywallPurchased() else analyticsTracker.paywallClosed()
+    }
+
+    /**
+     * Reports a purchase that RevenueCat confirmed on its own — [hasPremium] flipping to true —
+     * without the user attempting to close the paywall first. Lets the screen advance the moment
+     * a purchase completes instead of waiting for a manual close a happy buyer has no reason to
+     * make; that gap is why [AnalyticsTracker.paywallPurchased] used to never fire in practice.
+     * Exactly-once: a purchase already reported through [onCloseAttempt] (or a previous call
+     * here) is a no-op, so a race between the two paths can't double-report analytics.
+     */
+    fun onPremiumConfirmed() {
+        if (isResolved) return
+        onPaywallDismissed(true)
+        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackPurchased()
     }
 
     /**
@@ -177,10 +202,11 @@ class SubscriptionViewModel @Inject constructor(
     /**
      * Tracks a purchase that failed for a reason other than the user cancelling.
      *
-     * @param error the RevenueCat error; only its code is reported, never its message
+     * @param error the RevenueCat error; only its code is reported to analytics, never its message
      */
     fun onPurchaseError(error: PurchasesError) {
         analyticsTracker.paywallPurchaseFailed(error.code.name, pendingPlan, secondsOnPaywall())
+        recordPaywallError("purchase failed: ${error.code} ${error.message}")
         pendingPlan = null
     }
 
@@ -201,10 +227,11 @@ class SubscriptionViewModel @Inject constructor(
     /**
      * Tracks a restore that failed.
      *
-     * @param error the RevenueCat error; only its code is reported, never its message
+     * @param error the RevenueCat error; only its code is reported to analytics, never its message
      */
     fun onRestoreError(error: PurchasesError) {
         analyticsTracker.paywallRestoreFailed(error.code.name)
+        recordPaywallError("restore failed: ${error.code} ${error.message}")
     }
 
     /** Returns the whole seconds elapsed since the paywall appeared. */
@@ -221,8 +248,39 @@ class SubscriptionViewModel @Inject constructor(
             onSuccess = { customerInfo ->
                 subscriptionRepository.hasPremiumEntitlement(customerInfo)
             },
-            onFailure = { false }
+            onFailure = { error ->
+                recordPaywallError("premium check failed", error)
+                false
+            }
         )
+    }
+
+    /**
+     * Fetches the win-back offering, reporting a failure to Crashlytics instead of silently
+     * dropping it — used both by the [init] prefetch and the [onCloseAttempt] fallback fetch.
+     *
+     * @return the offering, or null if it doesn't exist or the fetch failed
+     */
+    private suspend fun fetchWinbackOffering(): Offering? =
+        subscriptionRepository.getOffering(WINBACK_OFFERING_ID)
+            .onFailure { recordPaywallError("winback offering fetch failed", it) }
+            .getOrNull()
+
+    /**
+     * Reports a paywall failure to Crashlytics as a non-fatal, tagged with [context] so distinct
+     * paywall failures show up as distinct issues instead of being grouped by whatever generic
+     * SDK exception caused them.
+     *
+     * @param context short, fixed label identifying which paywall step failed
+     * @param cause the underlying error, if one was caught; omitted for RevenueCat's own
+     *   [PurchasesError] callbacks, which aren't a [Throwable] and are folded into [context] instead
+     */
+    private fun recordPaywallError(context: String, cause: Throwable? = null) {
+        // Crashlytics reaches into real Android/Play Services classes that the plain JVM unit
+        // tests for this ViewModel don't mock, unlike the Robolectric-backed tests that do —
+        // same guard used for OneSignal/Mixpanel/PostHog/RevenueCat init, see [RobolectricDetector].
+        if (RobolectricDetector.isRobolectric()) return
+        FirebaseCrashlytics.getInstance().recordException(Exception("Paywall: $context", cause))
     }
 
     /**
@@ -238,15 +296,13 @@ class SubscriptionViewModel @Inject constructor(
     suspend fun onCloseAttempt(): PaywallCloseOutcome {
         val isPremiumNow = checkPremiumNow()
         if (isPremiumNow) {
-            onPaywallDismissed(true)
-            if (_winbackOffering.value != null) analyticsTracker.paywallWinbackPurchased()
+            onPremiumConfirmed()
             return PaywallCloseOutcome.Exit(true)
         }
 
         if (!winbackAlreadyOffered) {
             winbackAlreadyOffered = true
-            val winback = prefetchedWinback
-                ?: subscriptionRepository.getOffering(WINBACK_OFFERING_ID).getOrNull()
+            val winback = prefetchedWinback ?: fetchWinbackOffering()
             if (winback != null) {
                 _winbackOffering.value = winback
                 analyticsTracker.paywallWinbackShown()

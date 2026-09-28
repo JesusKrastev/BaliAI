@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -19,7 +20,10 @@ import com.jesuskrastev.bali.ui.screens.onboarding.steps.*
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 
 /**
- * Renders onboarding and keeps its paywall blocking until RevenueCat confirms premium.
+ * Renders onboarding and keeps its paywall blocking until RevenueCat confirms premium. A
+ * decline — including of the paywall's one-time win-back offer — finishes the hosting activity
+ * instead of returning to an earlier onboarding step, since there is no free-content step to
+ * send the user back to.
  *
  * @param sharedTransitionScope scope used by the mascot transition
  * @param animatedVisibilityScope visibility scope of the onboarding destination
@@ -37,10 +41,16 @@ fun OnboardingScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     if (uiState.currentStep == OnboardingStep.PaywallPending) {
+        // No onboarding step to fall back to here either: a decline (the win-back offer
+        // already shown and turned down) has to leave the app, not strand the user on a
+        // paywall step that never advances and whose close button stops responding.
+        val activity = LocalActivity.current
         PaywallScreen(
             onDismissResult = { hasPremium ->
                 if (hasPremium) {
                     viewModel.onEvent(OnboardingEvent.CompleteOnboarding)
+                } else {
+                    activity?.finish()
                 }
             }
         )

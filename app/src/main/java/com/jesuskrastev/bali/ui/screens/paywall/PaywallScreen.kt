@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.ui.screens.paywall
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,16 +34,23 @@ import kotlinx.coroutines.launch
 /**
  * Displays the RevenueCat paywall and reports whether premium is active on dismissal.
  *
- * The caller owns the hard-paywall policy: a false result must keep this composable on
- * screen, while a true result may advance to the mandatory login gate. A close attempt without
- * a purchase does not call [onDismissResult] straight away: [viewModel] switches this composable
- * to a one-time win-back offer first (see [SubscriptionViewModel.onCloseAttempt]), and only a
- * later close of that offer resolves to a real [onDismissResult] call.
+ * The caller owns the hard-paywall policy: this screen has no free-content fallback to fall
+ * back to, so [onDismissResult] is only ever a real exit — either into the mandatory login gate
+ * (true) or out of the app entirely (false), the same "no screen behind this one" rule
+ * [com.jesuskrastev.bali.ui.screens.auth.AuthScreen] applies to its mandatory sign-in gate. A
+ * close attempt (the paywall's own close button, or the system back gesture, both routed through
+ * the same attempt) does not call [onDismissResult] straight away: [viewModel] switches this
+ * composable to a one-time win-back offer first (see [SubscriptionViewModel.onCloseAttempt]),
+ * and only a later close of that offer resolves to a real [onDismissResult] call. A successful
+ * purchase does not wait for any of that: this screen also calls [onDismissResult] the moment
+ * [SubscriptionViewModel.hasPremium] confirms it, so a buyer never has to close anything at all.
  *
  * The paywall's purchase and restore callbacks are relayed to [viewModel], so analytics can
  * tell who tapped a plan and who backed out at the Google Play sheet.
  *
- * @param onDismissResult receives true only when RevenueCat confirms the premium entitlement
+ * @param onDismissResult receives true only when RevenueCat confirms the premium entitlement;
+ * false means the win-back offer (if any) was already shown and declined, so the caller must
+ * leave the app rather than leave this composable on screen with no way to progress
  * @param viewModel owner of subscription checks and paywall analytics
  */
 @Composable
@@ -54,10 +62,31 @@ fun PaywallScreen(
     val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
     val restoreMessage by viewModel.restoreMessage.collectAsStateWithLifecycle()
     val winbackOffering by viewModel.winbackOffering.collectAsStateWithLifecycle()
-    
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val paywallListener = remember(viewModel) { PaywallAnalyticsListener(viewModel) }
+
+    // Shared by the paywall's own close button and the system back gesture, so neither can
+    // skip the win-back step (or the other's analytics) by taking a different way out.
+    val attemptClose: () -> Unit = {
+        scope.launch {
+            when (val outcome = viewModel.onCloseAttempt()) {
+                is PaywallCloseOutcome.Exit -> onDismissResult(outcome.hasPremium)
+                PaywallCloseOutcome.ShowWinback -> Unit
+            }
+        }
+    }
+    BackHandler(onBack = attemptClose)
+
+    // Advances the moment RevenueCat confirms the purchase, instead of waiting for the user to
+    // also close the paywall afterward — a happy buyer has no reason to.
+    LaunchedEffect(hasPremium) {
+        if (hasPremium) {
+            viewModel.onPremiumConfirmed()
+            onDismissResult(true)
+        }
+    }
 
     // Tracks people who walk away from the paywall instead of deciding: without this, the
     // only signal is the absence of a dismissal, which is indistinguishable from a crash.
@@ -97,16 +126,7 @@ fun PaywallScreen(
             // on the composable to react to an in-place options change.
             key(winbackOffering) {
                 Paywall(
-                    options = PaywallOptions.Builder(
-                        dismissRequest = {
-                            scope.launch {
-                                when (val outcome = viewModel.onCloseAttempt()) {
-                                    is PaywallCloseOutcome.Exit -> onDismissResult(outcome.hasPremium)
-                                    PaywallCloseOutcome.ShowWinback -> Unit
-                                }
-                            }
-                        }
-                    )
+                    options = PaywallOptions.Builder(dismissRequest = attemptClose)
                         .setShouldDisplayDismissButton(true)
                         .setListener(paywallListener)
                         .apply { winbackOffering?.let { setOffering(it) } }

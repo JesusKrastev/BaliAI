@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.ui.navigation
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateColorAsState
@@ -487,12 +488,20 @@ fun AppNavigation(
             }
 
             composable<PaywallRoute> {
+                // PaywallRoute is only ever an app start destination (returning users who
+                // completed onboarding but never unlocked premium): there is no screen behind
+                // it to fall back to, so a decline — the win-back offer already shown and
+                // turned down — leaves the app instead of stranding the user on a paywall
+                // whose close button no longer does anything.
+                val activity = LocalActivity.current
                 PaywallScreen(
                     onDismissResult = { hasPremium ->
                         if (hasPremium) {
                             navController.navigate(AuthRoute(isMandatory = true)) {
                                 popUpTo(PaywallRoute) { inclusive = true }
                             }
+                        } else {
+                            activity?.finish()
                         }
                     }
                 )
