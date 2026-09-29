@@ -44,8 +44,9 @@ private class FakeFirestoreMigrationManager : FirestoreMigrationManager {
 }
 
 /**
- * Covers [MainViewModel.entryPoint]'s gating priority: the hard paywall before the login
- * gate, the login gate before home, and neither until onboarding is actually done.
+ * Covers [MainViewModel.entryPoint]'s gating: the hard paywall comes first, so nobody gets past it
+ * without paying, signed in or not; only a paying, signed-in user reaches home; and onboarding
+ * is never repeated once it is done.
  */
 class MainViewModelTest {
 
@@ -82,9 +83,10 @@ class MainViewModelTest {
     ): AppEntryPoint {
         val viewModel = MainViewModel(
             userRepository = FakeUserRepository(hasCompletedOnboarding = hasCompletedOnboarding),
-            // Kept signed out at the currentUser() level regardless of isLoggedIn: entryPoint
-            // never reads it, and a non-null id would drive MainViewModel's init block into
-            // OneSignal/FirebaseMessaging calls that don't work in a plain JVM unit test.
+            // Kept signed out at the currentUser() level regardless of isLoggedIn: a non-null id
+            // would drive MainViewModel's init block into OneSignal/FirebaseMessaging calls that
+            // don't work in a plain JVM unit test. It also means the premium state is read
+            // straight from the fake, without the RevenueCat account switch a real user gets.
             authRepository = FakeAuthRepository(isLoggedIn = isLoggedIn, currentUserId = null),
             subscriptionRepository = FakeSubscriptionRepository(hasPremium = hasPremium),
             migrationManager = fakeMigrationManager,
@@ -120,8 +122,71 @@ class MainViewModelTest {
     }
 
     @Test
-    fun `logged in always lands on home`() = runTest {
+    fun `logged in without premium is sent to the paywall, not home`() = runTest {
         val entryPoint = resolvedEntryPoint(hasCompletedOnboarding = true, isLoggedIn = true, hasPremium = false)
+        // Debug builds treat the app as always entitled, see entryPoint's BuildConfig.DEBUG bypass.
+        assertThat(entryPoint).isEqualTo(if (BuildConfig.DEBUG) AppEntryPoint.HOME else AppEntryPoint.PAYWALL)
+    }
+
+    @Test
+    fun `logged in with premium lands on home`() = runTest {
+        val entryPoint = resolvedEntryPoint(hasCompletedOnboarding = true, isLoggedIn = true, hasPremium = true)
         assertThat(entryPoint).isEqualTo(AppEntryPoint.HOME)
+    }
+
+    @Test
+    fun `a signed in account has no local onboarding flag and still lands on home once it has paid`() = runTest {
+        // Signing in clears the local profile, so hasCompletedOnboarding is false for an account.
+        val entryPoint = resolvedEntryPoint(hasCompletedOnboarding = false, isLoggedIn = true, hasPremium = true)
+        assertThat(entryPoint).isEqualTo(AppEntryPoint.HOME)
+    }
+
+    @Test
+    fun `a signed in account without a local profile and without premium is sent to the paywall`() = runTest {
+        val entryPoint = resolvedEntryPoint(hasCompletedOnboarding = false, isLoggedIn = true, hasPremium = false)
+        assertThat(entryPoint).isEqualTo(if (BuildConfig.DEBUG) AppEntryPoint.HOME else AppEntryPoint.PAYWALL)
+    }
+}
+
+/**
+ * Covers [resolveEntryPoint] directly, so the whole rule is checked whatever the build type:
+ * `unlocked` is passed in, unlike through [MainViewModel] where debug builds force it on.
+ */
+class ResolveEntryPointTest {
+
+    @Test
+    fun `a signed in user who has paid lands on home, with or without a local profile`() {
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = true, loggedIn = true, unlocked = true))
+            .isEqualTo(AppEntryPoint.HOME)
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = false, loggedIn = true, unlocked = true))
+            .isEqualTo(AppEntryPoint.HOME)
+    }
+
+    @Test
+    fun `a signed in user who has not paid never gets in and sees the paywall`() {
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = true, loggedIn = true, unlocked = false))
+            .isEqualTo(AppEntryPoint.PAYWALL)
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = false, loggedIn = true, unlocked = false))
+            .isEqualTo(AppEntryPoint.PAYWALL)
+    }
+
+    @Test
+    fun `someone who paid but is not signed in must sign in`() {
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = true, loggedIn = false, unlocked = true))
+            .isEqualTo(AppEntryPoint.LOGIN)
+    }
+
+    @Test
+    fun `someone who finished onboarding without paying sees the paywall`() {
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = true, loggedIn = false, unlocked = false))
+            .isEqualTo(AppEntryPoint.PAYWALL)
+    }
+
+    @Test
+    fun `a new user without a session starts at the greetings, whatever the subscription`() {
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = false, loggedIn = false, unlocked = false))
+            .isEqualTo(AppEntryPoint.GREETINGS)
+        assertThat(resolveEntryPoint(hasCompletedOnboarding = false, loggedIn = false, unlocked = true))
+            .isEqualTo(AppEntryPoint.GREETINGS)
     }
 }

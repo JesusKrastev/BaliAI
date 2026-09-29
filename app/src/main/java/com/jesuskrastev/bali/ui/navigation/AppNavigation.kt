@@ -303,19 +303,11 @@ fun AppNavigation(
                     animatedVisibilityScope = this@composable,
                     onBackClick = { navController.popBackStack() },
                     onLoginClick = { context -> 
-                        viewModel.signInWithGoogle(context, route.restrictNewAccounts) {
-                            // On success, go directly to Home
-                            navController.navigate(HomeRoute) {
-                                if (route.isMandatory) {
-                                    // The onboarding and the paywall are behind us: wipe the
-                                    // whole stack so back cannot return to the gate.
-                                    popUpTo(0) { inclusive = true }
-                                } else {
-                                    popUpTo(HomeRoute) { inclusive = true }
-                                }
-                                launchSingleTop = true
-                            }
-                        }
+                        // Nothing to navigate to on success: signing in changes the app's entry
+                        // point, which restarts navigation on Home for a subscriber and on the
+                        // paywall for anyone who has not paid. Going to Home from here would let
+                        // a user without a subscription in for as long as that takes.
+                        viewModel.signInWithGoogle(context, route.restrictNewAccounts) {}
                     },
                     isLoggingIn = isLoggingIn,
                     errorMessage = errorMsg,
@@ -488,21 +480,17 @@ fun AppNavigation(
             }
 
             composable<PaywallRoute> {
-                // PaywallRoute is only ever an app start destination (returning users who
-                // completed onboarding but never unlocked premium): there is no screen behind
-                // it to fall back to, so a decline — the win-back offer already shown and
-                // turned down — leaves the app instead of stranding the user on a paywall
-                // whose close button no longer does anything.
+                // PaywallRoute is only ever an app start destination (anyone who has not paid,
+                // signed in or not): there is no screen behind it to fall back to, so a decline
+                // — the win-back offer already shown and turned down — leaves the app instead of
+                // stranding the user on a paywall whose close button no longer does anything.
+                // A purchase needs no navigation from here: the app's entry point sees premium
+                // become active and restarts navigation on the login gate or, for someone who is
+                // already signed in, on Home.
                 val activity = LocalActivity.current
                 PaywallScreen(
                     onDismissResult = { hasPremium ->
-                        if (hasPremium) {
-                            navController.navigate(AuthRoute(isMandatory = true)) {
-                                popUpTo(PaywallRoute) { inclusive = true }
-                            }
-                        } else {
-                            activity?.finish()
-                        }
+                        if (!hasPremium) activity?.finish()
                     }
                 )
             }
