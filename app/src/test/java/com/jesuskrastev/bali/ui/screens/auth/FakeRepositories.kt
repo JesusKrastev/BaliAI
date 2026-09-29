@@ -123,9 +123,6 @@ class FakeAuthRepository(
 
 data class GameCompletedEvent(val gameId: String, val score: Int, val totalRounds: Int, val durationSeconds: Int)
 
-/** A `streak_extended` or `streak_broken` event: streak length in weeks before and after the change. */
-data class StreakChangeEvent(val previousWeeks: Int, val weeks: Int)
-
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
     mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
@@ -138,8 +135,6 @@ class FakeAnalyticsTracker(
     val gameStartedEvents = mutableListOf<String>()
     val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
     val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
-    val streakExtendedEvents = mutableListOf<StreakChangeEvent>()
-    val streakBrokenEvents = mutableListOf<StreakChangeEvent>()
 
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
@@ -187,12 +182,14 @@ class FakeAnalyticsTracker(
         attemptNumber: Int
     ) {}
     override fun examPassed(score: Int, total: Int, durationSeconds: Int, attemptNumber: Int) {}
-    override fun streakExtended(weeks: Int, previousWeeks: Int) {
-        streakExtendedEvents.add(StreakChangeEvent(previousWeeks, weeks))
-    }
-    override fun streakBroken(previousWeeks: Int, weeks: Int) {
-        streakBrokenEvents.add(StreakChangeEvent(previousWeeks, weeks))
-    }
+    override fun examFailed(
+        score: Int,
+        total: Int,
+        mistakes: Int,
+        durationSeconds: Int,
+        timeRanOut: Boolean,
+        attemptNumber: Int
+    ) {}
 
     fun clear() {
         identifiedUsers.clear()
@@ -202,8 +199,6 @@ class FakeAnalyticsTracker(
         gameStartedEvents.clear()
         gameCompletedEvents.clear()
         gameAbandonedEvents.clear()
-        streakExtendedEvents.clear()
-        streakBrokenEvents.clear()
     }
 }
 

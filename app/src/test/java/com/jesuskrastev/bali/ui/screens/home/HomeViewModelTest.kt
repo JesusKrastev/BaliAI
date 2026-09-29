@@ -2,7 +2,6 @@ package com.jesuskrastev.bali.ui.screens.home
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.jesuskrastev.bali.data.analytics.StreakChangeTracker
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
@@ -66,7 +65,6 @@ class HomeViewModelTest {
             generateNextPathNodesUseCase = fakeGenerateNextPathNodesUseCase,
             generateInitialPathUseCase = fakeGenerateInitialPathUseCase,
             analyticsTracker = fakeAnalyticsTracker,
-            streakChangeTracker = StreakChangeTracker(context, fakeAnalyticsTracker),
             dateTimeHelper = dateTimeHelper,
             remoteConfigProvider = remoteConfigProvider,
             context = context

@@ -417,6 +417,7 @@ class ExamViewModel @Inject constructor(
             durationSeconds = durationSeconds,
             isPassed = isPassed,
             xpGained = xpEarned.xpGained,
+            timeRanOut = state.isTimeUp,
             attemptNumber = previousAttempts + 1
         )
 
@@ -437,8 +438,8 @@ class ExamViewModel @Inject constructor(
     }
 
     /**
-     * Reports the finished exam — and, when it was passed, that too — once the result has been
-     * saved.
+     * Reports the finished exam, and then either the pass or the failure, once the result has
+     * been saved.
      *
      * @param correct number of correct answers
      * @param total number of questions in the exam
@@ -446,6 +447,7 @@ class ExamViewModel @Inject constructor(
      * @param durationSeconds time spent on the exam
      * @param isPassed whether the score met the DGT bar (three mistakes or fewer)
      * @param xpGained XP awarded for this attempt
+     * @param timeRanOut whether the clock ran out before the user finished
      * @param attemptNumber 1 for the user's first official exam, 2 for the second, and so on
      */
     private fun trackCompletion(
@@ -455,6 +457,7 @@ class ExamViewModel @Inject constructor(
         durationSeconds: Int,
         isPassed: Boolean,
         xpGained: Int,
+        timeRanOut: Boolean,
         attemptNumber: Int
     ) {
         analytics.examCompleted(
@@ -471,6 +474,15 @@ class ExamViewModel @Inject constructor(
                 score = correct,
                 total = total,
                 durationSeconds = durationSeconds,
+                attemptNumber = attemptNumber
+            )
+        } else {
+            analytics.examFailed(
+                score = correct,
+                total = total,
+                mistakes = total - correct,
+                durationSeconds = durationSeconds,
+                timeRanOut = timeRanOut,
                 attemptNumber = attemptNumber
             )
         }

@@ -502,8 +502,8 @@ open class AnalyticsTracker @Inject constructor(
     // ── STUDY LOOP ──────────────────────────────────────────────────────────
     //
     // The events that tell whether the habit loop works once someone is paying: did they finish
-    // what they started (test, node, exam), did it go well, and did the weekly streak survive.
-    // Every one is sent once per finished attempt, never per question.
+    // what they started (test, node, exam) and did it go well. Every one is sent once per
+    // finished attempt, never per question.
 
     /**
      * Tracks that the user finished a practice test, whether it came from a learning-path node
@@ -616,30 +616,33 @@ open class AnalyticsTracker @Inject constructor(
         }
 
     /**
-     * Tracks that the user's weekly streak grew. It also covers a streak starting from zero.
+     * Tracks that the user failed the in-app exam simulation. Sent on top of [examCompleted], so
+     * failures can be counted, and told apart by cause, without filtering.
      *
-     * The streak is evaluated by a weekly Cloud Function, so this is sent when the app first sees
-     * the new value, not at the instant it changed. See [StreakChangeTracker].
+     * Like [examPassed], this is the app's own 30-question exam, not the real DGT exam.
      *
-     * @param weeks streak length in weeks after the change
-     * @param previousWeeks streak length in weeks before it, 0 when a new streak began
+     * @param score number of correct answers
+     * @param total number of questions in the exam
+     * @param mistakes number of wrong or unanswered questions; the exam is failed from the fourth
+     * @param durationSeconds time spent on the exam
+     * @param timeRanOut true when the clock ran out before the user finished, which tells a
+     *   student who needs more speed from one who needs more knowledge
+     * @param attemptNumber how many exams this user had taken up to and including this one
      */
-    open fun streakExtended(weeks: Int, previousWeeks: Int) = log("streak_extended") {
-        putInt("streak_weeks", weeks)
-        putInt("previous_streak_weeks", previousWeeks)
-        putBoolean("is_new_streak", previousWeeks == 0)
-    }
-
-    /**
-     * Tracks that the user's weekly streak shrank, which in practice means it was lost. Like
-     * [streakExtended], it is sent when the app first sees the new value.
-     *
-     * @param previousWeeks streak length in weeks before the drop
-     * @param weeks streak length in weeks after it, usually 0
-     */
-    open fun streakBroken(previousWeeks: Int, weeks: Int) = log("streak_broken") {
-        putInt("previous_streak_weeks", previousWeeks)
-        putInt("streak_weeks", weeks)
+    open fun examFailed(
+        score: Int,
+        total: Int,
+        mistakes: Int,
+        durationSeconds: Int,
+        timeRanOut: Boolean,
+        attemptNumber: Int
+    ) = log("exam_failed") {
+        putInt("score", score)
+        putInt("total_questions", total)
+        putInt("mistakes", mistakes)
+        putInt("duration_seconds", durationSeconds)
+        putBoolean("time_ran_out", timeRanOut)
+        putInt("attempt_number", attemptNumber)
     }
 
     // ── MINI-GAMES ──────────────────────────────────────────────────────────

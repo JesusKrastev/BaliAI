@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
-import com.jesuskrastev.bali.data.analytics.StreakChangeTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -43,7 +42,6 @@ class HomeViewModel @Inject constructor(
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
     private val generateInitialPathUseCase: GenerateInitialPathUseCase,
     private val analyticsTracker: AnalyticsTracker,
-    private val streakChangeTracker: StreakChangeTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
     @ApplicationContext private val context: Context
@@ -64,28 +62,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
-        observeStreak()
         viewModelScope.launch {
             remoteConfigProvider.fetchAndActivate()
-        }
-    }
-
-    /**
-     * Feeds every distinct streak value the signed-in user reports into [streakChangeTracker],
-     * which turns changes into `streak_extended` / `streak_broken` events. Nothing is reported
-     * while signed out: the local profile has no account to compare against.
-     */
-    private fun observeStreak() {
-        viewModelScope.launch {
-            userRepository.get()
-                .filterNotNull()
-                .map { it.currentStreak }
-                .distinctUntilChanged()
-                .collect { streakWeeks ->
-                    authRepository.currentUser()?.let { userId ->
-                        streakChangeTracker.onStreakObserved(userId, streakWeeks)
-                    }
-                }
         }
     }
 

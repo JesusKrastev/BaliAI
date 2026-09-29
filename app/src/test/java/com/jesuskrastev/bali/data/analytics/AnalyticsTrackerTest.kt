@@ -193,39 +193,43 @@ class AnalyticsTrackerTest {
     }
 
     @Test
-    fun `a streak that starts from zero is flagged as new`() {
+    fun `failing the exam reports the mistakes and whether time ran out`() {
         val bundle = argumentCaptor<Bundle>()
 
-        tracker.streakExtended(weeks = 1, previousWeeks = 0)
+        tracker.examFailed(
+            score = 22,
+            total = 30,
+            mistakes = 8,
+            durationSeconds = 1800,
+            timeRanOut = true,
+            attemptNumber = 2
+        )
 
-        verify(firebase).logEvent(eq("streak_extended"), bundle.capture())
+        verify(firebase).logEvent(eq("exam_failed"), bundle.capture())
+        verify(mixpanel).track(eq("exam_failed"), any<JSONObject>())
         with(bundle.firstValue) {
-            assertThat(getInt("streak_weeks")).isEqualTo(1)
-            assertThat(getInt("previous_streak_weeks")).isEqualTo(0)
-            assertThat(getBoolean("is_new_streak")).isTrue()
+            assertThat(getInt("score")).isEqualTo(22)
+            assertThat(getInt("mistakes")).isEqualTo(8)
+            assertThat(getInt("duration_seconds")).isEqualTo(1800)
+            assertThat(getBoolean("time_ran_out")).isTrue()
+            assertThat(getInt("attempt_number")).isEqualTo(2)
         }
     }
 
     @Test
-    fun `growing an existing streak is not flagged as new`() {
+    fun `an exam failed before the clock ran out is not flagged as a timeout`() {
         val bundle = argumentCaptor<Bundle>()
 
-        tracker.streakExtended(weeks = 4, previousWeeks = 3)
+        tracker.examFailed(
+            score = 25,
+            total = 30,
+            mistakes = 5,
+            durationSeconds = 1200,
+            timeRanOut = false,
+            attemptNumber = 1
+        )
 
-        verify(firebase).logEvent(eq("streak_extended"), bundle.capture())
-        assertThat(bundle.firstValue.getBoolean("is_new_streak")).isFalse()
-    }
-
-    @Test
-    fun `a lost streak reports how long it had lasted`() {
-        val bundle = argumentCaptor<Bundle>()
-
-        tracker.streakBroken(previousWeeks = 5, weeks = 0)
-
-        verify(firebase).logEvent(eq("streak_broken"), bundle.capture())
-        with(bundle.firstValue) {
-            assertThat(getInt("previous_streak_weeks")).isEqualTo(5)
-            assertThat(getInt("streak_weeks")).isEqualTo(0)
-        }
+        verify(firebase).logEvent(eq("exam_failed"), bundle.capture())
+        assertThat(bundle.firstValue.getBoolean("time_ran_out")).isFalse()
     }
 }
