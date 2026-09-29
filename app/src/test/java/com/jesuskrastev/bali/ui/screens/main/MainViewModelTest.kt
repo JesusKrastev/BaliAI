@@ -33,6 +33,7 @@ private class FakeSubscriptionRepository(private val hasPremium: Boolean) : Subs
     override suspend fun restorePurchases(): Result<CustomerInfo> = Result.success(customerInfo)
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = hasPremium
     override suspend fun getOffering(identifier: String): Result<Offering?> = Result.success(null)
+    override suspend fun identify(userId: String): Result<CustomerInfo> = Result.success(customerInfo)
 }
 
 /** No-op [FirestoreMigrationManager]; entry-point resolution never reaches it when signed out. */

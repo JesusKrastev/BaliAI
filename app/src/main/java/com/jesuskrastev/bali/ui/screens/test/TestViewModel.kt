@@ -434,6 +434,13 @@ class TestViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Scores the finished test and applies everything it earns: XP, coins, the saved result and
+     * answers, the weekly streak and, for a path node, its completion and the unlock of the next
+     * one. Reports the attempt to analytics once it is all saved.
+     *
+     * @return the summary the result screen shows
+     */
     private suspend fun calculateResult(): TestSummary {
         val state = _uiState.value
         val correct = state.questions.indices.count { index ->
@@ -460,6 +467,7 @@ class TestViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
+        var unlockedNextNode = false
 
         withContext(Dispatchers.IO) {
             // 1. Save test result
@@ -522,10 +530,21 @@ class TestViewModel @Inject constructor(
                             NodeStatus.UNLOCKED.name,
                             null
                         )
+                        unlockedNextNode = true
                     }
                 }
             }
         }
+
+        trackCompletion(
+            correct = correct,
+            total = state.questions.size,
+            accuracy = accuracy,
+            durationSeconds = durationSeconds,
+            xpGained = xpEarned.xpGained,
+            isRepeat = isRepeat,
+            unlockedNextNode = unlockedNextNode
+        )
 
         return TestSummary(
             score = correct,
@@ -541,6 +560,48 @@ class TestViewModel @Inject constructor(
             coinsGained = coinsGained,
             newWeekSessions = newWeekSessions
         )
+    }
+
+    /**
+     * Reports the finished test and, when it belonged to a learning-path node, that node's
+     * completion, once the result has been saved.
+     *
+     * @param correct number of correct answers
+     * @param total number of questions in the test
+     * @param accuracy correct answers as a whole percentage, 0 to 100
+     * @param durationSeconds time spent on the test
+     * @param xpGained XP awarded for this attempt
+     * @param isRepeat whether the node had already been completed before this attempt
+     * @param unlockedNextNode whether this attempt unlocked the next node on the path
+     */
+    private fun trackCompletion(
+        correct: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        xpGained: Int,
+        isRepeat: Boolean,
+        unlockedNextNode: Boolean
+    ) {
+        analytics.testCompleted(
+            score = correct,
+            total = total,
+            accuracy = accuracy,
+            durationSeconds = durationSeconds,
+            xpGained = xpGained,
+            nodeType = aiNodeType,
+            isRepeat = isRepeat
+        )
+        aiNodeId?.let { nodeId ->
+            analytics.nodeCompleted(
+                nodeId = nodeId,
+                nodeType = aiNodeType,
+                accuracy = accuracy,
+                passed = accuracy >= PASSING_ACCURACY,
+                unlockedNext = unlockedNextNode,
+                isRepeat = isRepeat
+            )
+        }
     }
 
     override fun onCleared() {

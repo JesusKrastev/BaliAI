@@ -46,11 +46,24 @@ open class AnalyticsTracker @Inject constructor(
 
     // ── USERS ───────────────────────────────────────────────────────────────
 
-    /** Identifies the user in Firebase, Mixpanel and PostHog, and opts Mixpanel into tracking. */
+    /**
+     * Identifies the user in Firebase, Mixpanel and PostHog, and opts Mixpanel into tracking.
+     *
+     * Mixpanel is only opted in while PostHog is not: PostHog's opt-out is the one switch that
+     * marks a silenced build (Robolectric, Firebase Test Lab), and turning Mixpanel back on here
+     * would let a signed-in robot leak into it.
+     *
+     * The [userId] is the Firebase uid, the same id RevenueCat is logged in with (see
+     * [com.jesuskrastev.bali.domain.repository.SubscriptionRepository.identify]), so a purchase
+     * lands on the same person as the in-app events.
+     *
+     * @param userId Firebase uid of the signed-in user
+     * @param email the user's email, stored as a person property when present
+     */
     open fun identifyUser(userId: String, email: String? = null) {
         firebase.setUserId(userId)
         mixpanel.identify(userId)
-        mixpanel.optInTracking()
+        if (!posthog.isOptOut()) mixpanel.optInTracking()
         email?.let { mixpanel.people.set("\$email", it) }
         posthog.identify(distinctId = userId, userProperties = email?.let { mapOf("email" to it) })
     }
@@ -176,6 +189,13 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     // ── PAYWALL ─────────────────────────────────────────────────────────────
+    //
+    // Not every paywall_* event in PostHog is sent from here. `paywall_impression`,
+    // `paywall_close`, `paywall_cancel` and `paywall_component_interacted` come from RevenueCat's
+    // own PostHog integration (server-to-server, so they carry no `$lib` and no `environment`),
+    // and `rc_*` are its subscription lifecycle events. They overlap with `paywall_shown` and
+    // `paywall_closed` below, and can only be switched off in the RevenueCat dashboard
+    // (Integrations -> PostHog), never from this code.
 
     /**
      * Tracks that the paywall screen was displayed to the user.
@@ -478,6 +498,149 @@ open class AnalyticsTracker @Inject constructor(
             putInt("input_tokens", inputTokens)
             putInt("output_tokens", outputTokens)
         }
+
+    // ── STUDY LOOP ──────────────────────────────────────────────────────────
+    //
+    // The events that tell whether the habit loop works once someone is paying: did they finish
+    // what they started (test, node, exam), did it go well, and did the weekly streak survive.
+    // Every one is sent once per finished attempt, never per question.
+
+    /**
+     * Tracks that the user finished a practice test, whether it came from a learning-path node
+     * or not.
+     *
+     * @param score number of correct answers
+     * @param total number of questions in the test
+     * @param accuracy correct answers as a whole percentage, 0 to 100
+     * @param durationSeconds time between the first question appearing and the last answer
+     * @param xpGained XP awarded for the attempt, already reduced when it is a repeat
+     * @param nodeType [com.jesuskrastev.bali.domain.model.NodeType] name of the node the test
+     *   belongs to (`LESSON`, `REVIEW`, `EXAM`), or null for a test outside the path
+     * @param isRepeat true when the node had already been completed before this attempt
+     */
+    open fun testCompleted(
+        score: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        xpGained: Int,
+        nodeType: String?,
+        isRepeat: Boolean
+    ) = log("test_completed") {
+        putInt("score", score)
+        putInt("total_questions", total)
+        putInt("accuracy", accuracy)
+        putInt("duration_seconds", durationSeconds)
+        putInt("xp_gained", xpGained)
+        nodeType?.let { putString("node_type", it) }
+        putBoolean("is_repeat", isRepeat)
+    }
+
+    /**
+     * Tracks that the user finished the test of a learning-path node.
+     *
+     * The app marks a node as completed on any attempt and only unlocks the next one when the
+     * score clears the bar, so [passed] and [unlockedNext] are what tell a real advance from a
+     * mere attempt.
+     *
+     * @param nodeId identifier of the node on the learning path
+     * @param nodeType `LESSON`, `REVIEW` or `EXAM`, or null when it is unknown
+     * @param accuracy correct answers as a whole percentage, 0 to 100
+     * @param passed true when [accuracy] cleared the bar that unlocks the next node
+     * @param unlockedNext true when this attempt actually unlocked the next node
+     * @param isRepeat true when the node had already been completed before this attempt
+     */
+    open fun nodeCompleted(
+        nodeId: String,
+        nodeType: String?,
+        accuracy: Int,
+        passed: Boolean,
+        unlockedNext: Boolean,
+        isRepeat: Boolean
+    ) = log("node_completed") {
+        putString("node_id", nodeId)
+        nodeType?.let { putString("node_type", it) }
+        putInt("accuracy", accuracy)
+        putBoolean("passed", passed)
+        putBoolean("unlocked_next", unlockedNext)
+        putBoolean("is_repeat", isRepeat)
+    }
+
+    /**
+     * Tracks that the user finished a full 30-question exam, pass or fail.
+     *
+     * @param score number of correct answers
+     * @param total number of questions in the exam
+     * @param accuracy correct answers as a whole percentage, 0 to 100
+     * @param durationSeconds time spent on the exam
+     * @param passed true when the score met the DGT bar (three mistakes or fewer)
+     * @param xpGained XP awarded for the attempt, already reduced when it is a repeat
+     * @param attemptNumber 1 for the first exam this user takes, 2 for the second, and so on
+     */
+    open fun examCompleted(
+        score: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        passed: Boolean,
+        xpGained: Int,
+        attemptNumber: Int
+    ) = log("exam_completed") {
+        putInt("score", score)
+        putInt("total_questions", total)
+        putInt("accuracy", accuracy)
+        putInt("duration_seconds", durationSeconds)
+        putBoolean("passed", passed)
+        putInt("xp_gained", xpGained)
+        putInt("attempt_number", attemptNumber)
+    }
+
+    /**
+     * Tracks that the user passed the in-app exam simulation. Sent on top of [examCompleted], so
+     * the first pass and the number of tries it took can be read without filtering.
+     *
+     * This is the app's own 30-question exam, not the real DGT exam, whose result the app never
+     * learns.
+     *
+     * @param score number of correct answers
+     * @param total number of questions in the exam
+     * @param durationSeconds time spent on the exam
+     * @param attemptNumber how many exams this user had taken up to and including this one
+     */
+    open fun examPassed(score: Int, total: Int, durationSeconds: Int, attemptNumber: Int) =
+        log("exam_passed") {
+            putInt("score", score)
+            putInt("total_questions", total)
+            putInt("duration_seconds", durationSeconds)
+            putInt("attempt_number", attemptNumber)
+        }
+
+    /**
+     * Tracks that the user's weekly streak grew. It also covers a streak starting from zero.
+     *
+     * The streak is evaluated by a weekly Cloud Function, so this is sent when the app first sees
+     * the new value, not at the instant it changed. See [StreakChangeTracker].
+     *
+     * @param weeks streak length in weeks after the change
+     * @param previousWeeks streak length in weeks before it, 0 when a new streak began
+     */
+    open fun streakExtended(weeks: Int, previousWeeks: Int) = log("streak_extended") {
+        putInt("streak_weeks", weeks)
+        putInt("previous_streak_weeks", previousWeeks)
+        putBoolean("is_new_streak", previousWeeks == 0)
+    }
+
+    /**
+     * Tracks that the user's weekly streak shrank, which in practice means it was lost. Like
+     * [streakExtended], it is sent when the app first sees the new value.
+     *
+     * @param previousWeeks streak length in weeks before the drop
+     * @param weeks streak length in weeks after it, usually 0
+     */
+    open fun streakBroken(previousWeeks: Int, weeks: Int) = log("streak_broken") {
+        putInt("previous_streak_weeks", previousWeeks)
+        putInt("streak_weeks", weeks)
+    }
 
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 

@@ -123,6 +123,9 @@ class FakeAuthRepository(
 
 data class GameCompletedEvent(val gameId: String, val score: Int, val totalRounds: Int, val durationSeconds: Int)
 
+/** A `streak_extended` or `streak_broken` event: streak length in weeks before and after the change. */
+data class StreakChangeEvent(val previousWeeks: Int, val weeks: Int)
+
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
     mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
@@ -135,6 +138,8 @@ class FakeAnalyticsTracker(
     val gameStartedEvents = mutableListOf<String>()
     val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
     val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
+    val streakExtendedEvents = mutableListOf<StreakChangeEvent>()
+    val streakBrokenEvents = mutableListOf<StreakChangeEvent>()
 
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
@@ -155,6 +160,39 @@ class FakeAnalyticsTracker(
         gameCompletedEvents.add(GameCompletedEvent(gameId, score, totalRounds, durationSeconds))
     }
     override fun gameAbandoned(gameId: String, roundIndex: Int) { gameAbandonedEvents.add(gameId to roundIndex) }
+    override fun testCompleted(
+        score: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        xpGained: Int,
+        nodeType: String?,
+        isRepeat: Boolean
+    ) {}
+    override fun nodeCompleted(
+        nodeId: String,
+        nodeType: String?,
+        accuracy: Int,
+        passed: Boolean,
+        unlockedNext: Boolean,
+        isRepeat: Boolean
+    ) {}
+    override fun examCompleted(
+        score: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        passed: Boolean,
+        xpGained: Int,
+        attemptNumber: Int
+    ) {}
+    override fun examPassed(score: Int, total: Int, durationSeconds: Int, attemptNumber: Int) {}
+    override fun streakExtended(weeks: Int, previousWeeks: Int) {
+        streakExtendedEvents.add(StreakChangeEvent(previousWeeks, weeks))
+    }
+    override fun streakBroken(previousWeeks: Int, weeks: Int) {
+        streakBrokenEvents.add(StreakChangeEvent(previousWeeks, weeks))
+    }
 
     fun clear() {
         identifiedUsers.clear()
@@ -164,6 +202,8 @@ class FakeAnalyticsTracker(
         gameStartedEvents.clear()
         gameCompletedEvents.clear()
         gameAbandonedEvents.clear()
+        streakExtendedEvents.clear()
+        streakBrokenEvents.clear()
     }
 }
 

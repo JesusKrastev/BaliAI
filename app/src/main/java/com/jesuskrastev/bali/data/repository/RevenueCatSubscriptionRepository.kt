@@ -6,6 +6,7 @@ import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesException
 import com.revenuecat.purchases.awaitCustomerInfo
+import com.revenuecat.purchases.awaitLogIn
 import com.revenuecat.purchases.awaitOfferings
 import com.revenuecat.purchases.awaitRestore
 import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
@@ -64,6 +65,22 @@ class RevenueCatSubscriptionRepository @Inject constructor() : SubscriptionRepos
         return try {
             val offerings = Purchases.sharedInstance.awaitOfferings()
             Result.success(offerings.getOffering(identifier))
+        } catch (e: PurchasesException) {
+            Result.failure(e)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun identify(userId: String): Result<CustomerInfo> {
+        return try {
+            val customerInfo = Purchases.sharedInstance.awaitLogIn(userId).customerInfo
+            // Attributes belong to the customer, and logging in switched customer, so the
+            // PostHog link (the same uid AnalyticsTracker.identifyUser identified) is set again.
+            Purchases.sharedInstance.setPostHogUserId(userId)
+            Result.success(customerInfo)
         } catch (e: PurchasesException) {
             Result.failure(e)
         } catch (e: CancellationException) {

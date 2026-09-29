@@ -261,4 +261,6 @@ private class FakeSubscriptionRepository : SubscriptionRepository {
 
     override suspend fun getOffering(identifier: String): Result<Offering?> =
         offeringFailure?.let { Result.failure(it) } ?: Result.success(winbackOffering)
+
+    override suspend fun identify(userId: String): Result<CustomerInfo> = Result.success(customerInfo)
 }

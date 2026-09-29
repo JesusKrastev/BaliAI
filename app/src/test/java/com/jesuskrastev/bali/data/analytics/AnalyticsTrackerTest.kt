@@ -15,6 +15,7 @@ import org.mockito.kotlin.inOrder
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -71,6 +72,160 @@ class AnalyticsTrackerTest {
         inOrder(posthog) {
             verify(posthog).reset()
             verify(posthog).register(AnalyticsTracker.KEY_ENVIRONMENT, environment)
+        }
+    }
+
+    @Test
+    fun `identifying a user opts Mixpanel in`() {
+        tracker.identifyUser("uid_1")
+
+        verify(firebase).setUserId("uid_1")
+        verify(mixpanel).identify("uid_1")
+        verify(mixpanel).optInTracking()
+    }
+
+    @Test
+    fun `identifying a user never turns Mixpanel back on while PostHog is opted out`() {
+        // PostHog's opt-out marks a silenced build (Firebase Test Lab, Robolectric).
+        whenever(posthog.isOptOut()).thenReturn(true)
+
+        tracker.identifyUser("uid_1")
+
+        verify(mixpanel).identify("uid_1")
+        verify(mixpanel, never()).optInTracking()
+    }
+
+    @Test
+    fun `a finished test reports its accuracy and the kind of node it came from`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.testCompleted(
+            score = 8,
+            total = 10,
+            accuracy = 80,
+            durationSeconds = 95,
+            xpGained = 12,
+            nodeType = "LESSON",
+            isRepeat = false
+        )
+
+        verify(firebase).logEvent(eq("test_completed"), bundle.capture())
+        verify(mixpanel).track(eq("test_completed"), any<JSONObject>())
+        with(bundle.firstValue) {
+            assertThat(getInt("score")).isEqualTo(8)
+            assertThat(getInt("total_questions")).isEqualTo(10)
+            assertThat(getInt("accuracy")).isEqualTo(80)
+            assertThat(getInt("duration_seconds")).isEqualTo(95)
+            assertThat(getInt("xp_gained")).isEqualTo(12)
+            assertThat(getString("node_type")).isEqualTo("LESSON")
+            assertThat(getBoolean("is_repeat")).isFalse()
+        }
+    }
+
+    @Test
+    fun `a finished test outside the learning path carries no node type`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.testCompleted(7, 10, 70, 60, 5, nodeType = null, isRepeat = false)
+
+        verify(firebase).logEvent(eq("test_completed"), bundle.capture())
+        assertThat(bundle.firstValue.containsKey("node_type")).isFalse()
+    }
+
+    @Test
+    fun `a finished node tells an attempt apart from a real advance`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.nodeCompleted(
+            nodeId = "lesson_3",
+            nodeType = "REVIEW",
+            accuracy = 60,
+            passed = false,
+            unlockedNext = false,
+            isRepeat = true
+        )
+
+        verify(firebase).logEvent(eq("node_completed"), bundle.capture())
+        with(bundle.firstValue) {
+            assertThat(getString("node_id")).isEqualTo("lesson_3")
+            assertThat(getString("node_type")).isEqualTo("REVIEW")
+            assertThat(getInt("accuracy")).isEqualTo(60)
+            assertThat(getBoolean("passed")).isFalse()
+            assertThat(getBoolean("unlocked_next")).isFalse()
+            assertThat(getBoolean("is_repeat")).isTrue()
+        }
+    }
+
+    @Test
+    fun `a finished exam reports whether it was passed and which attempt it was`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.examCompleted(
+            score = 27,
+            total = 30,
+            accuracy = 90,
+            durationSeconds = 1400,
+            passed = true,
+            xpGained = 40,
+            attemptNumber = 2
+        )
+
+        verify(firebase).logEvent(eq("exam_completed"), bundle.capture())
+        with(bundle.firstValue) {
+            assertThat(getInt("score")).isEqualTo(27)
+            assertThat(getBoolean("passed")).isTrue()
+            assertThat(getInt("attempt_number")).isEqualTo(2)
+        }
+    }
+
+    @Test
+    fun `passing the exam is reported as its own event`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.examPassed(score = 28, total = 30, durationSeconds = 1300, attemptNumber = 3)
+
+        verify(firebase).logEvent(eq("exam_passed"), bundle.capture())
+        verify(mixpanel).track(eq("exam_passed"), any<JSONObject>())
+        with(bundle.firstValue) {
+            assertThat(getInt("score")).isEqualTo(28)
+            assertThat(getInt("attempt_number")).isEqualTo(3)
+        }
+    }
+
+    @Test
+    fun `a streak that starts from zero is flagged as new`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.streakExtended(weeks = 1, previousWeeks = 0)
+
+        verify(firebase).logEvent(eq("streak_extended"), bundle.capture())
+        with(bundle.firstValue) {
+            assertThat(getInt("streak_weeks")).isEqualTo(1)
+            assertThat(getInt("previous_streak_weeks")).isEqualTo(0)
+            assertThat(getBoolean("is_new_streak")).isTrue()
+        }
+    }
+
+    @Test
+    fun `growing an existing streak is not flagged as new`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.streakExtended(weeks = 4, previousWeeks = 3)
+
+        verify(firebase).logEvent(eq("streak_extended"), bundle.capture())
+        assertThat(bundle.firstValue.getBoolean("is_new_streak")).isFalse()
+    }
+
+    @Test
+    fun `a lost streak reports how long it had lasted`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.streakBroken(previousWeeks = 5, weeks = 0)
+
+        verify(firebase).logEvent(eq("streak_broken"), bundle.capture())
+        with(bundle.firstValue) {
+            assertThat(getInt("previous_streak_weeks")).isEqualTo(5)
+            assertThat(getInt("streak_weeks")).isEqualTo(0)
         }
     }
 }

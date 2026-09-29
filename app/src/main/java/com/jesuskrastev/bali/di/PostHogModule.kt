@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.di
 import android.content.Context
 import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.RobolectricDetector
+import com.jesuskrastev.bali.TestLabDetector
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.posthog.PostHogInterface
 import com.posthog.android.PostHogAndroid
@@ -35,7 +36,10 @@ object PostHogModule {
      *
      * Every event, the SDK's own included, carries the `environment` property so debug traffic
      * can be filtered out. Under Robolectric the client is opted out and replay is not
-     * started, so unit tests never touch the network.
+     * started, so unit tests never touch the network. The same goes for Firebase Test Lab (and
+     * Google Play's pre-launch report, which runs on it): the robot must not appear as a user,
+     * so the client is opted out from the very start, lifecycle events and replay included.
+     * The opt-out is also what [AnalyticsTracker] reads to keep Mixpanel from being re-enabled.
      *
      * @param context application context, required to initialize the SDK
      * @return a configured [PostHogInterface] instance
@@ -46,13 +50,17 @@ object PostHogModule {
         @ApplicationContext context: Context
     ): PostHogInterface {
         val isRobolectric = RobolectricDetector.isRobolectric()
+        val isMuted = isRobolectric || TestLabDetector.isTestLab(context)
         val config = PostHogAndroidConfig(
             apiKey = if (isRobolectric) "test_token" else BuildConfig.POSTHOG_API_KEY,
             host = BuildConfig.POSTHOG_HOST
         ).apply {
-            captureApplicationLifecycleEvents = true
+            // Opted out in the config, not after setup: lifecycle events are captured during
+            // setup, so a later optOut() would already be too late for "Application Installed".
+            optOut = isMuted
+            captureApplicationLifecycleEvents = !isMuted
             captureScreenViews = false
-            sessionReplay = !isRobolectric && !BuildConfig.DEBUG
+            sessionReplay = !isMuted && !BuildConfig.DEBUG
             sessionReplayConfig.apply {
                 screenshot = true
                 screenshotScale = 0.5f
@@ -66,7 +74,7 @@ object PostHogModule {
         }
         return PostHogAndroid.with(context, config).apply {
             register(AnalyticsTracker.KEY_ENVIRONMENT, AnalyticsTracker.currentEnvironment())
-            if (isRobolectric) optOut()
+            if (isMuted) optOut()
         }
     }
 }

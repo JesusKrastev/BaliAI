@@ -343,6 +343,14 @@ class ExamViewModel @Inject constructor(
         _uiState.update { it.copy(showReviewGrid = !it.showReviewGrid) }
     }
 
+    /**
+     * Scores the finished exam and applies everything it earns: XP, coins, the saved result and
+     * answers and the weekly streak. It passes with 27 correct answers out of 30 (three mistakes
+     * or fewer). Reports the attempt, and the pass if there was one, to analytics once it is all
+     * saved.
+     *
+     * @return the summary the result screen shows
+     */
     private suspend fun calculateResult(): TestSummary {
         timerJob?.cancel()
         val state = _uiState.value
@@ -360,7 +368,8 @@ class ExamViewModel @Inject constructor(
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
         // content again" — otherwise a 100-coin exam would silently pay full XP every time.
-        val isRepeat = testResultRepository.get().first().any { it.category == OFFICIAL_EXAM_CATEGORY }
+        val previousAttempts = testResultRepository.get().first().count { it.category == OFFICIAL_EXAM_CATEGORY }
+        val isRepeat = previousAttempts > 0
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -401,6 +410,16 @@ class ExamViewModel @Inject constructor(
             newWeekSessions = incrementStreakUseCase()
         }
 
+        trackCompletion(
+            correct = correct,
+            total = state.questions.size,
+            accuracy = accuracy,
+            durationSeconds = durationSeconds,
+            isPassed = isPassed,
+            xpGained = xpEarned.xpGained,
+            attemptNumber = previousAttempts + 1
+        )
+
         return TestSummary(
             score = correct,
             total = state.questions.size,
@@ -415,6 +434,46 @@ class ExamViewModel @Inject constructor(
             coinsGained = coinsGained,
             newWeekSessions = newWeekSessions
         )
+    }
+
+    /**
+     * Reports the finished exam — and, when it was passed, that too — once the result has been
+     * saved.
+     *
+     * @param correct number of correct answers
+     * @param total number of questions in the exam
+     * @param accuracy correct answers as a whole percentage, 0 to 100
+     * @param durationSeconds time spent on the exam
+     * @param isPassed whether the score met the DGT bar (three mistakes or fewer)
+     * @param xpGained XP awarded for this attempt
+     * @param attemptNumber 1 for the user's first official exam, 2 for the second, and so on
+     */
+    private fun trackCompletion(
+        correct: Int,
+        total: Int,
+        accuracy: Int,
+        durationSeconds: Int,
+        isPassed: Boolean,
+        xpGained: Int,
+        attemptNumber: Int
+    ) {
+        analytics.examCompleted(
+            score = correct,
+            total = total,
+            accuracy = accuracy,
+            durationSeconds = durationSeconds,
+            passed = isPassed,
+            xpGained = xpGained,
+            attemptNumber = attemptNumber
+        )
+        if (isPassed) {
+            analytics.examPassed(
+                score = correct,
+                total = total,
+                durationSeconds = durationSeconds,
+                attemptNumber = attemptNumber
+            )
+        }
     }
 
     override fun onCleared() {

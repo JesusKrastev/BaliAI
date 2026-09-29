@@ -120,6 +120,9 @@ class MainViewModel @Inject constructor(
             val currentUserUid = authRepository.currentUser()
             if (currentUserUid != null) {
                 OneSignal.login(currentUserUid)
+                // Covers accounts that signed in before RevenueCat was linked to the uid, and
+                // sign-ins where that link failed. Not awaited: nothing here depends on it.
+                launch { subscriptionRepository.identify(currentUserUid) }
                 runCatching {
                     val token = FirebaseMessaging.getInstance().token.await()
                     userRepository.updateFcmToken(token)

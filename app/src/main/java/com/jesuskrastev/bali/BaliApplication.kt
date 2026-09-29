@@ -8,6 +8,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.SvgDecoder
 import coil.util.DebugLogger
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.perf.FirebasePerformance
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
@@ -49,7 +50,13 @@ class BaliApplication : Application(), ImageLoaderFactory {
             .build()
     }
 
-    /** Initializes telemetry and third-party SDKs unless the process is a Robolectric test. */
+    /**
+     * Initializes telemetry and third-party SDKs unless the process is a Robolectric test.
+     *
+     * On Firebase Test Lab (which also runs Google Play's pre-launch report) everything still
+     * starts so the app behaves normally, but the SDKs that would count the robot as a user
+     * are silenced, see [muteEngagementSdks].
+     */
     override fun onCreate() {
         super.onCreate()
 
@@ -58,13 +65,17 @@ class BaliApplication : Application(), ImageLoaderFactory {
             return
         }
 
+        val isTestLab = TestLabDetector.isTestLab(this)
+
         if (BuildConfig.DEBUG) {
             FirebasePerformance.getInstance().isPerformanceCollectionEnabled = true
         }
         initAppCheck()
         createNotificationChannel()
+        if (isTestLab) muteEngagementSdks()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
-        MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
+        // On Test Lab MixpanelModule builds the client already opted out, on first injection.
+        if (!isTestLab) MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
         Purchases.logLevel = LogLevel.DEBUG
         val builder = PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY)
         Purchases.configure(
@@ -74,13 +85,33 @@ class BaliApplication : Application(), ImageLoaderFactory {
                 .diagnosticsEnabled(true)
                 .build(),
         )
-        linkRevenueCatToPostHog()
+        // A Test Lab robot has no PostHog person worth linking to (its events are dropped).
+        if (!isTestLab) linkRevenueCatToPostHog()
+    }
+
+    /**
+     * Keeps a Firebase Test Lab robot out of the tools that count users: Firebase Analytics
+     * stops collecting, and OneSignal is made to require consent that is never granted, so it
+     * neither registers the device nor receives pushes. PostHog and Mixpanel are opted out
+     * where they are created, in [com.jesuskrastev.bali.di.PostHogModule] and
+     * [com.jesuskrastev.bali.di.MixpanelModule].
+     *
+     * Must run before OneSignal is initialized, since consent is read at that point.
+     */
+    private fun muteEngagementSdks() {
+        FirebaseAnalytics.getInstance(this).setAnalyticsCollectionEnabled(false)
+        OneSignal.consentRequired = true
     }
 
     /**
      * Tells RevenueCat which PostHog person this install is (the `$posthogUserId` subscriber
      * attribute), so purchase events from its PostHog integration land on the same person as
      * the in-app events instead of on a separate `$RCAnonymousID` one.
+     *
+     * This covers the anonymous, pre-login person. Once the user signs in, PostHog is
+     * identified with the Firebase uid and
+     * [com.jesuskrastev.bali.domain.repository.SubscriptionRepository.identify] moves the
+     * RevenueCat customer to that same uid and refreshes the attribute.
      *
      * Only tags the subscriber: it cannot change purchases or entitlements. Resolving the
      * lazy client here also creates PostHog at process start, rather than on the first
@@ -103,6 +134,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(appCheckProviderFactory())
     }
 
+    /** Creates the high-importance "reminders" channel that study reminders and achievements use (API 26+). */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(

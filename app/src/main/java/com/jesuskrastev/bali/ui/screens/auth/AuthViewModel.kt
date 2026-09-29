@@ -11,6 +11,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
+import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 @HiltViewModel
@@ -27,6 +29,7 @@ class AuthViewModel @Inject constructor(
     private val answerRepository: AnswerRepository,
     private val authRepository: AuthRepository,
     private val analyticsTracker: AnalyticsTracker,
+    private val subscriptionRepository: SubscriptionRepository,
     private val migrationManager: FirestoreMigrationManager
 ) : ViewModel() {
 
@@ -44,6 +47,15 @@ class AuthViewModel @Inject constructor(
         _errorEmail.value = null
     }
 
+    /**
+     * Signs in with a Google account. New accounts get the local onboarding data uploaded to
+     * Firestore, existing ones run their pending migrations; either way the user is identified
+     * in analytics and the RevenueCat customer is linked to the account before [onSuccess] runs.
+     *
+     * @param context activity context the Google account picker is shown from
+     * @param restrictNewAccounts when true, only accounts that already exist may sign in
+     * @param onSuccess called once the sign-in has completed
+     */
     fun signInWithGoogle(context: Context, restrictNewAccounts: Boolean, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isLoggingIn.value = true
@@ -88,6 +100,7 @@ class AuthViewModel @Inject constructor(
                         analyticsTracker.login("google")
                         userId?.let { migrationManager.executePendingMigrations(it) }
                     }
+                    userId?.let { linkSubscriptionTo(it) }
                     // Navigate back
                     onSuccess()
                 } else {
@@ -107,6 +120,22 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Moves this device's RevenueCat customer to the account that just signed in, so a purchase
+     * made before signing in becomes the account's and later purchase events carry its uid.
+     *
+     * Best effort and bounded: a failure or a slow network must never hold up the sign-in, and
+     * [MainViewModel][com.jesuskrastev.bali.ui.screens.main.MainViewModel] repeats the link on
+     * the next launch.
+     *
+     * @param userId Firebase uid of the account that just signed in
+     */
+    private suspend fun linkSubscriptionTo(userId: String) {
+        withTimeoutOrNull(SUBSCRIPTION_LINK_TIMEOUT_MILLIS) {
+            subscriptionRepository.identify(userId)
+        }
+    }
+
     private suspend fun synchronizeLocalDataToFirestore(
         userId: String,
         user: User,
@@ -120,5 +149,10 @@ class AuthViewModel @Inject constructor(
             testResultRepository.clear()
             answerRepository.clear()
         }
+    }
+
+    private companion object {
+        /** Longest the sign-in waits for RevenueCat to link the account before moving on. */
+        const val SUBSCRIPTION_LINK_TIMEOUT_MILLIS = 5_000L
     }
 }
