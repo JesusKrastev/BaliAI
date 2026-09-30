@@ -10,7 +10,6 @@ import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
-import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
@@ -45,7 +44,6 @@ class HomeViewModelTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val dateTimeHelper: DateTimeHelper = mock()
     
-    private val fakeDecrementCoinsUseCase = DecrementCoinsUseCase(fakeUserRepository)
     private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeAuthRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
     private val remoteConfigProvider: RemoteConfigProvider = mock()
@@ -59,7 +57,6 @@ class HomeViewModelTest {
             userRepository = fakeUserRepository,
             testResultRepository = fakeTestResultRepository,
             answerRepository = fakeAnswerRepository,
-            decrementCoinsUseCase = fakeDecrementCoinsUseCase,
             authRepository = fakeAuthRepository,
             pathRepository = fakePathRepository,
             generateNextPathNodesUseCase = fakeGenerateNextPathNodesUseCase,
@@ -72,14 +69,12 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun `showNoCoinsDialog can be triggered by startExam`() = runTest {
+    fun `the coin balance on Home follows the user profile`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        // User starts with 500 coins in FakeUserRepository, so 100 coin exam should work.
-        // Let's set coins to 0 to trigger the dialog.
-        fakeUserRepository.setCoinsForTest(0)
-        assertThat(viewModel.uiState.value.showNoCoinsDialog).isFalse()
-        viewModel.startExam {}
-        assertThat(viewModel.uiState.value.showNoCoinsDialog).isTrue()
+
+        fakeUserRepository.setCoinsForTest(250)
+
+        assertThat(viewModel.uiState.value.coinsCount).isEqualTo(250)
         collectJob.cancel()
     }
 }

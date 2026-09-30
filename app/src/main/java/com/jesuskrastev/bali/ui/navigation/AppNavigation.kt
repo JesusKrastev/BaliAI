@@ -253,9 +253,8 @@ fun AppNavigation(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            viewModel.startExam {
-                                navController.navigate(ExamRoute)
-                            }
+                            // Mock exams are free for subscribers (idea 015): no coin check.
+                            navController.navigate(ExamRoute)
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }

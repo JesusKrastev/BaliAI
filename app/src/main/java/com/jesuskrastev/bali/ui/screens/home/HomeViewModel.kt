@@ -15,7 +15,6 @@ import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.LessonNode
@@ -28,15 +27,11 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
-/** Coins charged to start an official exam; also quoted in Home's "not enough coins" dialog. */
-internal const val EXAM_COST_COINS = 100
-
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
-    private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
     private val pathRepository: PathRepository,
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
@@ -50,7 +45,6 @@ class HomeViewModel @Inject constructor(
     private val _isPathLoading = MutableStateFlow(false)
     private val _pathError = MutableStateFlow<String?>(null)
 
-    private val _showNoCoinsDialog = MutableStateFlow(false)
     private val _dailyTip = MutableStateFlow("")
 
     private val _pathNodes: StateFlow<List<LessonNode>?> = authRepository.currentUserFlow
@@ -111,7 +105,6 @@ class HomeViewModel @Inject constructor(
         testResultRepository.count(),
         answerRepository.getRecentMistakes(),
         testResultRepository.getAverageScore(),
-        _showNoCoinsDialog,
         _dailyTip,
         _pathNodes,
         _isPathLoading,
@@ -123,13 +116,12 @@ class HomeViewModel @Inject constructor(
         val totalTests = flows[1] as Int
         val mistakes = flows[2] as List<*>
         val avgScore = flows[3] as Double? ?: 0.0
-        val showNoCoinsDialog = flows[4] as Boolean
-        val dailyTip = flows[5] as String
-        val pathNodes = flows[6] as List<*>?
-        val isPathLoading = flows[7] as Boolean
-        val pathError = flows[8] as String?
-        val profilePictureUrl = flows[9] as String?
-        val userEmail = flows[10] as String?
+        val dailyTip = flows[4] as String
+        val pathNodes = flows[5] as List<*>?
+        val isPathLoading = flows[6] as Boolean
+        val pathError = flows[7] as String?
+        val profilePictureUrl = flows[8] as String?
+        val userEmail = flows[9] as String?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -160,7 +152,6 @@ class HomeViewModel @Inject constructor(
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
                 highestStreak = user.highestStreak,
-                showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
                 weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays),
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
@@ -181,21 +172,6 @@ class HomeViewModel @Inject constructor(
             analyticsTracker.logout()
             analyticsTracker.resetUser()
         }
-    }
-
-    fun startExam(onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            val success = decrementCoinsUseCase(EXAM_COST_COINS)
-            if (success) {
-                onSuccess()
-            } else {
-                _showNoCoinsDialog.value = true
-            }
-        }
-    }
-
-    fun dismissNoCoinsDialog() {
-        _showNoCoinsDialog.value = false
     }
 
     fun generateNextPathNodesCount(count: Int = 5) {

@@ -64,8 +64,9 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
  * scrollable learning-path graph. The account menu that used to open from here as a side
  * drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
- * @param viewModel supplies [HomeUiState] and drives path generation / exam coin gating
- * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type name
+ * @param viewModel supplies [HomeUiState] and drives path generation
+ * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type
+ *   name; exam nodes open the mock exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the AI tutor chat
@@ -79,43 +80,6 @@ fun HomeScreen(
     onChatClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    if (uiState.showNoCoinsDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissNoCoinsDialog() },
-            title = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.coin),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("¡Sin monedas!", fontWeight = FontWeight.Black)
-                }
-            },
-            text = {
-                Text(
-                    "Necesitas $EXAM_COST_COINS monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.dismissNoCoinsDialog() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("ENTENDIDO", fontWeight = FontWeight.Bold)
-                }
-            },
-            shape = RoundedCornerShape(32.dp),
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
