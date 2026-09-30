@@ -49,18 +49,12 @@ import com.jesuskrastev.bali.ui.screens.onboarding.optionLabel
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import com.jesuskrastev.bali.ui.util.replayMask
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 private val SUCCESS_GREEN = Color(0xFF10B981)
 private val FAILURE_RED = Color(0xFFF44336)
-
-/** Weeks the plan needs when there is no booked exam to aim at, by study rhythm. */
-private const val WEEKS_DAILY = 3
-private const val WEEKS_OFTEN = 5
-private const val WEEKS_WHENEVER = 8
 
 /**
  * Reveals the personalised plan, right before the product preview and the pact.
@@ -74,7 +68,9 @@ private const val WEEKS_WHENEVER = 8
  */
 @Composable
 fun StepPlanReveal(data: OnboardingData) {
-    val targetDate = remember(data) { planTargetDate(data) }
+    val targetDate = remember(data) {
+        Date(OnboardingConfig.planTargetMillis(data.examDate, data.weeklyStudy))
+    }
 
     Column(
         modifier = Modifier
@@ -514,29 +510,6 @@ private fun ReviewCard(testimonial: Testimonial) {
             )
         }
     }
-}
-
-/**
- * Works out the day the plan aims at.
- *
- * A booked exam is the honest answer. Without one the date is derived from the rhythm the
- * user committed to, which keeps the promise personal instead of inventing a deadline.
- *
- * @param data the answers collected during the onboarding flow
- * @return the target date shown in the hero
- */
-private fun planTargetDate(data: OnboardingData): Date {
-    data.examDate
-        ?.takeIf { it > System.currentTimeMillis() }
-        ?.let { return Date(it) }
-
-    val weeks = when (data.weeklyStudy) {
-        OnboardingConfig.WEEKLY_STUDY_DAILY -> WEEKS_DAILY
-        OnboardingConfig.WEEKLY_STUDY_OFTEN -> WEEKS_OFTEN
-        else -> WEEKS_WHENEVER
-    }
-
-    return Calendar.getInstance().apply { add(Calendar.WEEK_OF_YEAR, weeks) }.time
 }
 
 /**

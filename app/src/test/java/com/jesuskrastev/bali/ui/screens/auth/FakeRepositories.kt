@@ -67,6 +67,15 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _user.update { it?.copy(highestStreak = highestStreak) }
     }
 
+    override suspend fun updateExamDate(examDateMillis: Long) {
+        _user.update { it?.copy(examDateMillis = examDateMillis) }
+    }
+
+    /** Test-only helper to set the saved exam and plan dates directly. */
+    fun setPlanDatesForTest(examDateMillis: Long?, planTargetMillis: Long?) {
+        _user.update { it?.copy(examDateMillis = examDateMillis, planTargetMillis = planTargetMillis) }
+    }
+
     override suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit> {
         return Result.success(Unit)
     }

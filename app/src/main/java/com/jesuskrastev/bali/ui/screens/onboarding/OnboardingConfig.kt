@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.ui.screens.onboarding
 import androidx.annotation.RawRes
 import com.jesuskrastev.bali.R
 import java.text.Normalizer
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 /**
@@ -183,6 +184,41 @@ object OnboardingConfig {
         WEEKLY_STUDY_OFTEN -> "Varias veces por semana"
         WEEKLY_STUDY_WHENEVER -> "Cuando puedas"
         else -> null
+    }
+
+    /** Weeks the plan needs when there is no booked exam to aim at, by study rhythm. */
+    private const val PLAN_WEEKS_DAILY = 3
+    private const val PLAN_WEEKS_OFTEN = 5
+    private const val PLAN_WEEKS_WHENEVER = 8
+
+    /**
+     * Works out the day the plan promises the license by: the one shown in the plan reveal
+     * ("Puedes tener tu carnet antes del…") and the one saved for Home's plan card, so both
+     * always say the same thing.
+     *
+     * A booked exam still ahead is the honest answer. Without one the date is derived from the
+     * rhythm the user committed to, which keeps the promise personal instead of inventing a
+     * deadline.
+     *
+     * @param examDate the estimated exam date, or null when no exam is booked
+     * @param weeklyStudy one of [weeklyStudyOptions], or null if unanswered
+     * @param now current time in millis, the day the plan starts
+     * @return the target day in millis
+     */
+    fun planTargetMillis(examDate: Long?, weeklyStudy: String?, now: Long = System.currentTimeMillis()): Long {
+        examDate?.takeIf { it > now }?.let { return it }
+
+        val weeks = when (weeklyStudy) {
+            WEEKLY_STUDY_DAILY -> PLAN_WEEKS_DAILY
+            WEEKLY_STUDY_OFTEN -> PLAN_WEEKS_OFTEN
+            else -> PLAN_WEEKS_WHENEVER
+        }
+        return Calendar.getInstance()
+            .apply {
+                timeInMillis = now
+                add(Calendar.WEEK_OF_YEAR, weeks)
+            }
+            .timeInMillis
     }
 
     val learningPreferences = listOf(

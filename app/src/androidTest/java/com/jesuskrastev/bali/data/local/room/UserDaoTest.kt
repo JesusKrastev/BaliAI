@@ -134,4 +134,20 @@ class UserDaoTest {
         val retrieved = userDao.get().first()
         assertThat(retrieved?.currentStreak).isEqualTo(0)
     }
+
+    @Test
+    fun updateExamDateReplacesTheEstimateAndKeepsThePlanDate() = runTest {
+        val user = UserEntity(
+            id = "user_123",
+            examDateMillis = 1_000L,
+            planTargetMillis = 2_000L
+        )
+
+        userDao.insert(user)
+        userDao.updateExamDate(3_000L)
+
+        val retrieved = userDao.get().first()
+        assertThat(retrieved?.examDateMillis).isEqualTo(3_000L)
+        assertThat(retrieved?.planTargetMillis).isEqualTo(2_000L)
+    }
 }

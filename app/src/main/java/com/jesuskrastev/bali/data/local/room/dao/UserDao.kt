@@ -49,6 +49,14 @@ interface UserDao {
     @Query("UPDATE users SET highestStreak = :highestStreak")
     suspend fun updateHighestStreak(highestStreak: Int)
 
+    /**
+     * Replaces the exam date with the one the user picked on Home's plan card.
+     *
+     * @param examDateMillis local midnight of the exam day
+     */
+    @Query("UPDATE users SET examDateMillis = :examDateMillis")
+    suspend fun updateExamDate(examDateMillis: Long)
+
     @Query("SELECT COUNT(*) > 0 FROM users")
     fun exists(): Flow<Boolean>
 

@@ -538,6 +538,20 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
+    // ── PLAN (Home) ─────────────────────────────────────────────────────────
+
+    /**
+     * Tracks that the user set their exam date from Home's plan card.
+     *
+     * @param daysUntil calendar days from today to the chosen exam day
+     * @param hadPlanDate true when the card was already counting down to a date (so this is a
+     *   correction), false when it was asking for one
+     */
+    open fun examDateSet(daysUntil: Int, hadPlanDate: Boolean) = log("exam_date_set") {
+        putInt("days_until", daysUntil)
+        putBoolean("had_plan_date", hadPlanDate)
+    }
+
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 
     /**

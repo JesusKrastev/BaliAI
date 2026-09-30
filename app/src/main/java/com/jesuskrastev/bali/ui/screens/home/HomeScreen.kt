@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,13 +59,16 @@ import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * Renders the home dashboard: streak/coins status, the AI-tutor entry point, and the
- * scrollable learning-path graph. The account menu that used to open from here as a side
- * drawer (profile, legal links, sign out) now lives in the Settings tab.
+ * Renders the home dashboard: streak/coins status, the plan card, the AI-tutor entry point,
+ * and the scrollable learning-path graph. The account menu that used to open from here as a
+ * side drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
- * @param viewModel supplies [HomeUiState] and drives path generation
+ * @param viewModel supplies [HomeUiState], drives path generation and saves the exam date
  * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type
  *   name; exam nodes open the mock exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
@@ -80,6 +84,18 @@ fun HomeScreen(
     onChatClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showExamDatePicker) {
+        ExamDatePickerDialog(
+            initialDateMillis = uiState.plan.targetMillis,
+            onConfirm = { pickerMillis ->
+                viewModel.setExamDate(pickerMillis)
+                showExamDatePicker = false
+            },
+            onDismiss = { showExamDatePicker = false }
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -110,6 +126,165 @@ fun HomeScreen(
             },
             onGenerateClick = {
                 viewModel.generateNextPathNodesCount()
+            },
+            header = {
+                PlanCard(
+                    plan = uiState.plan,
+                    weekSessions = uiState.weekSessions,
+                    weeklyGoal = uiState.weeklyGoal,
+                    onClick = { showExamDatePicker = true }
+                )
+            }
+        )
+    }
+}
+
+// ─── Plan Card ──────────────────────────────────────────────────────────────
+
+/** Formats a plan date the way the onboarding promise reads it, e.g. "14 de noviembre". */
+private val planDateFormat = SimpleDateFormat("d 'de' MMMM", Locale("es", "ES"))
+
+/**
+ * Keeps the plan promised during onboarding in sight after payment: the day the student is
+ * working towards, how many days are left, and this week's sessions against the weekly goal.
+ * Tapping it lets the student set their real exam date.
+ *
+ * @param plan the date to count down to, or an empty summary to ask for the exam date
+ * @param weekSessions days practised so far this week
+ * @param weeklyGoal sessions per week the student aims for
+ * @param onClick opens the exam date picker
+ */
+@Composable
+private fun PlanCard(plan: PlanSummary, weekSessions: Int, weeklyGoal: Int, onClick: () -> Unit) {
+    val goal = weeklyGoal.coerceAtLeast(1)
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "TU PLAN",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = planHeadline(plan),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = planCountdown(plan),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Icon(
+                    imageVector = Icons.Rounded.EditCalendar,
+                    contentDescription = "Cambiar la fecha del examen",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            LinearProgressIndicator(
+                progress = { (weekSessions.toFloat() / goal).coerceIn(0f, 1f) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+                color = BaliAccentYellow,
+                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Esta semana: $weekSessions de $goal ${if (goal == 1) "sesión" else "sesiones"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * Builds the plan card's headline.
+ *
+ * @param plan the date the card counts down to
+ * @return "Examen el…" for the student's own exam date, "Carnet antes del…" for the onboarding
+ *   promise, or a question when there is no date ahead
+ */
+private fun planHeadline(plan: PlanSummary): String {
+    val target = plan.targetMillis ?: return "¿Cuándo es tu examen?"
+    val date = planDateFormat.format(Date(target))
+    return if (plan.isExamDate) "Examen el $date" else "Carnet antes del $date"
+}
+
+/**
+ * Builds the line under the plan card's headline.
+ *
+ * @param plan the date the card counts down to
+ * @return how many days are left, or an invitation to set the date when there is none
+ */
+private fun planCountdown(plan: PlanSummary): String = when {
+    plan.targetMillis == null -> "Ponle fecha y te decimos cuántos días quedan"
+    plan.daysLeft == 0 -> if (plan.isExamDate) "Es hoy. ¡Mucha suerte!" else "Es hoy"
+    plan.daysLeft == 1 -> "Falta 1 día"
+    else -> "Faltan ${plan.daysLeft} días"
+}
+
+/**
+ * Date picker for the exam day, opened from the plan card. Only today and later can be picked.
+ *
+ * @param initialDateMillis the day to preselect (local time), or null to preselect nothing
+ * @param onConfirm invoked with the picker's selection, midnight UTC of the chosen day
+ * @param onDismiss invoked when the dialog is closed without saving
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ExamDatePickerDialog(
+    initialDateMillis: Long?,
+    onConfirm: (Long) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val today = remember { pickerMillisFromLocalDay(System.currentTimeMillis()) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = initialDateMillis?.let(::pickerMillisFromLocalDay)?.takeIf { it >= today },
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= today
+        }
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { datePickerState.selectedDateMillis?.let(onConfirm) },
+                enabled = datePickerState.selectedDateMillis != null
+            ) {
+                Text("GUARDAR", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCELAR", fontWeight = FontWeight.Bold)
+            }
+        }
+    ) {
+        DatePicker(
+            state = datePickerState,
+            title = {
+                Text(
+                    text = "¿Cuándo es tu examen?",
+                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
+                )
             }
         )
     }
@@ -244,6 +419,7 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
+ * @param header content placed above the first section, scrolling away with the path
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -252,7 +428,8 @@ fun LearningPathGraph(
     pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
     onNodeClick: (LessonNode) -> Unit,
-    onGenerateClick: () -> Unit
+    onGenerateClick: () -> Unit,
+    header: @Composable () -> Unit = {}
 ) {
     if (pathNodes.isEmpty()) {
         if (isPathLoading) PathLoadingState(modifier)
@@ -287,6 +464,10 @@ fun LearningPathGraph(
             // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
         ) {
+            item(key = "header") {
+                Box(modifier = Modifier.padding(top = 8.dp)) { header() }
+            }
+
             sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
                 val sectionNodes = nodesBySection[sectionKey].orEmpty()
                 if (sectionNodes.isEmpty()) return@forEachIndexed

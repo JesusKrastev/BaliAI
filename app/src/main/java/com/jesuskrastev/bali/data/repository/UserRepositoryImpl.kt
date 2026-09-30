@@ -139,6 +139,12 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateHighestStreak(highestStreak) }
     )
 
+    /** See [UserRepository.updateExamDate]. */
+    override suspend fun updateExamDate(examDateMillis: Long) = updateField(
+        fields = mapOf("examDateMillis" to examDateMillis),
+        localAction = { userDao.updateExamDate(examDateMillis) }
+    )
+
     override fun exists(userId: String?): Flow<Boolean> = authRepository.currentUserFlow.flatMapLatest { currentUserId ->
         val targetId = userId ?: currentUserId
         if (targetId != null) {

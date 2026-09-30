@@ -136,14 +136,20 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail
             )
         } else {
+            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
+            // Counted from practiceDays like the streak screens: user.weekSessions is only
+            // refreshed on the next practice, so it can still hold last week's number.
+            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
+                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, System.currentTimeMillis()),
                 streak = user.currentStreak,
-                weekSessions = user.weekSessions,
-                weeklyGoal = remoteConfigProvider.getWeeklyGoal(),
-                weekProgressPercent = ((user.weekSessions.toFloat() / remoteConfigProvider.getWeeklyGoal().coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100),
+                weekSessions = weekSessions,
+                weeklyGoal = weeklyGoal,
+                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
@@ -153,7 +159,7 @@ class HomeViewModel @Inject constructor(
                 streakFreezes = user.streakFreezes,
                 highestStreak = user.highestStreak,
                 dailyTip = dailyTip,
-                weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays),
+                weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
@@ -171,6 +177,23 @@ class HomeViewModel @Inject constructor(
             authRepository.signOut(context)
             analyticsTracker.logout()
             analyticsTracker.resetUser()
+        }
+    }
+
+    /**
+     * Saves the exam date picked on the plan card; from then on the card counts down to it.
+     *
+     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
+     */
+    fun setExamDate(pickerMillis: Long) {
+        val examDay = localDayFromPickerMillis(pickerMillis)
+        val hadPlanDate = uiState.value.plan.targetMillis != null
+        viewModelScope.launch {
+            userRepository.updateExamDate(examDay)
+            analyticsTracker.examDateSet(
+                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
+                hadPlanDate = hadPlanDate
+            )
         }
     }
 

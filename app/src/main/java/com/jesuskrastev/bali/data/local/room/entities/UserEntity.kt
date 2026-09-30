@@ -10,6 +10,7 @@ data class UserEntity(
     val licenseType: String? = null,
     val experience: String? = null,
     val examDateMillis: Long? = null,
+    val planTargetMillis: Long? = null,
     val difficultTopics: String = "",
     val lastPracticeTimestamp: Long = 0,
     val currentStreak: Int = 0,

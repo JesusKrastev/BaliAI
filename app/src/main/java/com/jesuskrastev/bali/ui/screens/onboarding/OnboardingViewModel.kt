@@ -277,11 +277,15 @@ class OnboardingViewModel @Inject constructor(
         _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
     }
 
-    /** Converts collected onboarding answers into the local profile persisted before payment. */
+    /**
+     * Converts collected onboarding answers into the local profile persisted before payment,
+     * including the date the plan reveal just promised, so Home can keep showing it.
+     */
     private fun OnboardingData.toUser(): User = User(
         name = name,
         experience = experience,
         examDateMillis = examDate,
+        planTargetMillis = OnboardingConfig.planTargetMillis(examDate, weeklyStudy),
         lastPracticeTimestamp = 0,
         currentStreak = 0
     )
