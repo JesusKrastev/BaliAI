@@ -367,9 +367,12 @@ open class AnalyticsTracker @Inject constructor(
     /**
      * Tracks that the user left the paywall having bought the win-back offer. Flushes
      * immediately, like [paywallPurchased].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this purchase, so
+     *   an impulse buy can be told apart from one the user thought over
      */
-    open fun paywallWinbackPurchased() {
-        log("paywall_winback_purchased")
+    open fun paywallWinbackPurchased(secondsOnOffer: Int) {
+        log("paywall_winback_purchased") { putInt("seconds_on_offer", secondsOnOffer) }
         mixpanel.flush()
         posthog.flush()
     }
@@ -377,12 +380,33 @@ open class AnalyticsTracker @Inject constructor(
     /**
      * Tracks that the user also closed the win-back offer without buying. Flushes immediately,
      * like [paywallClosed].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this decline, so a
+     *   near-instant close can be told apart from one where the user considered it first
      */
-    open fun paywallWinbackClosed() {
-        log("paywall_winback_closed")
+    open fun paywallWinbackClosed(secondsOnOffer: Int) {
+        log("paywall_winback_closed") { putInt("seconds_on_offer", secondsOnOffer) }
         mixpanel.flush()
         posthog.flush()
     }
+
+    /**
+     * Tracks that the win-back offer left the foreground with no decision taken — pressing
+     * home, switching apps or killing the app while looking at the discount.
+     *
+     * Kept as its own event rather than reusing [paywallBackgrounded] so a visitor who closes
+     * the app directly from the win-back screen isn't folded into the main paywall's count;
+     * pair with [paywallWinbackResumed] the same way [paywallBackgrounded] pairs with
+     * [paywallResumed]. Flushes immediately, because the process may not survive.
+     */
+    open fun paywallWinbackBackgrounded() {
+        log("paywall_winback_backgrounded")
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /** Tracks that the user came back to the win-back offer after backgrounding it. */
+    open fun paywallWinbackResumed() = log("paywall_winback_resumed")
 
     /**
      * Adds the properties every paywall purchase event shares.
