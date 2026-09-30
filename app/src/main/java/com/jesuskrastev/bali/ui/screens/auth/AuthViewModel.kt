@@ -8,6 +8,7 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
@@ -44,6 +45,15 @@ class AuthViewModel @Inject constructor(
         _errorEmail.value = null
     }
 
+    /**
+     * Signs in with Google. A brand-new account gets the profile collected so far uploaded as its
+     * document, enrolled in the first-steps card; an existing one just runs its pending migrations.
+     *
+     * @param context used to launch the Google account picker.
+     * @param restrictNewAccounts when true, an email with no Bali account is rejected instead of
+     *   silently creating one.
+     * @param onSuccess invoked once the session is open and any new account has been created.
+     */
     fun signInWithGoogle(context: Context, restrictNewAccounts: Boolean, onSuccess: () -> Unit) {
         viewModelScope.launch {
             _isLoggingIn.value = true
@@ -77,7 +87,7 @@ class AuthViewModel @Inject constructor(
                     if (!userExists) {
                         synchronizeLocalDataToFirestore(
                             userId ?: "",
-                            localUser ?: User(),
+                            enrollInFirstSteps(localUser ?: User()),
                             localTestResults,
                             localAnswers
                         )
@@ -106,6 +116,17 @@ class AuthViewModel @Inject constructor(
             _isLoggingIn.value = false
         }
     }
+
+    /**
+     * Enrolls a brand-new account in the day-0 "Tus primeros pasos" card. Only accounts created
+     * here get it: existing ones never pass through this path, so they keep no enrollment and
+     * never see the card.
+     *
+     * @param user the profile about to be uploaded as the new account's document.
+     * @return [user] with the first-steps card started now.
+     */
+    private fun enrollInFirstSteps(user: User): User =
+        user.copy(firstSteps = FirstStepsProgress.startingAt(System.currentTimeMillis()))
 
     private suspend fun synchronizeLocalDataToFirestore(
         userId: String,

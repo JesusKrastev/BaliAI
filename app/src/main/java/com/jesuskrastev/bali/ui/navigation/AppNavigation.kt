@@ -242,14 +242,13 @@ fun AppNavigation(
 
             composable<HomeRoute> {
                 val viewModel: HomeViewModel = hiltViewModel()
+                val startExam = { viewModel.startExam { navController.navigate(ExamRoute) } }
 
                 HomeScreen(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            viewModel.startExam {
-                                navController.navigate(ExamRoute)
-                            }
+                            startExam()
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }
@@ -262,7 +261,12 @@ fun AppNavigation(
                     },
                     onChatClick = {
                         navController.navigate(ChatRoute)
-                    }
+                    },
+                    onPlayGameClick = {
+                        // The first-steps card's game task goes straight into a game; back returns to Home.
+                        navController.navigate(GamePlayRoute(GameType.entries.first().id))
+                    },
+                    onExamClick = startExam
                 )
             }
 

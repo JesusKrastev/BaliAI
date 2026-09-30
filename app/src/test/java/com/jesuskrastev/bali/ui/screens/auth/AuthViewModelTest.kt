@@ -8,6 +8,7 @@ import org.junit.Rule
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
 
+import android.content.Context
 import org.mockito.kotlin.mock
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.mixpanel.android.mpmetrics.MixpanelAPI
@@ -63,5 +64,40 @@ class AuthViewModelTest {
     @Test
     fun `errorEmail is initially null`() = runTest {
         assertThat(viewModel.errorEmail.value).isNull()
+    }
+
+    /** Builds an [AuthViewModel] over [userRepository], sharing every other fake with the suite. */
+    private fun viewModelFor(userRepository: FakeUserRepository) = AuthViewModel(
+        userRepository = userRepository,
+        testResultRepository = fakeTestResultRepository,
+        answerRepository = fakeAnswerRepository,
+        authRepository = fakeAuthRepository,
+        analyticsTracker = fakeAnalyticsTracker,
+        migrationManager = fakeMigrationManager
+    )
+
+    @Test
+    fun `a brand-new account is enrolled in the first-steps card`() = runTest {
+        val userRepository = FakeUserRepository(userExists = false)
+        var signedIn = false
+
+        viewModelFor(userRepository).signInWithGoogle(mock<Context>(), restrictNewAccounts = false) {
+            signedIn = true
+        }
+
+        assertThat(signedIn).isTrue()
+        val uploaded = userRepository.uploadedUsers.single()
+        assertThat(uploaded.firstSteps.isEnrolled).isTrue()
+        assertThat(uploaded.firstSteps.isActive).isTrue()
+        assertThat(uploaded.firstSteps.completed).isEmpty()
+    }
+
+    @Test
+    fun `an account that already existed is never enrolled`() = runTest {
+        val userRepository = FakeUserRepository(userExists = true)
+
+        viewModelFor(userRepository).signInWithGoogle(mock<Context>(), restrictNewAccounts = false) {}
+
+        assertThat(userRepository.uploadedUsers).isEmpty()
     }
 }

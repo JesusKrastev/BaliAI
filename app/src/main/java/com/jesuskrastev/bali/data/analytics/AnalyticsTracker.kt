@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.data.analytics
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.jesuskrastev.bali.BuildConfig
+import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.posthog.PostHogInterface
 import org.json.JSONObject
@@ -515,6 +516,47 @@ open class AnalyticsTracker @Inject constructor(
     open fun gameAbandoned(gameId: String, roundIndex: Int) = log("game_abandoned") {
         putString("game_id", gameId)
         putInt("round_index", roundIndex)
+    }
+
+    // ── FIRST STEPS (day-0 card on Home) ────────────────────────────────────
+
+    /**
+     * Tracks that the first-steps card reached the screen. Sent once per Home instance, so it
+     * counts students who saw it rather than every recomposition.
+     *
+     * @param tasksDone how many of the tasks the student had already completed
+     */
+    open fun firstStepsShown(tasksDone: Int) = log("first_steps_shown") {
+        putInt("tasks_done", tasksDone)
+    }
+
+    /**
+     * Tracks the coins earned for a first step. Also sends `first_steps_completed` when it was the
+     * last one, which is the event retention and cancellations are compared against.
+     *
+     * @param reward the task that was completed and what it paid
+     */
+    open fun firstStepRewarded(reward: FirstStepReward) {
+        log("first_steps_task_completed") {
+            putString("task", reward.task.id)
+            putInt("coins", reward.coins)
+        }
+        if (reward.completedAll) log("first_steps_completed")
+    }
+
+    /**
+     * Tracks that the student tapped the final "haz tu primer simulacro" call to action.
+     * Together with the exam's own events it gives the day-1 first-simulacro rate.
+     */
+    open fun firstStepsExamClicked() = log("first_steps_exam_clicked")
+
+    /**
+     * Tracks that the student hid the card, giving up the coins still pending.
+     *
+     * @param tasksDone how many tasks they had completed when they dismissed it
+     */
+    open fun firstStepsDismissed(tasksDone: Int) = log("first_steps_dismissed") {
+        putInt("tasks_done", tasksDone)
     }
 
     companion object {

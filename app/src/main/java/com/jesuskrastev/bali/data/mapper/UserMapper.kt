@@ -2,6 +2,8 @@ package com.jesuskrastev.bali.data.mapper
 
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.User
 
 fun UserEntity.toDomain(): User = User(
@@ -58,7 +60,10 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     highestStreak = highestStreak,
     practiceDays = practiceDays,
     weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    currentWeekStart = currentWeekStart,
+    firstStepsStartedAt = firstSteps.startedAtMillis,
+    firstStepsDone = firstSteps.completed.map { it.id },
+    firstStepsDismissed = firstSteps.dismissed
 )
 
 fun UserFirestore.toDomain(): User = User(
@@ -77,5 +82,11 @@ fun UserFirestore.toDomain(): User = User(
     highestStreak = highestStreak,
     practiceDays = practiceDays,
     weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    currentWeekStart = currentWeekStart,
+    firstSteps = FirstStepsProgress(
+        startedAtMillis = firstStepsStartedAt,
+        // Ids this build does not know (written by a newer version) are ignored, not crashed on.
+        completed = firstStepsDone.mapNotNull(FirstStepTask::fromId).toSet(),
+        dismissed = firstStepsDismissed
+    )
 )

@@ -7,12 +7,16 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.type.GenerateContentResponse
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -40,6 +44,8 @@ class TestViewModelTest {
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
+    private val pendingRewards = PendingFirstStepRewards()
+    private val fakeCompleteFirstStepUseCase = CompleteFirstStepUseCase(fakeUserRepository, pendingRewards)
 
     private lateinit var viewModel: TestViewModel
 
@@ -53,6 +59,7 @@ class TestViewModelTest {
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
+            completeFirstStepUseCase = fakeCompleteFirstStepUseCase,
             pathRepository = fakePathRepository,
             analytics = mock<AnalyticsTracker>(),
             savedStateHandle = SavedStateHandle()
@@ -86,5 +93,19 @@ class TestViewModelTest {
         viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
         assertThat(viewModel.uiState.value.category).isEqualTo("Conductor")
         collectJob.cancel()
+    }
+
+    @Test
+    fun `finishing a test completes the first-test step for an enrolled account`() = runTest {
+        fakeUserRepository.enrollInFirstStepsForTest()
+        viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
+
+        // The reward is granted before calculateResult hops to the IO dispatcher to save the
+        // result, so it has already happened by the time onEvent returns.
+        viewModel.onEvent(TestEvent.FinishTest { })
+
+        val user = fakeUserRepository.get().first()!!
+        assertThat(user.firstSteps.completed).containsExactly(FirstStepTask.FIRST_TEST)
+        assertThat(pendingRewards.next.first()?.task).isEqualTo(FirstStepTask.FIRST_TEST)
     }
 }

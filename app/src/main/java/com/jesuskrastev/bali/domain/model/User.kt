@@ -20,6 +20,8 @@ package com.jesuskrastev.bali.domain.model
  * @property weeklyGoal The number of sessions the user aims to complete per week.
  * @property weekSessions The number of sessions completed in the current week.
  * @property currentWeekStart The timestamp of the start of the current week (Monday 00:00).
+ * @property firstSteps Progress through the day-0 "Tus primeros pasos" card. Account-scoped and
+ *   Firestore-only: the local (Room) user never carries it, because Home is only reachable signed in.
  */
 data class User(
     val id: String = "",
@@ -37,5 +39,6 @@ data class User(
     val highestStreak: Int = 0,
     val practiceDays: List<Long> = emptyList(),
     val weekSessions: Int = 0,
-    val currentWeekStart: Long = 0L
+    val currentWeekStart: Long = 0L,
+    val firstSteps: FirstStepsProgress = FirstStepsProgress()
 )

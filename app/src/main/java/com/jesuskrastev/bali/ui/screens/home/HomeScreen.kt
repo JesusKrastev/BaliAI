@@ -54,6 +54,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
@@ -61,14 +62,17 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 
 /**
  * Renders the home dashboard: streak/coins status, the AI-tutor entry point, and the
- * scrollable learning-path graph. The account menu that used to open from here as a side
- * drawer (profile, legal links, sign out) now lives in the Settings tab.
+ * scrollable learning-path graph, headed by the day-0 "Tus primeros pasos" card while the
+ * account has it. The account menu that used to open from here as a side drawer (profile,
+ * legal links, sign out) now lives in the Settings tab.
  *
  * @param viewModel supplies [HomeUiState] and drives path generation / exam coin gating
  * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type name
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the AI tutor chat
+ * @param onPlayGameClick starts a mini-game straight away (the first-steps card's game task)
+ * @param onExamClick starts the first simulacro (the first-steps card's closing action)
  */
 @Composable
 fun HomeScreen(
@@ -76,9 +80,27 @@ fun HomeScreen(
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
-    onChatClick: () -> Unit = {}
+    onChatClick: () -> Unit = {},
+    onPlayGameClick: () -> Unit = {},
+    onExamClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showDismissFirstSteps by remember { mutableStateOf(false) }
+
+    uiState.firstStepReward?.let { reward ->
+        FirstStepRewardDialog(reward = reward, onDismiss = viewModel::dismissFirstStepReward)
+    }
+
+    uiState.firstSteps?.takeIf { showDismissFirstSteps }?.let { progress ->
+        DismissFirstStepsDialog(
+            pendingCoins = progress.pendingCoins,
+            onConfirm = {
+                showDismissFirstSteps = false
+                viewModel.dismissFirstSteps()
+            },
+            onCancel = { showDismissFirstSteps = false }
+        )
+    }
 
     if (uiState.showNoCoinsDialog) {
         AlertDialog(
@@ -117,6 +139,36 @@ fun HomeScreen(
         )
     }
 
+    val firstUnlockedNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
+    // Typed explicitly so the lambda is a @Composable one; a nullable header means "no card".
+    val firstStepsHeader: (@Composable () -> Unit)? = uiState.firstSteps?.let { progress ->
+        val content: @Composable () -> Unit = {
+            LaunchedEffect(Unit) { viewModel.onFirstStepsShown() }
+            FirstStepsCard(
+                progress = progress,
+                onTaskClick = { task ->
+                    when (task) {
+                        FirstStepTask.FIRST_TEST -> firstUnlockedNode?.let { node ->
+                            onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                        }
+                        FirstStepTask.ASK_BALI -> onChatClick()
+                        FirstStepTask.PLAY_GAME -> onPlayGameClick()
+                    }
+                },
+                onExamClick = {
+                    viewModel.onFirstStepsExamClicked()
+                    onExamClick()
+                },
+                onDismissClick = {
+                    // Nothing is lost once everything is paid, so only ask when it costs coins.
+                    if (progress.isComplete) viewModel.dismissFirstSteps() else showDismissFirstSteps = true
+                },
+                isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstUnlockedNode != null }
+            )
+        }
+        content
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -146,7 +198,8 @@ fun HomeScreen(
             },
             onGenerateClick = {
                 viewModel.generateNextPathNodesCount()
-            }
+            },
+            header = firstStepsHeader
         )
     }
 }
@@ -280,6 +333,8 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
+ * @param header optional content shown above the path — it scrolls away with it, and is also
+ *   visible while the first nodes are still being generated
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -288,10 +343,18 @@ fun LearningPathGraph(
     pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
     onNodeClick: (LessonNode) -> Unit,
-    onGenerateClick: () -> Unit
+    onGenerateClick: () -> Unit,
+    header: (@Composable () -> Unit)? = null
 ) {
     if (pathNodes.isEmpty()) {
-        if (isPathLoading) PathLoadingState(modifier)
+        if (isPathLoading) {
+            Column(modifier = modifier) {
+                if (header != null) {
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) { header() }
+                }
+                PathLoadingState(Modifier.weight(1f))
+            }
+        }
         return
     }
 
@@ -323,6 +386,12 @@ fun LearningPathGraph(
             // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
         ) {
+            if (header != null) {
+                item(key = "header") {
+                    Box(modifier = Modifier.padding(vertical = 8.dp)) { header() }
+                }
+            }
+
             sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
                 val sectionNodes = nodesBySection[sectionKey].orEmpty()
                 if (sectionNodes.isEmpty()) return@forEachIndexed

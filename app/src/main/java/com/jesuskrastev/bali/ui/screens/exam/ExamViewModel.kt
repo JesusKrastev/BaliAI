@@ -12,6 +12,7 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.model.TestResult.Companion.OFFICIAL_EXAM_CATEGORY
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -428,9 +429,6 @@ class ExamViewModel @Inject constructor(
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"
-
-        /** [TestResult.category] used for every official-exam attempt, win or lose. */
-        private const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
     }
 
     @Serializable
