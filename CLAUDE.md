@@ -68,7 +68,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
   in the app: Firebase proxies the call and App Check attests the caller. Models are configured in
   `di/GeminiModule.kt`, one qualifier per use (`@TutorModel`, `@QuestionsModel`, `@PathNodesModel`).
   Note the project is on Kotlin 2.0.21, so Firebase BOM 34.x will not compile against it.
-- **Payments**: RevenueCat 9.23.1
+- **Payments**: RevenueCat 10.16.0 (`purchases` + `purchases-ui`: paywall and Customer Center)
 - **Push**: OneSignal + Firebase Messaging
 - **Analytics**: Mixpanel + PostHog + Firebase Analytics (all three tracked via `AnalyticsTracker`)
 - **Images**: Coil 2.7.0 with SVG support
@@ -171,9 +171,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 The sweep of the whole codebase is finished (migrations were intentionally excluded). These findings were **not** fixed because they need a product/design decision, not a guess. Delete each line once decided.
 
 - **Free practice is unreachable.** The Topics and Mistakes screens were deleted (nothing linked to them), which leaves `TestRoute()` without a node (free practice) and `TestRoute.topic` / `TestViewModel.setTopic` as dead paths: `TestRoute` is only navigated to from Home's learning-path nodes. Remove them (plus `TestViewModelTest`'s `setTopic` test and `ScreenNameTest`'s route string) or give free practice a new entry point.
-- **No subscription-management entry.** `CustomerCenterLauncher` is not used anywhere; Settings has no "manage subscription" row.
 - Streak freezes have no visual feedback: `StreakStatus.FROZEN` is implemented in `StreakScreen` / `LessonStreakScreen` but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
-- The learning-path node popup (`FloatingNodePopup` in `HomeScreen.kt`) shows a flat "+20 XP" / "+6 XP". Those are the *maximum* practice values from `IncrementXpUseCase` (≥95% accuracy; repeat = ×0.3), not what the user will necessarily earn.
 - `SectionHeaderCard` prints "SECCIÓN n, UNIDAD n" using the same index for both numbers.
 - `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
 - `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.

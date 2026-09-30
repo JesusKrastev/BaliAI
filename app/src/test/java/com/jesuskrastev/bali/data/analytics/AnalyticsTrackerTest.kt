@@ -73,4 +73,16 @@ class AnalyticsTrackerTest {
             verify(posthog).register(AnalyticsTracker.KEY_ENVIRONMENT, environment)
         }
     }
+
+    @Test
+    fun `a cancellation reason is sent with the chosen option before the user leaves for Play`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.subscriptionCancelReason("too_expensive")
+
+        verify(firebase).logEvent(eq("subscription_cancel_reason"), bundle.capture())
+        assertThat(bundle.firstValue.getString("reason")).isEqualTo("too_expensive")
+        verify(mixpanel).flush()
+        verify(posthog).flush()
+    }
 }

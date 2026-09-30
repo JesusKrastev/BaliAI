@@ -72,6 +72,8 @@ import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
@@ -129,6 +131,10 @@ object SuggestionsRoute
 
 @Serializable
 object ChatRoute
+
+/** RevenueCat's Customer Center, opened from settings to manage or cancel the subscription. */
+@Serializable
+object CustomerCenterRoute
 
 /**
  * Sign-in destination.
@@ -287,7 +293,18 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
+                    },
+                    onManageSubscriptionClick = {
+                        navController.navigate(CustomerCenterRoute)
                     }
+                )
+            }
+
+            composable<CustomerCenterRoute> {
+                val viewModel: CustomerCenterViewModel = hiltViewModel()
+                CustomerCenterLauncher(
+                    listener = viewModel.listener,
+                    onDismiss = { navController.popBackStack() }
                 )
             }
 

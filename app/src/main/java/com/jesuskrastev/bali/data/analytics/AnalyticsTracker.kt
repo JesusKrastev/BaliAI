@@ -428,6 +428,41 @@ open class AnalyticsTracker @Inject constructor(
         putString("source", source)
     }
 
+    // ── SUBSCRIPTION MANAGEMENT (Customer Center) ───────────────────────────
+    // Opening the Customer Center is already reported as the "CustomerCenter" screen view.
+
+    /**
+     * Tracks an option picked in the Customer Center, before any survey or store hand-off.
+     * "cancel" here is the intent to leave, whether or not the user goes through with it.
+     *
+     * @param option `cancel`, `missing_purchase`, `custom_url` or `custom_action`
+     */
+    open fun customerCenterOptionSelected(option: String) = log("customer_center_option_selected") {
+        putString("option", option)
+    }
+
+    /**
+     * Tracks the answer to "¿Por qué lo dejas?", the cancellation survey configured in the
+     * RevenueCat dashboard. Flushes immediately: the user is about to leave for Google Play.
+     *
+     * @param reasonId the id of the chosen survey option, as set in the RevenueCat dashboard
+     */
+    open fun subscriptionCancelReason(reasonId: String) {
+        log("subscription_cancel_reason") { putString("reason", reasonId) }
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /**
+     * Tracks the Customer Center handing the user over to Google Play's subscription screen,
+     * where the cancellation actually happens. Flushes immediately, because the app is left.
+     */
+    open fun subscriptionManagementOpened() {
+        log("subscription_management_opened")
+        mixpanel.flush()
+        posthog.flush()
+    }
+
     // ── AI CHAT ─────────────────────────────────────────────────────────────
 
     /**
