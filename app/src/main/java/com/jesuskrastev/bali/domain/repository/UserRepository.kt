@@ -23,8 +23,8 @@ interface UserRepository {
     suspend fun insert(user: User)
 
     /**
-     * Saves every field of the daily streak in one write, so the count, the freezes and the
-     * day history never disagree.
+     * Saves every field of the daily streak in one write, so its momentum, settlement marker,
+     * freezes and day history never disagree.
      *
      * @param streak the streak to store
      */

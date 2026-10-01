@@ -18,12 +18,14 @@ package com.jesuskrastev.bali.domain.model
  *   ("Puedes tener tu carnet antes del…"), saved so Home can keep showing it after payment;
  *   null for users who finished onboarding before it was saved.
  * @property lastPracticeTimestamp When the user last started a study day, 0 if never.
- * @property currentStreak Consecutive days with study; see [DailyStreak] for the rules.
+ * @property currentStreak Current streak momentum, from 0 to [DailyStreak.MAX_LEVEL].
  * @property xp The user's accumulated experience points.
  * @property level The user's current level based on their XP.
  * @property coins The user's current coin balance, spent in the shop on streak freezes.
  * @property streakFreezes The number of streak freezes the user currently owns.
- * @property highestStreak The longest daily streak the user has reached.
+ * @property highestStreak The highest streak momentum the user has reached.
+ * @property lastStreakSettledDayMillis Local midnight of the last day whose absence was
+ * processed, preventing an absence from reducing momentum more than once.
  * @property practiceDays Local midnights of the days with study, the last
  *   [DailyStreak.HISTORY_DAYS] only.
  * @property frozenDays Local midnights of the days a streak freeze covered, the last
@@ -44,6 +46,7 @@ data class User(
     val coins: Int = 0,
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
+    val lastStreakSettledDayMillis: Long = 0,
     val practiceDays: List<Long> = emptyList(),
     val frozenDays: List<Long> = emptyList()
 )

@@ -29,12 +29,12 @@ class StreakViewModelTest {
         DailyStreak.startOfDayMillis(DailyStreak.epochDay(now) + offset)
 
     @Test
-    fun `a streak lost since the last visit shows as zero before it is saved`() {
+    fun `a missed streak day lowers the speedometer before it is saved`() {
         val user = User(currentStreak = 5, highestStreak = 5, lastPracticeTimestamp = day(-3), practiceDays = listOf(day(-3)))
 
         val state = streakUiStateOf(user, now)
 
-        assertThat(state.currentStreak).isEqualTo(0)
+        assertThat(state.currentStreak).isEqualTo(3)
         assertThat(state.highestStreak).isEqualTo(5)
     }
 
@@ -96,13 +96,13 @@ class StreakViewModelTest {
     }
 
     @Test
-    fun `opening the app after the freezes run out ends the streak`() = runTest {
+    fun `opening the app after the freezes run out lowers the speedometer`() = runTest {
         val users = FakeUserRepository().apply {
             insert(User(currentStreak = 6, lastPracticeTimestamp = day(-2), practiceDays = listOf(day(-2))))
         }
 
         SettleStreakUseCase(users)()
 
-        assertThat(users.get().first()?.currentStreak).isEqualTo(0)
+        assertThat(users.get().first()?.currentStreak).isEqualTo(5)
     }
 }
