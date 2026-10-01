@@ -85,6 +85,7 @@ class UserRepositoryImpl @Inject constructor(
             "highestStreak" to streak.highest,
             "streakFreezes" to streak.freezes,
             "lastPracticeTimestamp" to streak.lastPracticeMillis,
+            "lastStreakSettledDayMillis" to streak.lastSettledDayMillis,
             "practiceDays" to streak.practiceDays,
             "frozenDays" to streak.frozenDays
         ),
@@ -95,6 +96,7 @@ class UserRepositoryImpl @Inject constructor(
                 highest = streak.highest,
                 freezes = streak.freezes,
                 lastPracticeMillis = streak.lastPracticeMillis,
+                lastSettledDayMillis = streak.lastSettledDayMillis,
                 practiceDaysJson = converters.fromLongList(streak.practiceDays),
                 frozenDaysJson = converters.fromLongList(streak.frozenDays)
             )

@@ -6,9 +6,9 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 /**
- * Brings the stored streak up to today when the app opens: days missed since the last visit
- * spend freezes or end the streak. Without it, someone who stopped studying would still see
- * their old streak until their next session.
+ * Brings stored streak momentum up to today when the app opens. Missed days spend freezes first
+ * and then lower the level one step at a time, so someone who stopped studying does not keep a
+ * stale speedometer.
  */
 class SettleStreakUseCase @Inject constructor(
     private val userRepository: UserRepository

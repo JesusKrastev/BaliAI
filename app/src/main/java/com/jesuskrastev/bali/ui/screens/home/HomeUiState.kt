@@ -21,7 +21,7 @@ data class DailyStreakState(
  * UI state for Home.
  *
  * @property plan the date the plan card counts down to, see [planSummaryOf]
- * @property streak consecutive days with study, as of today
+ * @property streak current daily streak momentum, from zero to seven
  * @property practicedToday whether today already counts for the streak; the flame is grey until it does
  * @property weekSessions days practised so far this week, counted from [practiceDays] like the
  *   streak screens do, since the stored counter can still hold last week's number

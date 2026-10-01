@@ -20,6 +20,7 @@ data class UserEntity(
     val coins: Int = 0,
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
+    @ColumnInfo(defaultValue = "0") val lastStreakSettledDayMillis: Long = 0,
     val practiceDays: List<Long> = emptyList(),
     // Only the old weekly streak used these two. Kept so the table does not have to be rebuilt.
     val weekSessions: Int = 0,

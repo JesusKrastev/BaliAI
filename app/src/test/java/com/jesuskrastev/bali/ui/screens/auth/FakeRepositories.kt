@@ -36,6 +36,7 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
                 highestStreak = streak.highest,
                 streakFreezes = streak.freezes,
                 lastPracticeTimestamp = streak.lastPracticeMillis,
+                lastStreakSettledDayMillis = streak.lastSettledDayMillis,
                 practiceDays = streak.practiceDays,
                 frozenDays = streak.frozenDays
             )

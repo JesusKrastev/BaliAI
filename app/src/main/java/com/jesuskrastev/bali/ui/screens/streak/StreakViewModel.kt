@@ -19,8 +19,8 @@ import javax.inject.Inject
  * What the streak screens show.
  *
  * @property isLoading true until the profile has loaded
- * @property currentStreak consecutive days with study, as of today
- * @property highestStreak the longest streak ever reached
+ * @property currentStreak current speedometer level, as of today
+ * @property highestStreak highest speedometer level ever reached
  * @property practicedToday whether today already counts
  * @property streakFreezes freezes still available
  * @property week the current week, Monday first
@@ -36,7 +36,7 @@ data class StreakUiState(
 
 /**
  * Builds the streak screens' state from a profile. The streak is settled to [nowMillis] first,
- * so a streak lost since the last visit never shows as alive, even before it is saved.
+ * so missed days always show their gradual decay, even before it is saved.
  *
  * @param user the profile
  * @param nowMillis the current time

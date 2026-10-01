@@ -85,17 +85,18 @@ class DailyStreakTest {
     }
 
     @Test
-    fun `more missed days than freezes end the streak and keep the freezes`() {
+    fun `missed days after freezes lower momentum one level each`() {
         val settled = studiedOn(5, 6, start = empty.copy(freezes = 1)).settledAt(at(10, 9))
 
-        assertThat(settled.current).isEqualTo(0)
-        assertThat(settled.freezes).isEqualTo(1)
-        assertThat(settled.frozenDays).isEmpty()
+        assertThat(settled.current).isEqualTo(1)
+        assertThat(settled.freezes).isEqualTo(0)
+        assertThat(settled.frozenDays.map(DailyStreak::epochDay))
+            .containsExactly(DailyStreak.epochDay(at(10, 7)))
     }
 
     @Test
-    fun `after the streak ends, the next session starts again at one and keeps the record`() {
-        val streak = studiedOn(5, 6, 7, 10)
+    fun `after momentum reaches zero, the next session starts again at one and keeps the record`() {
+        val streak = studiedOn(5, 6, 7, 12)
 
         assertThat(streak.current).isEqualTo(1)
         assertThat(streak.highest).isEqualTo(3)
@@ -115,6 +116,22 @@ class DailyStreakTest {
 
         assertThat(once.settledAt(at(10, 7, hour = 18))).isEqualTo(once)
         assertThat(once.freezes).isEqualTo(1)
+    }
+
+    @Test
+    fun `settling twice does not decay the same missed day twice`() {
+        val once = studiedOn(5, 6, 7).settledAt(at(10, 9))
+
+        assertThat(once.current).isEqualTo(2)
+        assertThat(once.settledAt(at(10, 9, hour = 18))).isEqualTo(once)
+    }
+
+    @Test
+    fun `daily practice caps the speedometer at seven`() {
+        val streak = studiedOn(1, 2, 3, 4, 5, 6, 7, 8)
+
+        assertThat(streak.current).isEqualTo(DailyStreak.MAX_LEVEL)
+        assertThat(streak.highest).isEqualTo(DailyStreak.MAX_LEVEL)
     }
 
     @Test

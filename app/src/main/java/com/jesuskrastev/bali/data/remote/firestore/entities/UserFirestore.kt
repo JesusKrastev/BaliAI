@@ -17,6 +17,7 @@ data class UserFirestore(
     val coins: Int = 0,
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
+    val lastStreakSettledDayMillis: Long = 0L,
     val practiceDays: List<Long> = emptyList(),
     val frozenDays: List<Long> = emptyList(),
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),

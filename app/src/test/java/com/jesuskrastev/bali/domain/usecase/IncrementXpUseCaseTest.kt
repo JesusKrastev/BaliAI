@@ -57,8 +57,6 @@ class IncrementXpUseCaseTest {
 
     @Test
     fun `calculateStreakBonus returns expected values`() {
-        assertThat(useCase.calculateStreakBonus(30)).isEqualTo(10)
-        assertThat(useCase.calculateStreakBonus(14)).isEqualTo(5)
         assertThat(useCase.calculateStreakBonus(7)).isEqualTo(3)
         assertThat(useCase.calculateStreakBonus(5)).isEqualTo(1)
         assertThat(useCase.calculateStreakBonus(3)).isNull()

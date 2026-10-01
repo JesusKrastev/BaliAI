@@ -6,8 +6,8 @@ import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 /**
- * Counts a finished test, mock exam or mini-game towards the daily streak. Only the first
- * session of the day extends it; see [DailyStreak] for the rules.
+ * Counts a finished test, mock exam or mini-game towards streak momentum. Only the first
+ * session of the day accelerates it; see [DailyStreak] for the rules.
  */
 open class IncrementStreakUseCase @Inject constructor(
     private val userRepository: UserRepository
@@ -15,8 +15,8 @@ open class IncrementStreakUseCase @Inject constructor(
     /**
      * Records the session and saves the streak.
      *
-     * @return the streak in days when this was the first session of the day, so the caller can
-     *   celebrate it; -1 when the user had already studied today or there is no profile
+     * @return the momentum level when this was the first session of the day, so the caller can
+     * celebrate it; -1 when the user had already studied today or there is no profile
      */
     open suspend operator fun invoke(): Int {
         val user = userRepository.get().first() ?: return -1
