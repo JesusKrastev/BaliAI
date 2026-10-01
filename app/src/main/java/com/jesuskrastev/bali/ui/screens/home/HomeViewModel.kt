@@ -197,6 +197,20 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Records a tap on the plan card's study button, right before the lesson it opens, to tell
+     * how many sessions start from the card rather than from the path.
+     */
+    fun trackPlanStudyClick() {
+        val state = uiState.value
+        val pace = weekPaceOf(state.weeklyStreak, state.weekSessions, state.weeklyGoal)
+        analyticsTracker.planStudyClicked(
+            daysLeft = state.plan.daysLeft,
+            practicedToday = pace.practicedToday,
+            weekSessions = pace.sessions
+        )
+    }
+
     fun generateNextPathNodesCount(count: Int = 5) {
         if (_isPathLoading.value) return
         viewModelScope.launch {

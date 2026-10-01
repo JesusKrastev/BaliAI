@@ -101,4 +101,60 @@ class HomePlanTest {
         assertThat(localDay).isEqualTo(at(2026, 11, 14))
         assertThat(pickerMillisFromLocalDay(localDay)).isEqualTo(pickerMillis)
     }
+
+    @Test
+    fun `the card turns to its final stretch in the last week`() {
+        val date = at(2026, 10, 20)
+
+        assertThat(PlanSummary().urgency()).isEqualTo(PlanUrgency.NO_DATE)
+        assertThat(PlanSummary(date, daysLeft = 8).urgency()).isEqualTo(PlanUrgency.ON_TRACK)
+        assertThat(PlanSummary(date, daysLeft = 7).urgency()).isEqualTo(PlanUrgency.FINAL_WEEK)
+        assertThat(PlanSummary(date, daysLeft = 1).urgency()).isEqualTo(PlanUrgency.FINAL_WEEK)
+        assertThat(PlanSummary(date, daysLeft = 0).urgency()).isEqualTo(PlanUrgency.TODAY)
+    }
+
+    /** A Monday-to-Sunday strip with these statuses; "today" is the day marked TODAY, or [todayIndex]. */
+    private fun week(vararg statuses: StreakStatus, todayIndex: Int = statuses.indexOf(StreakStatus.TODAY)) =
+        statuses.mapIndexed { index, status ->
+            DailyStreakState(dayOfWeek = "LMXJVSD"[index].toString(), dayOfMonth = index + 1, status = status, isToday = index == todayIndex)
+        }
+
+    @Test
+    fun `today still counts as a day left until it has a session`() {
+        val thursdayPending = week(
+            StreakStatus.COMPLETED, StreakStatus.FAILED, StreakStatus.COMPLETED,
+            StreakStatus.TODAY, StreakStatus.FUTURE, StreakStatus.FUTURE, StreakStatus.FUTURE
+        )
+
+        val pace = weekPaceOf(thursdayPending, sessions = 2, weeklyGoal = 5)
+
+        assertThat(pace).isEqualTo(WeekPace(sessions = 2, goal = 5, daysLeft = 4, practicedToday = false))
+        assertThat(pace.missing).isEqualTo(3)
+    }
+
+    @Test
+    fun `once today has a session only the days after it are left`() {
+        val thursdayDone = week(
+            StreakStatus.COMPLETED, StreakStatus.FAILED, StreakStatus.COMPLETED,
+            StreakStatus.COMPLETED, StreakStatus.FUTURE, StreakStatus.FUTURE, StreakStatus.FUTURE,
+            todayIndex = 3
+        )
+
+        val pace = weekPaceOf(thursdayDone, sessions = 3, weeklyGoal = 5)
+
+        assertThat(pace).isEqualTo(WeekPace(sessions = 3, goal = 5, daysLeft = 3, practicedToday = true))
+    }
+
+    @Test
+    fun `the pace line says what is missing and how much time is left`() {
+        fun message(sessions: Int, goal: Int, daysLeft: Int) =
+            weekPaceMessage(WeekPace(sessions, goal, daysLeft, practicedToday = false))
+
+        assertThat(message(sessions = 2, goal = 5, daysLeft = 4)).isEqualTo("Te faltan 3 sesiones y quedan 4 días")
+        assertThat(message(sessions = 4, goal = 5, daysLeft = 1)).isEqualTo("Te falta 1 sesión y queda 1 día: que no se te pase")
+        assertThat(message(sessions = 2, goal = 5, daysLeft = 3)).isEqualTo("Te faltan 3 sesiones y quedan 3 días: no te saltes ninguno")
+        assertThat(message(sessions = 1, goal = 5, daysLeft = 2)).isEqualTo("Te faltan 4 sesiones y solo quedan 2 días")
+        assertThat(message(sessions = 3, goal = 5, daysLeft = 0)).isEqualTo("Esta semana te has quedado a 2 sesiones. El lunes, otra oportunidad.")
+        assertThat(message(sessions = 6, goal = 5, daysLeft = 2)).isEqualTo("¡Objetivo de la semana cumplido!")
+    }
 }
