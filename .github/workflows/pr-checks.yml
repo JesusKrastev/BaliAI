@@ -40,6 +40,20 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # Manual runs also record the Roborazzi screenshots and keep them as an artifact, so UI
+      # changes can be reviewed without a device. Pull request runs skip both steps.
+      - name: Record screenshots
+        if: github.event_name == 'workflow_dispatch'
+        run: ./gradlew recordRoborazziDebug --stacktrace
+
+      - name: Upload screenshots
+        if: always() && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: app/build/outputs/roborazzi/
+          retention-days: 7
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 

@@ -65,10 +65,10 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Renders the home dashboard: streak/coins status, the plan card (headed by the day-0
- * "Tus primeros pasos" card while the account has it), the AI-tutor entry point, and the
- * scrollable learning-path graph. The account menu that used to open from here as a side
- * drawer (profile, legal links, sign out) now lives in the Settings tab.
+ * Renders the home dashboard: streak/coins status, the plan card, the AI-tutor entry point,
+ * the scrollable learning-path graph and, while the account has it, the day-0 "Tus primeros
+ * pasos" bar pinned above the bottom navigation. The account menu that used to open from here
+ * as a side drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
  * @param viewModel supplies [HomeUiState], drives path generation and saves the exam date
  * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type
@@ -76,8 +76,8 @@ import java.util.Locale
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the AI tutor chat
- * @param onPlayGameClick starts a mini-game straight away (the first-steps card's game task)
- * @param onExamClick starts the first simulacro (the first-steps card's closing action)
+ * @param onPlayGameClick starts a mini-game straight away (the first-steps game task)
+ * @param onExamClick starts the first simulacro (the first-steps closing action)
  */
 @Composable
 fun HomeScreen(
@@ -92,10 +92,6 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
     var showDismissFirstSteps by remember { mutableStateOf(false) }
-
-    uiState.firstStepReward?.let { reward ->
-        FirstStepRewardDialog(reward = reward, onDismiss = viewModel::dismissFirstStepReward)
-    }
 
     uiState.firstSteps?.takeIf { showDismissFirstSteps }?.let { progress ->
         DismissFirstStepsDialog(
@@ -119,8 +115,6 @@ fun HomeScreen(
         )
     }
 
-    val firstUnlockedNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
-
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -133,6 +127,35 @@ fun HomeScreen(
                 coinsCount = uiState.coinsCount,
                 onCoinsClick = onShopClick,
                 onStreakClick = onStreakClick
+            )
+        },
+        // Pinned above the bottom navigation so the day-0 tasks stay in sight while scrolling;
+        // the Scaffold lifts the FAB above it and pads the path so nothing is hidden behind it.
+        bottomBar = {
+            val firstUnlockedNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
+            FirstStepsBar(
+                progress = uiState.firstSteps,
+                reward = uiState.firstStepReward,
+                onTaskClick = { task ->
+                    when (task) {
+                        FirstStepTask.FIRST_TEST -> firstUnlockedNode?.let { node ->
+                            onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                        }
+                        FirstStepTask.ASK_BALI -> onChatClick()
+                        FirstStepTask.PLAY_GAME -> onPlayGameClick()
+                    }
+                },
+                onExamClick = {
+                    viewModel.onFirstStepsExamClicked()
+                    onExamClick()
+                },
+                onDismissClick = {
+                    // Nothing is lost once everything is paid, so only ask when it costs coins.
+                    if (uiState.firstSteps?.isComplete == true) viewModel.dismissFirstSteps() else showDismissFirstSteps = true
+                },
+                onRewardShown = viewModel::dismissFirstStepReward,
+                onShown = viewModel::onFirstStepsShown,
+                isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstUnlockedNode != null }
             )
         },
         floatingActionButton = {
@@ -152,39 +175,12 @@ fun HomeScreen(
                 viewModel.generateNextPathNodesCount()
             },
             header = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // Day 0–1 comes first: what to do right after paying, then the long-term plan.
-                    uiState.firstSteps?.let { progress ->
-                        LaunchedEffect(Unit) { viewModel.onFirstStepsShown() }
-                        FirstStepsCard(
-                            progress = progress,
-                            onTaskClick = { task ->
-                                when (task) {
-                                    FirstStepTask.FIRST_TEST -> firstUnlockedNode?.let { node ->
-                                        onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
-                                    }
-                                    FirstStepTask.ASK_BALI -> onChatClick()
-                                    FirstStepTask.PLAY_GAME -> onPlayGameClick()
-                                }
-                            },
-                            onExamClick = {
-                                viewModel.onFirstStepsExamClicked()
-                                onExamClick()
-                            },
-                            onDismissClick = {
-                                // Nothing is lost once everything is paid, so only ask when it costs coins.
-                                if (progress.isComplete) viewModel.dismissFirstSteps() else showDismissFirstSteps = true
-                            },
-                            isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstUnlockedNode != null }
-                        )
-                    }
-                    PlanCard(
-                        plan = uiState.plan,
-                        weekSessions = uiState.weekSessions,
-                        weeklyGoal = uiState.weeklyGoal,
-                        onClick = { showExamDatePicker = true }
-                    )
-                }
+                PlanCard(
+                    plan = uiState.plan,
+                    weekSessions = uiState.weekSessions,
+                    weeklyGoal = uiState.weeklyGoal,
+                    onClick = { showExamDatePicker = true }
+                )
             }
         )
     }
@@ -470,8 +466,7 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
- * @param header content placed above the first section; it scrolls away with the path and is
- *   also shown while the first nodes are still being generated
+ * @param header content placed above the first section, scrolling away with the path
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -484,12 +479,7 @@ fun LearningPathGraph(
     header: @Composable () -> Unit = {}
 ) {
     if (pathNodes.isEmpty()) {
-        if (isPathLoading) {
-            Column(modifier = modifier) {
-                Box(modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) { header() }
-                PathLoadingState(Modifier.weight(1f))
-            }
-        }
+        if (isPathLoading) PathLoadingState(modifier)
         return
     }
 
