@@ -8,7 +8,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -85,6 +88,7 @@ import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakViewModel
 import com.jesuskrastev.bali.ui.screens.settings.SettingsScreen
+import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliGrayMedium
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 import com.jesuskrastev.bali.ui.theme.White
@@ -216,6 +220,7 @@ fun AppNavigation(
                         onHomeClick = { navController.navigateTopLevel(HomeRoute) },
                         onGamesClick = { navController.navigateTopLevel(GamesRoute) },
                         onSettingsClick = { navController.navigateTopLevel(SettingsRoute) },
+                        onChatClick = { navController.navigate(ChatRoute) },
                     )
                 }
             },
@@ -264,9 +269,6 @@ fun AppNavigation(
                     },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
-                    },
-                    onChatClick = {
-                        navController.navigate(ChatRoute)
                     }
                 )
             }
@@ -544,19 +546,22 @@ fun AppNavigation(
 }
 
 /**
- * Renders the three persistent destinations that make up the primary app navigation.
+ * Renders the primary app navigation: the three persistent destinations plus the entry to the
+ * AI tutor chat, reachable from every tab.
  *
  * @param currentDestination back stack entry's destination, used to highlight the active tab
  * @param onHomeClick navigates to [HomeRoute]
  * @param onGamesClick navigates to [GamesRoute]
  * @param onSettingsClick navigates to [SettingsRoute]
+ * @param onChatClick opens [ChatRoute] full screen, on top of the current tab
  */
 @Composable
-private fun AppBottomBar(
+internal fun AppBottomBar(
     currentDestination: androidx.navigation.NavDestination?,
     onHomeClick: () -> Unit,
     onGamesClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onChatClick: () -> Unit,
 ) {
     // The bar's background is drawn flush to the true bottom edge (behind the system nav bar,
     // matching edge-to-edge), but the tappable row is lifted above it by the real nav bar inset
@@ -595,6 +600,10 @@ private fun AppBottomBar(
                 icon = Icons.Rounded.Home,
                 selected = currentDestination?.hasRoute<HomeRoute>() == true,
                 onClick = onHomeClick,
+                modifier = Modifier.weight(1f),
+            )
+            AskBaliBarItem(
+                onClick = onChatClick,
                 modifier = Modifier.weight(1f),
             )
             BaliBottomBarItem(
@@ -721,6 +730,49 @@ private fun BaliBottomBarItem(
                 .height(3.dp)
                 .clip(RoundedCornerShape(50))
                 .background(BaliPrimary),
+        )
+    }
+}
+
+/**
+ * The bar's entry to the AI tutor chat. It opens the chat on top of the current tab instead of
+ * switching tabs, so it is an action rather than a selectable tab: the mascot in colour on a
+ * soft orange pill makes it read as "ask Bali", like the floating button it replaces.
+ *
+ * @param onClick opens the chat
+ * @param modifier layout modifier applied to the item's touch target
+ */
+@Composable
+private fun AskBaliBarItem(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .height(70.dp)
+            .clickable(onClickLabel = "Pregunta a Bali", role = Role.Button, onClick = onClick)
+            .padding(horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(13.dp))
+                .background(BaliPrimary.copy(alpha = 0.12f))
+                .width(44.dp)
+                .height(40.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.bali),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        // Grey like the unselected tabs: an orange label would read as a second selected tab.
+        Text(
+            text = "Pregunta",
+            color = BaliGrayMedium,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
         )
     }
 }
