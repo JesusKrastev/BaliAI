@@ -20,6 +20,96 @@ data class PlanSummary(
     val daysLeft: Int = 0
 )
 
+/** Days before the date from which the plan card switches to its final-week look. */
+internal const val PLAN_FINAL_WEEK_DAYS = 7
+
+/** How close the plan's date is; the plan card escalates its look as the date approaches. */
+enum class PlanUrgency {
+    /** No date ahead: the card asks for one. */
+    NO_DATE,
+
+    /** More than [PLAN_FINAL_WEEK_DAYS] days left. */
+    ON_TRACK,
+
+    /** Between 1 and [PLAN_FINAL_WEEK_DAYS] days left. */
+    FINAL_WEEK,
+
+    /** The date is today. */
+    TODAY;
+
+    /** Whether the date is close enough for the card to switch to its red, final-stretch look. */
+    val isClose: Boolean get() = this == FINAL_WEEK || this == TODAY
+}
+
+/**
+ * Classifies how close this plan's date is.
+ *
+ * @return [PlanUrgency.NO_DATE] without a date, otherwise the band [PlanSummary.daysLeft] falls in
+ */
+internal fun PlanSummary.urgency(): PlanUrgency = when {
+    targetMillis == null -> PlanUrgency.NO_DATE
+    daysLeft == 0 -> PlanUrgency.TODAY
+    daysLeft <= PLAN_FINAL_WEEK_DAYS -> PlanUrgency.FINAL_WEEK
+    else -> PlanUrgency.ON_TRACK
+}
+
+/**
+ * Where the student stands against this week's session goal, as the plan card reports it.
+ *
+ * @property sessions days practised so far this week
+ * @property goal sessions per week the student aims for, at least 1
+ * @property daysLeft days of this week still open for a session: today if it has no session
+ *   yet, plus the days after it
+ * @property practicedToday whether today already has a session
+ */
+data class WeekPace(
+    val sessions: Int,
+    val goal: Int,
+    val daysLeft: Int,
+    val practicedToday: Boolean
+) {
+    /** Sessions still needed to reach [goal]; 0 once it is reached. */
+    val missing: Int get() = (goal - sessions).coerceAtLeast(0)
+}
+
+/**
+ * Works out this week's pace from the Monday-to-Sunday strip Home already builds.
+ *
+ * @param week the seven days of the current week, as built by `StreakUiHelper`
+ * @param sessions days practised so far this week
+ * @param weeklyGoal sessions per week the student aims for; anything below 1 counts as 1
+ * @return the pace the plan card reports
+ */
+internal fun weekPaceOf(week: List<DailyStreakState>, sessions: Int, weeklyGoal: Int): WeekPace =
+    WeekPace(
+        sessions = sessions,
+        goal = weeklyGoal.coerceAtLeast(1),
+        daysLeft = week.count { it.status == StreakStatus.TODAY || it.status == StreakStatus.FUTURE },
+        practicedToday = week.any { it.isToday && it.status == StreakStatus.COMPLETED }
+    )
+
+/**
+ * Builds the line under the plan card's week strip: what is still missing and how many days
+ * are left to do it in, so falling behind shows before the week is lost.
+ *
+ * @param pace this week's pace
+ * @return the sentence to show
+ */
+internal fun weekPaceMessage(pace: WeekPace): String {
+    val missing = pace.missing
+    val days = pace.daysLeft
+    val sessionsText = if (missing == 1) "1 sesión" else "$missing sesiones"
+    val missingText = if (missing == 1) "Te falta $sessionsText" else "Te faltan $sessionsText"
+    val daysText = if (days == 1) "queda 1 día" else "quedan $days días"
+    return when {
+        missing == 0 -> "¡Objetivo de la semana cumplido!"
+        days == 0 -> "Esta semana te has quedado a $sessionsText. El lunes, otra oportunidad."
+        missing > days -> "$missingText y solo $daysText"
+        missing == days -> "$missingText y $daysText: ${if (days == 1) "que no se te pase" else "no te saltes ninguno"}"
+        else -> "$missingText y $daysText"
+    }
+}
+
 /**
  * Picks the day Home's plan card counts down to.
  *

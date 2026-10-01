@@ -552,6 +552,21 @@ open class AnalyticsTracker @Inject constructor(
         putBoolean("had_plan_date", hadPlanDate)
     }
 
+    /**
+     * Tracks a tap on the study button of Home's plan card, which opens the next unlocked lesson.
+     *
+     * @param daysLeft calendar days from today to the date the card counts down to
+     * @param practicedToday true when today already had a session, so the button read "Seguir
+     *   practicando" instead of "Empezar la sesión de hoy"
+     * @param weekSessions sessions done so far this week
+     */
+    open fun planStudyClicked(daysLeft: Int, practicedToday: Boolean, weekSessions: Int) =
+        log("plan_study_clicked") {
+            putInt("days_left", daysLeft)
+            putBoolean("practiced_today", practicedToday)
+            putInt("week_sessions", weekSessions)
+        }
+
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 
     /**
