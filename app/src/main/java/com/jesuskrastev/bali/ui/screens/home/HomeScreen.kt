@@ -63,8 +63,8 @@ import com.jesuskrastev.bali.domain.model.NodeType
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 
 /**
- * Renders the home dashboard: streak/coins status, the plan card, the AI-tutor entry point,
- * and the scrollable learning-path graph. The account menu that used to open from here as a
+ * Renders the home dashboard: streak/coins status, the plan card and the scrollable
+ * learning-path graph. The AI-tutor chat opens from the app's bottom bar. The account menu that used to open from here as a
  * side drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
  * @param viewModel supplies [HomeUiState], drives path generation and saves the exam date
@@ -73,15 +73,13 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
  *   exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
- * @param onChatClick opens the AI tutor chat
  */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
-    onStreakClick: () -> Unit = {},
-    onChatClick: () -> Unit = {}
+    onStreakClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
@@ -111,9 +109,6 @@ fun HomeScreen(
                 onCoinsClick = onShopClick,
                 onStreakClick = onStreakClick
             )
-        },
-        floatingActionButton = {
-            AskBaliFab(onClick = onChatClick)
         }
     ) { paddingValues ->
         LearningPathGraph(
@@ -147,30 +142,6 @@ fun HomeScreen(
             }
         )
     }
-}
-
-/**
- * Entry point to the AI tutor chat. Carries the mascot rather than a generic chat glyph
- * so it reads as "ask Bali", the same character the student already talks to elsewhere.
- *
- * @param onClick invoked when the student wants to open the chat
- */
-@Composable
-fun AskBaliFab(onClick: () -> Unit) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = Color.White,
-        shape = RoundedCornerShape(20.dp),
-        icon = {
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp)
-            )
-        },
-        text = { Text("Pregunta a Bali", fontWeight = FontWeight.Black) }
-    )
 }
 
 /**
@@ -324,8 +295,7 @@ fun LearningPathGraph(
         LazyColumn(
             state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
-            // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
         ) {
             item(key = "header") {
                 Box(modifier = Modifier.padding(top = 8.dp)) { header() }
