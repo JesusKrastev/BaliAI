@@ -46,17 +46,6 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: ./gradlew recordRoborazziDebug --stacktrace
 
-      # TEMPORARY: prints the first-steps screenshots into the log for review from a sandbox
-      # that cannot reach the artifact storage. Remove once the redesign is reviewed.
-      - name: Dump first-steps screenshots
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          for f in $(find app/build/outputs/roborazzi -name '*FirstStepsBar*.png' | sort); do
-            echo "=== SHOT $(basename "$f")"
-            base64 -w 0 "$f"
-            echo
-          done
-
       - name: Upload screenshots
         if: always() && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
