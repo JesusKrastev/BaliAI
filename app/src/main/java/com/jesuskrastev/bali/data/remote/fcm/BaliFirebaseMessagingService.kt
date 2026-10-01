@@ -14,6 +14,10 @@ import com.jesuskrastev.bali.BuildConfig
  *
  * The initial token fetch on login is handled by MainViewModel.
  * This service only needs to react to token refreshes (rare).
+ *
+ * It does not compete with OneSignal, which delivers every push the app sends (D-010):
+ * OneSignal receives FCM through its own high-priority broadcast receiver and filters out
+ * its own messages before they reach this service.
  */
 class BaliFirebaseMessagingService : FirebaseMessagingService() {
 

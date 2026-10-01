@@ -175,6 +175,19 @@ open class AnalyticsTracker @Inject constructor(
         putInt("step_index", stepIndex)
     }
 
+    /**
+     * Tracks the answer to the onboarding screen that offers study reminders.
+     *
+     * @param result `granted` (said yes and Android allowed it), `denied` (said yes but
+     *   refused the system dialog) or `declined` (tapped "Ahora no", no system dialog shown)
+     * @param studySlot the part of the day picked on the previous screen, e.g. `night`
+     */
+    open fun notificationsPermissionAnswered(result: String, studySlot: String?) =
+        log("notifications_permission_result") {
+            putString("result", result)
+            studySlot?.let { putString("study_slot", it) }
+        }
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**

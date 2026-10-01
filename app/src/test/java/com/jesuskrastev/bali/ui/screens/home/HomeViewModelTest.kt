@@ -12,6 +12,7 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -65,6 +66,7 @@ class HomeViewModelTest {
             analyticsTracker = fakeAnalyticsTracker,
             dateTimeHelper = dateTimeHelper,
             remoteConfigProvider = remoteConfigProvider,
+            settleStreak = SettleStreakUseCase(fakeUserRepository),
             context = context
         )
     }

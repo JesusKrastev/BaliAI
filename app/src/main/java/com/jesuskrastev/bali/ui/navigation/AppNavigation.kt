@@ -83,7 +83,8 @@ import com.jesuskrastev.bali.ui.screens.test.TestViewModel
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
-import com.jesuskrastev.bali.ui.screens.streak.LessonStreakViewModel
+import com.jesuskrastev.bali.ui.screens.streak.StreakScreen
+import com.jesuskrastev.bali.ui.screens.streak.StreakViewModel
 import com.jesuskrastev.bali.ui.screens.settings.SettingsScreen
 import com.jesuskrastev.bali.ui.theme.BaliGrayMedium
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
@@ -151,10 +152,11 @@ data class AuthRoute(
 )
 
 @Serializable
-data class CoinsGainedRoute(val coins: Int, val newWeekSessions: Int)
+data class CoinsGainedRoute(val coins: Int, val newStreakDays: Int)
 
+/** Celebration after the first session of the day, the one that extends the streak. */
 @Serializable
-data class StreakRoute(val newWeekSessions: Int)
+object StreakRoute
 
 @Serializable
 object MainStreakRoute
@@ -172,7 +174,7 @@ data class TestResultRoute(
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
     val coinsGained: Int = 0,
-    val newWeekSessions: Int = -1
+    val newStreakDays: Int = -1
 )
 
 /**
@@ -381,7 +383,7 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newWeekSessions = result.newWeekSessions
+                                newStreakDays = result.newStreakDays
                             )
                         ) {
                             popUpTo(TestRoute(null)) { inclusive = true }
@@ -411,7 +413,7 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newWeekSessions = result.newWeekSessions
+                                newStreakDays = result.newStreakDays
                             )
                         ) {
                             popUpTo(ExamRoute) { inclusive = true }
@@ -433,7 +435,7 @@ fun AppNavigation(
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
                     onContinueClick = {
-                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newWeekSessions)) {
+                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreakDays)) {
                             popUpTo(HomeRoute) { inclusive = false }
                         }
                     }
@@ -445,8 +447,8 @@ fun AppNavigation(
                 CoinsGainedScreen(
                     coinsGained = route.coins,
                     onContinueClick = {
-                        if (route.newWeekSessions > 0) {
-                            navController.navigate(StreakRoute(route.newWeekSessions)) {
+                        if (route.newStreakDays > 0) {
+                            navController.navigate(StreakRoute) {
                                 popUpTo(HomeRoute) { inclusive = false }
                             }
                         } else {
@@ -458,13 +460,9 @@ fun AppNavigation(
                 )
             }
 
-            composable<StreakRoute> { backStackEntry ->
-                val route: StreakRoute = backStackEntry.toRoute()
-                val viewModel: LessonStreakViewModel = hiltViewModel()
-                
+            composable<StreakRoute> {
                 LessonStreakScreen(
-                    viewModel = viewModel,
-                    newWeekSessions = route.newWeekSessions,
+                    viewModel = hiltViewModel<StreakViewModel>(),
                     onContinueClick = {
                         navController.navigate(HomeRoute) {
                             popUpTo(HomeRoute) { inclusive = true }
@@ -474,13 +472,10 @@ fun AppNavigation(
             }
 
             composable<MainStreakRoute> {
-                val viewModel: com.jesuskrastev.bali.ui.screens.streak.StreakViewModel = hiltViewModel()
-                
-                com.jesuskrastev.bali.ui.screens.streak.StreakScreen(
-                    viewModel = viewModel,
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                StreakScreen(
+                    viewModel = hiltViewModel<StreakViewModel>(),
+                    onBackClick = { navController.popBackStack() },
+                    onShopClick = { navController.navigate(ShopRoute) }
                 )
             }
 

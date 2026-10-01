@@ -32,7 +32,7 @@ class GameViewModelTest {
 
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
-    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
+    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
 
     private lateinit var viewModel: GameViewModel
 

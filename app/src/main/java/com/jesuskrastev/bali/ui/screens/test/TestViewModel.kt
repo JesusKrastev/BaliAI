@@ -61,7 +61,7 @@ data class TestSummary(
     val bonusStreak: Int?,
     val leveledUp: Boolean,
     val coinsGained: Int,
-    val newWeekSessions: Int
+    val newStreakDays: Int
 )
 
 @HiltViewModel
@@ -442,7 +442,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newWeekSessions = -1
+        var newStreakDays = -1
 
         val userId = userRepository.get().first()?.id ?: ""
         // Read the node's status BEFORE this attempt overwrites it below — repeating an
@@ -490,7 +490,7 @@ class TestViewModel @Inject constructor(
             }
 
             // 3. Increment streak
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
 
             // 4. Update path if coming from a path node: always record the attempt on the
             // current node, but only unlock the next one once the score clears the bar.
@@ -539,7 +539,7 @@ class TestViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays
         )
     }
 

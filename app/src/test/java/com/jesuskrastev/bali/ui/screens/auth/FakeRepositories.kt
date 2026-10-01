@@ -1,6 +1,8 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.*
@@ -27,16 +29,17 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _hasCompletedOnboarding.value = true
     }
 
-    override suspend fun resetStreak() {
-        _user.update { it?.copy(currentStreak = 0) }
-    }
-
-    override suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) {
-        _user.update { it?.copy(currentStreak = streak, lastPracticeTimestamp = timestamp, practiceDays = practiceDays) }
-    }
-
-    override suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, lastPracticeTimestamp: Long, practiceDays: List<Long>) {
-        _user.update { it?.copy(weekSessions = weekSessions, lastPracticeTimestamp = lastPracticeTimestamp, practiceDays = practiceDays) }
+    override suspend fun updateStreak(streak: DailyStreak) {
+        _user.update {
+            it?.copy(
+                currentStreak = streak.current,
+                highestStreak = streak.highest,
+                streakFreezes = streak.freezes,
+                lastPracticeTimestamp = streak.lastPracticeMillis,
+                practiceDays = streak.practiceDays,
+                frozenDays = streak.frozenDays
+            )
+        }
     }
 
     override suspend fun updateXp(xp: Int, level: Int) {
@@ -63,9 +66,6 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _user.update { it?.copy(streakFreezes = count) }
     }
 
-    override suspend fun updateHighestStreak(highestStreak: Int) {
-        _user.update { it?.copy(highestStreak = highestStreak) }
-    }
 
     override suspend fun updateExamDate(examDateMillis: Long) {
         _user.update { it?.copy(examDateMillis = examDateMillis) }
@@ -144,7 +144,11 @@ class FakeAnalyticsTracker(
     val gameStartedEvents = mutableListOf<String>()
     val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
     val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
+    val notificationsAnswers = mutableListOf<Pair<String, String?>>()
 
+    override fun notificationsPermissionAnswered(result: String, studySlot: String?) {
+        notificationsAnswers.add(result to studySlot)
+    }
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
     override fun signUp(method: String) { signUpEvents.add(method) }
@@ -173,6 +177,49 @@ class FakeAnalyticsTracker(
         gameStartedEvents.clear()
         gameCompletedEvents.clear()
         gameAbandonedEvents.clear()
+        notificationsAnswers.clear()
+    }
+}
+
+/**
+ * [NotificationsRepository] that records every call instead of reaching OneSignal.
+ *
+ * @param grantsPermission what the system dialog answers when permission is requested
+ */
+class FakeNotificationsRepository(private val grantsPermission: Boolean = true) : NotificationsRepository {
+    private val _studySchedule = MutableStateFlow<StudySchedule?>(null)
+    override val studySchedule: Flow<StudySchedule?> = _studySchedule
+
+    var permissionRequests = 0
+        private set
+    var optedOut = false
+        private set
+
+    /** Every [identify] call in order; null entries are sign-outs. */
+    val identifiedUsers = mutableListOf<String?>()
+
+    /** Every [updateTags] call in order. */
+    val sentTags = mutableListOf<Map<String, String?>>()
+
+    /** [identify] and [updateTags] calls interleaved, as `identify:<id>` and `tags`. */
+    val calls = mutableListOf<String>()
+
+    /** The latest saved study moment, or null if none was saved. */
+    val savedSchedule: StudySchedule? get() = _studySchedule.value
+
+    override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
+    override suspend fun requestPermission(): Boolean {
+        permissionRequests++
+        return grantsPermission
+    }
+    override fun optOut() { optedOut = true }
+    override fun identify(userId: String?) {
+        identifiedUsers.add(userId)
+        calls.add("identify:$userId")
+    }
+    override fun updateTags(tags: Map<String, String?>) {
+        sentTags.add(tags)
+        calls.add("tags")
     }
 }
 

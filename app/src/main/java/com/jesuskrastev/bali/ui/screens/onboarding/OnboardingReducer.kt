@@ -75,6 +75,8 @@ class OnboardingReducer {
             OnboardingStep.Province -> "¿En qué |provincia| te examinas? 📍"
             OnboardingStep.ProvinceConfirmed -> provinceConfirmationHeadline(data.province)
             OnboardingStep.WeeklyStudy -> "¿Cuánto quieres estudiar |a la semana|? Mejor poco y constante ⚡"
+            OnboardingStep.StudyTime -> "¿A qué hora te viene mejor |estudiar|? ⏰"
+            OnboardingStep.Notifications -> notificationsHeadline(data)
             OnboardingStep.LearningPreference -> "¿Cómo prefieres practicar? Tu |método| manda 🧠"
 
             // Cierre
@@ -101,4 +103,15 @@ class OnboardingReducer {
     private fun provinceConfirmationHeadline(province: String?): String = province
         ?.let { "Tenemos el temario que se usa en |$it| 📋" }
         ?: "Tenemos el |temario oficial| de la DGT 📋"
+
+    /**
+     * Headline of the reminders offer, naming the hour picked on the previous screen so the
+     * question is about that reminder, not about notifications in general.
+     *
+     * @param data the answers collected so far
+     * @return the message to show in the speech bubble
+     */
+    private fun notificationsHeadline(data: OnboardingData): String = data.studySlot()
+        ?.let { "¿Te aviso a las |${OnboardingConfig.reminderTimeLabel(it)}| para que no se te pase? 🔔" }
+        ?: "¿Te aviso para que |no se te pase|? 🔔"
 }
