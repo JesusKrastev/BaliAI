@@ -17,15 +17,17 @@ package com.jesuskrastev.bali.domain.model
  * @property planTargetMillis The day the onboarding plan promised the license by
  *   ("Puedes tener tu carnet antes del…"), saved so Home can keep showing it after payment;
  *   null for users who finished onboarding before it was saved.
- * @property currentStreak The user's current consecutive weeks of study.
+ * @property lastPracticeTimestamp When the user last started a study day, 0 if never.
+ * @property currentStreak Consecutive days with study; see [DailyStreak] for the rules.
  * @property xp The user's accumulated experience points.
  * @property level The user's current level based on their XP.
  * @property coins The user's current coin balance, spent in the shop on streak freezes.
  * @property streakFreezes The number of streak freezes the user currently owns.
- * @property weekSessions The number of sessions completed in the current week. Only
- *   refreshed when the user practises, so it can still hold last week's count: screens
- *   count this week's [practiceDays] instead.
- * @property currentWeekStart The timestamp of the start of the current week (Monday 00:00).
+ * @property highestStreak The longest daily streak the user has reached.
+ * @property practiceDays Local midnights of the days with study, the last
+ *   [DailyStreak.HISTORY_DAYS] only.
+ * @property frozenDays Local midnights of the days a streak freeze covered, the last
+ *   [DailyStreak.HISTORY_DAYS] only.
  */
 data class User(
     val id: String = "",
@@ -43,6 +45,5 @@ data class User(
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
     val practiceDays: List<Long> = emptyList(),
-    val weekSessions: Int = 0,
-    val currentWeekStart: Long = 0L
+    val frozenDays: List<Long> = emptyList()
 )

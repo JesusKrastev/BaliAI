@@ -1,431 +1,294 @@
 package com.jesuskrastev.bali.ui.screens.streak
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.EmojiEvents
-import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jesuskrastev.bali.ui.components.WeeklyStreakProgress
-import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
-import com.jesuskrastev.bali.ui.screens.home.StreakStatus
-import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
-
-/** Number of streak freeze slots a user can hold at once. */
-private const val MAX_STREAK_FREEZES = 2
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.DailyStreak
 
 /**
- * Standalone page with the full picture of the user's streak.
+ * Page with the whole picture of the daily streak: today's state, the week, the freezes and
+ * the record.
  *
- * Shows the weekly goal ring, the day-by-day progress, the available streak freezes and the
- * current/record streak stats.
- *
- * @param viewModel Supplies the weekly streak, goal, freezes and streak records.
- * @param onBackClick Invoked when the user taps the back arrow.
+ * @param viewModel supplies the streak
+ * @param onBackClick invoked by the back arrow
+ * @param onShopClick opens the shop, where freezes are bought
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreakScreen(
     viewModel: StreakViewModel,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onShopClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    StreakContent(uiState = uiState, onBackClick = onBackClick, onShopClick = onShopClick)
+}
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(brush = BaliBackgroundGradient())
-    ) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Text(
-                            text = "TU RACHA",
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBackClick) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = "Volver"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground
-                    )
-                )
-            }
-        ) { padding ->
-            if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val completedDaysThisWeek =
-                        uiState.weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-
-                    WeeklyStreakProgress(
-                        testsCompletedThisWeek = completedDaysThisWeek,
-                        weeklyGoal = uiState.weeklyGoal,
-                        macroStreakWeeks = uiState.currentStreak
-                    )
-
-                    ProgressCard(weeklyStreak = uiState.weeklyStreak)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    ShieldsCard(freezes = uiState.streakFreezes)
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        StatCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            icon = Icons.Rounded.LocalFireDepartment,
-                            label = "SEMANAS SEGUIDAS",
-                            value = uiState.currentStreak.toString(),
-                            subLabel = "Racha actual"
-                        )
-                        StatCard(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            icon = Icons.Rounded.EmojiEvents,
-                            label = "MEJOR RACHA",
-                            value = uiState.highestStreak.toString(),
-                            subLabel = "Semanas récord"
-                        )
+/**
+ * Stateless body of [StreakScreen].
+ *
+ * @param uiState the streak to show
+ * @param onBackClick invoked by the back arrow
+ * @param onShopClick opens the shop
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StreakContent(
+    uiState: StreakUiState,
+    onBackClick: () -> Unit,
+    onShopClick: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Tu racha", fontWeight = FontWeight.Black) },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
                     }
-
-                    Spacer(modifier = Modifier.height(40.dp))
-
-                    FooterSection(message = uiState.encouragingMessage)
-
-                    Spacer(modifier = Modifier.height(40.dp))
-                }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { padding ->
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
+            return@Scaffold
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            StreakHero(uiState)
+
+            Section(title = "Esta semana") {
+                StreakCard { StreakWeek(uiState.week) }
+            }
+            Section(title = "Congeladores") {
+                FreezesCard(freezes = uiState.streakFreezes, onShopClick = onShopClick)
+            }
+            Section(title = "Tu récord") {
+                RecordCard(current = uiState.currentStreak, highest = uiState.highestStreak)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
 /**
- * Rounded elevated container shared by every card on this page.
+ * A titled block of the page.
  *
- * @param modifier Applied to the surface, so callers can size or weight it.
- * @param content Card body; it is responsible for its own padding.
+ * @param title the section title
+ * @param content the section body
  */
 @Composable
-private fun StreakCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 1.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-        content = content
-    )
+private fun Section(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        StreakSectionLabel(title)
+        content()
+    }
 }
 
 /**
- * Card listing the streak freezes the user still has available.
+ * The flame, the day count and what the user has to do today.
  *
- * @param freezes Freezes currently owned; drives how many shields are highlighted.
+ * @param uiState the streak to show
  */
 @Composable
-private fun ShieldsCard(freezes: Int) {
-    StreakCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+private fun StreakHero(uiState: StreakUiState) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        StreakFlame(lit = uiState.practicedToday, size = 104.dp)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = uiState.currentStreak.toString(),
+            fontSize = 64.sp,
+            lineHeight = 64.sp,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = "${daysWord(uiState.currentStreak)} seguidos",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val atRisk = uiState.currentStreak > 0 && !uiState.practicedToday
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = if (atRisk) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            }
         ) {
+            Text(
+                text = todayMessage(uiState),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (atRisk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+            )
+        }
+    }
+}
+
+/**
+ * What today means for the streak.
+ *
+ * @param uiState the streak to describe
+ * @return one line for the hero
+ */
+private fun todayMessage(uiState: StreakUiState): String = when {
+    uiState.practicedToday -> "Hoy ya cuenta. ¡Vuelve mañana!"
+    uiState.currentStreak > 0 -> "Haz un test hoy para no perderla."
+    else -> "Haz un test hoy y empieza tu racha."
+}
+
+/**
+ * The freezes left, what they do and a way to get more.
+ *
+ * @param freezes freezes still available
+ * @param onShopClick opens the shop
+ */
+@Composable
+private fun FreezesCard(freezes: Int, onShopClick: () -> Unit) {
+    StreakCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Image(
+                painter = painterResource(id = R.drawable.streak_freezer),
+                contentDescription = null,
+                modifier = Modifier.size(44.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Protecciones de Racha",
+                    text = "Tienes $freezes de ${DailyStreak.MAX_FREEZES}",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Salva tu racha si no cumples el objetivo.",
+                    text = "Si un día no estudias, se gasta uno y tu racha sigue.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(MAX_STREAK_FREEZES) { index ->
-                    Icon(
-                        imageVector = Icons.Rounded.Shield,
-                        contentDescription = "Escudo",
-                        tint = if (index < freezes) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
-                        },
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Card with the day-by-day progress of the current week.
- *
- * @param weeklyStreak One entry per day of the week, in display order.
- */
-@Composable
-private fun ProgressCard(weeklyStreak: List<DailyStreakState>) {
-    StreakCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Progreso de la Semana",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                weeklyStreak.forEach { day ->
-                    DayIndicator(day = day)
-                }
-            }
-        }
-    }
-}
-
-/**
- * Single day cell of the weekly progress card.
- *
- * @param day Status and label of the day to render.
- */
-@Composable
-private fun DayIndicator(day: DailyStreakState) {
-    val isCompleted = day.status == StreakStatus.COMPLETED
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isCompleted) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                if (freezes < DailyStreak.MAX_FREEZES) {
+                    TextButton(onClick = onShopClick, contentPadding = PaddingValues(0.dp)) {
+                        Text("Conseguir en la tienda →", fontWeight = FontWeight.Bold)
                     }
-                )
-                .border(
-                    width = if (day.isToday) 2.dp else 1.dp,
-                    color = when {
-                        isCompleted -> MaterialTheme.colorScheme.primary
-                        day.isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                    },
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = day.dayOfWeek,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (day.isToday) FontWeight.Black else FontWeight.Bold,
-                color = when {
-                    isCompleted -> MaterialTheme.colorScheme.onPrimary
-                    day.isToday -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
-            )
+            }
         }
     }
 }
 
 /**
- * Square tile highlighting a single streak statistic.
+ * The longest streak and how far the current one is from it.
  *
- * @param modifier Applied to the card, so callers can weight it inside a row.
- * @param icon Leading icon shown next to the label.
- * @param label Uppercase caption describing the metric.
- * @param value Formatted metric value.
- * @param subLabel Secondary line clarifying the metric.
+ * @param current consecutive days now
+ * @param highest the longest streak ever
  */
 @Composable
-private fun StatCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    label: String,
-    value: String,
-    subLabel: String
-) {
-    StreakCard(modifier = modifier) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
+private fun RecordCard(current: Int, highest: Int) {
+    StreakCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "🏆", fontSize = 32.sp)
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = "Mejor racha",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
+                    text = "$highest ${daysWord(highest)}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
-
-            Text(
-                text = value,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Text(
-                text = subLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                fontWeight = FontWeight.Medium
-            )
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = recordMessage(current, highest),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 /**
- * Closing block with a badge icon and an encouraging message.
+ * How the current streak compares with the record.
  *
- * @param message Personalised line about how close the user is to their record.
+ * @param current consecutive days now
+ * @param highest the longest streak ever
+ * @return one line under the record
  */
-@Composable
-private fun FooterSection(message: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
-        }
-
-        Text(
-            text = "¡Sigue así, Campeón!",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Black,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            lineHeight = 20.sp
-        )
+private fun recordMessage(current: Int, highest: Int): String = when {
+    highest == 0 -> "Tu primera racha empieza con el próximo test."
+    current >= highest -> "Estás en tu mejor racha: cada día que sumes es un récord nuevo."
+    else -> {
+        val toBeat = highest - current + 1
+        "Te faltan $toBeat ${daysWord(toBeat)} para superarlo."
     }
 }

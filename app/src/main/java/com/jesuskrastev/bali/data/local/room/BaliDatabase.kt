@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,14 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Days a streak freeze covered, for the daily streak. The default matches the
+                // entity's @ColumnInfo so Room's schema check passes.
+                database.execSQL("ALTER TABLE users ADD COLUMN frozenDays TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Day the onboarding plan promised the license by, kept for Home's plan card.

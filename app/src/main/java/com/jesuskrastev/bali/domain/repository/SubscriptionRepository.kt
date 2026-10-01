@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.domain.repository
 
-import com.jesuskrastev.bali.domain.model.User
 import kotlinx.coroutines.flow.Flow
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
@@ -25,6 +24,15 @@ interface SubscriptionRepository {
      * Helper to verify if the 'premium' entitlement is active on the given [CustomerInfo].
      */
     fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean
+
+    /**
+     * When the user first bought premium, for messages meant for their first days as a
+     * subscriber.
+     *
+     * @param customerInfo the customer info to read
+     * @return the original purchase time in millis, or null when premium is not active
+     */
+    fun premiumSinceMillis(customerInfo: CustomerInfo): Long?
 
     /**
      * Fetches a specific offering by its RevenueCat identifier, for paywalls that are not the

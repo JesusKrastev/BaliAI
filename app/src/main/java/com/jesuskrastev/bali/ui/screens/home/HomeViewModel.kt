@@ -17,6 +17,8 @@ import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
@@ -39,6 +41,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
+    private val settleStreak: SettleStreakUseCase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -56,6 +59,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
+        // Days missed since the last visit spend freezes or end the streak before it is shown.
+        viewModelScope.launch { settleStreak() }
         viewModelScope.launch {
             remoteConfigProvider.fetchAndActivate()
         }
@@ -136,7 +141,10 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail
             )
         } else {
-            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
+            val now = System.currentTimeMillis()
+            // Settled here too, so a lost streak never flashes as alive while the save lands.
+            val streak = DailyStreak.of(user).settledAt(now)
+            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(streak.practiceDays, streak.frozenDays, now)
             // Counted from practiceDays like the streak screens: user.weekSessions is only
             // refreshed on the next practice, so it can still hold last week's number.
             val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
@@ -145,8 +153,9 @@ class HomeViewModel @Inject constructor(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
-                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, System.currentTimeMillis()),
-                streak = user.currentStreak,
+                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now),
+                streak = streak.current,
+                practicedToday = streak.hasPracticedOn(now),
                 weekSessions = weekSessions,
                 weeklyGoal = weeklyGoal,
                 weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
@@ -156,8 +165,8 @@ class HomeViewModel @Inject constructor(
                 xpLevel = user.level,
                 mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
-                streakFreezes = user.streakFreezes,
-                highestStreak = user.highestStreak,
+                streakFreezes = streak.freezes,
+                highestStreak = streak.highest,
                 dailyTip = dailyTip,
                 weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,

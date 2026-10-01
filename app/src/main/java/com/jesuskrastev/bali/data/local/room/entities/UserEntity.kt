@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.data.local.room.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -20,6 +21,8 @@ data class UserEntity(
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
     val practiceDays: List<Long> = emptyList(),
+    // Only the old weekly streak used these two. Kept so the table does not have to be rebuilt.
     val weekSessions: Int = 0,
-    val currentWeekStart: Long = 0L
+    val currentWeekStart: Long = 0L,
+    @ColumnInfo(defaultValue = "[]") val frozenDays: List<Long> = emptyList()
 )

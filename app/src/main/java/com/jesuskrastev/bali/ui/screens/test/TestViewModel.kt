@@ -60,8 +60,14 @@ data class TestSummary(
     val bonusFast: Int?,
     val bonusStreak: Int?,
     val leveledUp: Boolean,
+    /** The level after this result; 0 when unknown. The result screen names it when [leveledUp]. */
+    val newLevel: Int = 0,
     val coinsGained: Int,
-    val newWeekSessions: Int
+    val newStreakDays: Int,
+    /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
+    val isFailedExam: Boolean = false,
+    /** True only for an official exam at or above the DGT pass mark; the result screen stamps it "APROBADO". */
+    val isPassedExam: Boolean = false
 )
 
 @HiltViewModel
@@ -442,7 +448,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newWeekSessions = -1
+        var newStreakDays = -1
 
         val userId = userRepository.get().first()?.id ?: ""
         // Read the node's status BEFORE this attempt overwrites it below — repeating an
@@ -490,7 +496,7 @@ class TestViewModel @Inject constructor(
             }
 
             // 3. Increment streak
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
 
             // 4. Update path if coming from a path node: always record the attempt on the
             // current node, but only unlock the next one once the score clears the bar.
@@ -538,8 +544,9 @@ class TestViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays
         )
     }
 

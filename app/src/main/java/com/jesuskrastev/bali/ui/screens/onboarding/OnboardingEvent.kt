@@ -12,6 +12,9 @@ sealed class OnboardingEvent {
     data class SelectExamTiming(val timing: String) : OnboardingEvent()
     data class SelectProvince(val province: String) : OnboardingEvent()
     data class SelectWeeklyStudy(val weeklyStudy: String) : OnboardingEvent()
+    data class SelectStudyTime(val studyTime: String) : OnboardingEvent()
+    /** The answer to the reminders offer: true for "Sí, avísame", false for "Ahora no". */
+    data class AnswerNotifications(val accepted: Boolean) : OnboardingEvent()
     data class SelectLearningPreference(val preference: String) : OnboardingEvent()
     // Navigation Events
     data object GoToNextStep : OnboardingEvent()

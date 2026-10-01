@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
@@ -104,6 +106,7 @@ fun HomeScreen(
                     .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 streak = uiState.streak,
+                practicedToday = uiState.practicedToday,
                 coinsCount = uiState.coinsCount,
                 onCoinsClick = onShopClick,
                 onStreakClick = onStreakClick
@@ -175,6 +178,7 @@ fun AskBaliFab(onClick: () -> Unit) {
  *
  * @param modifier layout modifier applied to the row
  * @param streak current daily streak count
+ * @param practicedToday whether today already counts; the flame stays grey until it does
  * @param coinsCount current coin balance
  * @param onCoinsClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
@@ -183,6 +187,7 @@ fun AskBaliFab(onClick: () -> Unit) {
 fun UserStatusRow(
     modifier: Modifier = Modifier,
     streak: Int,
+    practicedToday: Boolean = true,
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
     onStreakClick: () -> Unit = {}
@@ -198,6 +203,8 @@ fun UserStatusRow(
             Image(
                 painter = painterResource(id = R.drawable.streak_icon),
                 contentDescription = null,
+                colorFilter = if (practicedToday) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                alpha = if (practicedToday) 1f else 0.5f,
                 modifier = Modifier.size(16.dp)
             )
             Text(

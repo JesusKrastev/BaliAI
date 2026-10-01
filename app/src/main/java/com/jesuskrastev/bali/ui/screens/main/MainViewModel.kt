@@ -10,9 +10,9 @@ import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
+import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
-import com.onesignal.OneSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +55,8 @@ class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val migrationManager: FirestoreMigrationManager,
-    private val inAppUpdateManager: InAppUpdateManager
+    private val inAppUpdateManager: InAppUpdateManager,
+    private val syncNotificationTags: SyncNotificationTagsUseCase
 ) : ViewModel() {
 
     /**
@@ -116,10 +117,11 @@ class MainViewModel @Inject constructor(
     )
 
     init {
+        // Also links OneSignal to the account on every sign-in and sign-out.
+        viewModelScope.launch { syncNotificationTags() }
         viewModelScope.launch {
             val currentUserUid = authRepository.currentUser()
             if (currentUserUid != null) {
-                OneSignal.login(currentUserUid)
                 runCatching {
                     val token = FirebaseMessaging.getInstance().token.await()
                     userRepository.updateFcmToken(token)
