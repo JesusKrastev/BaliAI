@@ -60,10 +60,14 @@ data class TestSummary(
     val bonusFast: Int?,
     val bonusStreak: Int?,
     val leveledUp: Boolean,
+    /** The level after this result; 0 when unknown. The result screen names it when [leveledUp]. */
+    val newLevel: Int = 0,
     val coinsGained: Int,
     val newStreakDays: Int,
     /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
-    val isFailedExam: Boolean = false
+    val isFailedExam: Boolean = false,
+    /** True only for an official exam at or above the DGT pass mark; the result screen stamps it "APROBADO". */
+    val isPassedExam: Boolean = false
 )
 
 @HiltViewModel
@@ -540,6 +544,7 @@ class TestViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
             coinsGained = coinsGained,
             newStreakDays = newStreakDays
         )

@@ -19,14 +19,16 @@ private const val REVIEW_PROMPT_DELAY_MILLIS = 1_200L
  * Google Play applies its own quota and may intentionally decide not to display the prompt.
  *
  * @param accuracy percentage of correctly answered questions
+ * @param enabled false holds the request back, e.g. while a celebration is still on screen; the
+ *   delay starts once it turns true
  */
 @Composable
-fun InAppReviewEffect(accuracy: Int) {
+fun InAppReviewEffect(accuracy: Int, enabled: Boolean = true) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
 
-    LaunchedEffect(accuracy, activity) {
-        if (!shouldRequestInAppReview(accuracy) || activity == null) return@LaunchedEffect
+    LaunchedEffect(accuracy, activity, enabled) {
+        if (!enabled || !shouldRequestInAppReview(accuracy) || activity == null) return@LaunchedEffect
 
         delay(REVIEW_PROMPT_DELAY_MILLIS)
         if (activity.isFinishing || activity.isDestroyed) return@LaunchedEffect

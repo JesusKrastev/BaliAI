@@ -79,6 +79,7 @@ import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
+import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import com.jesuskrastev.bali.ui.screens.test.TestViewModel
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
@@ -173,9 +174,34 @@ data class TestResultRoute(
     val bonusFast: Int? = null,
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
+    val newLevel: Int = 0,
     val coinsGained: Int = 0,
     val newStreakDays: Int = -1,
-    val isFailedExam: Boolean = false
+    val isFailedExam: Boolean = false,
+    val isPassedExam: Boolean = false
+)
+
+/**
+ * Builds the result screen's route from a finished test or exam.
+ *
+ * @return the route carrying everything the result screen and the screens after it show
+ */
+private fun TestSummary.toResultRoute() = TestResultRoute(
+    score = score,
+    total = total,
+    xpGained = xpGained,
+    durationSeconds = durationSeconds,
+    accuracy = accuracy,
+    baseXp = baseXp,
+    bonusPerfection = bonusPerfection,
+    bonusFast = bonusFast,
+    bonusStreak = bonusStreak,
+    leveledUp = leveledUp,
+    newLevel = newLevel,
+    coinsGained = coinsGained,
+    newStreakDays = newStreakDays,
+    isFailedExam = isFailedExam,
+    isPassedExam = isPassedExam
 )
 
 /**
@@ -371,22 +397,7 @@ fun AppNavigation(
                         navController.popBackStack()
                     },
                     onFinishTest = { result ->
-                        navController.navigate(
-                            TestResultRoute(
-                                score = result.score,
-                                total = result.total,
-                                xpGained = result.xpGained,
-                                durationSeconds = result.durationSeconds,
-                                accuracy = result.accuracy,
-                                baseXp = result.baseXp,
-                                bonusPerfection = result.bonusPerfection,
-                                bonusFast = result.bonusFast,
-                                bonusStreak = result.bonusStreak,
-                                leveledUp = result.leveledUp,
-                                coinsGained = result.coinsGained,
-                                newStreakDays = result.newStreakDays
-                            )
-                        ) {
+                        navController.navigate(result.toResultRoute()) {
                             popUpTo(TestRoute(null)) { inclusive = true }
                         }
                     },
@@ -401,23 +412,7 @@ fun AppNavigation(
                         navController.popBackStack()
                     },
                     onFinishExam = { result ->
-                        navController.navigate(
-                            TestResultRoute(
-                                score = result.score,
-                                total = result.total,
-                                xpGained = result.xpGained,
-                                durationSeconds = result.durationSeconds,
-                                accuracy = result.accuracy,
-                                baseXp = result.baseXp,
-                                bonusPerfection = result.bonusPerfection,
-                                bonusFast = result.bonusFast,
-                                bonusStreak = result.bonusStreak,
-                                leveledUp = result.leveledUp,
-                                coinsGained = result.coinsGained,
-                                newStreakDays = result.newStreakDays,
-                                isFailedExam = result.isFailedExam
-                            )
-                        ) {
+                        navController.navigate(result.toResultRoute()) {
                             popUpTo(ExamRoute) { inclusive = true }
                         }
                     },
@@ -436,7 +431,11 @@ fun AppNavigation(
                     leveledUp = route.leveledUp,
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
+                    newLevel = route.newLevel,
+                    score = route.score,
+                    total = route.total,
                     isFailedExam = route.isFailedExam,
+                    isPassedExam = route.isPassedExam,
                     onContinueClick = {
                         navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreakDays)) {
                             popUpTo(HomeRoute) { inclusive = false }
