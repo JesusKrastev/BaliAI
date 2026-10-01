@@ -174,7 +174,8 @@ data class TestResultRoute(
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
     val coinsGained: Int = 0,
-    val newStreakDays: Int = -1
+    val newStreakDays: Int = -1,
+    val isFailedExam: Boolean = false
 )
 
 /**
@@ -413,7 +414,8 @@ fun AppNavigation(
                                 bonusStreak = result.bonusStreak,
                                 leveledUp = result.leveledUp,
                                 coinsGained = result.coinsGained,
-                                newStreakDays = result.newStreakDays
+                                newStreakDays = result.newStreakDays,
+                                isFailedExam = result.isFailedExam
                             )
                         ) {
                             popUpTo(ExamRoute) { inclusive = true }
@@ -434,6 +436,7 @@ fun AppNavigation(
                     leveledUp = route.leveledUp,
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
+                    isFailedExam = route.isFailedExam,
                     onContinueClick = {
                         navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreakDays)) {
                             popUpTo(HomeRoute) { inclusive = false }

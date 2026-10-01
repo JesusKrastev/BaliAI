@@ -413,7 +413,8 @@ class ExamViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             coinsGained = coinsGained,
-            newStreakDays = newStreakDays
+            newStreakDays = newStreakDays,
+            isFailedExam = !isPassed
         )
     }
 

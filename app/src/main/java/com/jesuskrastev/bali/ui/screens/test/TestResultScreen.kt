@@ -65,6 +65,8 @@ fun getMotivationalMessage(accuracy: Int, durationSeconds: Int): Pair<String, St
  * @param leveledUp whether the result increased the user's level
  * @param durationSeconds time spent completing the test
  * @param accuracy percentage of correctly answered questions
+ * @param isFailedExam whether this is an official exam below the DGT pass mark (27/30); hides the
+ *   confetti even when [accuracy] reaches 70
  * @param onContinueClick callback invoked when the user continues
  * @param secondaryActionLabel optional label for a secondary outlined action (e.g. "JUGAR OTRA VEZ"
  *   in the arcade mini-games); when null, only the primary continue button is shown
@@ -79,11 +81,12 @@ fun TestResultScreen(
     leveledUp: Boolean = false,
     durationSeconds: Int,
     accuracy: Int,
+    isFailedExam: Boolean = false,
     onContinueClick: () -> Unit,
     secondaryActionLabel: String? = null,
     onSecondaryActionClick: () -> Unit = {},
 ) {
-    val showConfetti = accuracy >= 70
+    val showConfetti = accuracy >= 70 && !isFailedExam
     val minutes = durationSeconds / 60
     val seconds = durationSeconds % 60
 

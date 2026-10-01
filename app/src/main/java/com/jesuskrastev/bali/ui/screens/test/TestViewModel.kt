@@ -61,7 +61,9 @@ data class TestSummary(
     val bonusStreak: Int?,
     val leveledUp: Boolean,
     val coinsGained: Int,
-    val newStreakDays: Int
+    val newStreakDays: Int,
+    /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
+    val isFailedExam: Boolean = false
 )
 
 @HiltViewModel
