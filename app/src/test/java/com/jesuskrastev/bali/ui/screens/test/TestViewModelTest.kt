@@ -15,9 +15,13 @@ import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.type.GenerateContentResponse
 import com.jesuskrastev.bali.domain.model.FirstStepTask
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -99,10 +103,15 @@ class TestViewModelTest {
     fun `finishing a test completes the first-test step for an enrolled account`() = runTest {
         fakeUserRepository.enrollInFirstStepsForTest()
         viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
+        val summary = CompletableDeferred<TestSummary>()
 
-        // The reward is granted before calculateResult hops to the IO dispatcher to save the
-        // result, so it has already happened by the time onEvent returns.
-        viewModel.onEvent(TestEvent.FinishTest { })
+        viewModel.onEvent(TestEvent.FinishTest { summary.complete(it) })
+
+        // calculateResult saves on Dispatchers.IO and then resumes on Main. Wait for it for
+        // real (the timeout runs on a real dispatcher, not on runTest's virtual clock): if the
+        // test ended first, that tail would resume after MainDispatcherRule reset Main and leak
+        // an exception into whichever test runs next.
+        withContext(Dispatchers.Default) { withTimeout(10_000) { summary.await() } }
 
         val user = fakeUserRepository.get().first()!!
         assertThat(user.firstSteps.completed).containsExactly(FirstStepTask.FIRST_TEST)
