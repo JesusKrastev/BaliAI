@@ -72,6 +72,8 @@ import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
@@ -129,6 +131,10 @@ object SuggestionsRoute
 
 @Serializable
 object ChatRoute
+
+/** RevenueCat's Customer Center, opened from settings to manage or cancel the subscription. */
+@Serializable
+object CustomerCenterRoute
 
 /**
  * Sign-in destination.
@@ -242,13 +248,15 @@ fun AppNavigation(
 
             composable<HomeRoute> {
                 val viewModel: HomeViewModel = hiltViewModel()
-                val startExam = { viewModel.startExam { navController.navigate(ExamRoute) } }
+                // Mock exams are free for subscribers (idea 015): no coin check, from a path
+                // node or from the first-steps card alike.
+                val openExam = { navController.navigate(ExamRoute) }
 
                 HomeScreen(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            startExam()
+                            openExam()
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }
@@ -266,7 +274,7 @@ fun AppNavigation(
                         // The first-steps card's game task goes straight into a game; back returns to Home.
                         navController.navigate(GamePlayRoute(GameType.entries.first().id))
                     },
-                    onExamClick = startExam
+                    onExamClick = openExam
                 )
             }
 
@@ -291,7 +299,18 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
+                    },
+                    onManageSubscriptionClick = {
+                        navController.navigate(CustomerCenterRoute)
                     }
+                )
+            }
+
+            composable<CustomerCenterRoute> {
+                val viewModel: CustomerCenterViewModel = hiltViewModel()
+                CustomerCenterLauncher(
+                    listener = viewModel.listener,
+                    onDismiss = { navController.popBackStack() }
                 )
             }
 

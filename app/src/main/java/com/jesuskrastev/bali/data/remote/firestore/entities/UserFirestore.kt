@@ -8,6 +8,7 @@ data class UserFirestore(
     val licenseType: String = "",
     val experience: String = "",
     val examDateMillis: Long = 0L,
+    val planTargetMillis: Long = 0L,
     val difficultTopics: String = "",
     val lastPracticeTimestamp: Long = 0L,
     val currentStreak: Int = 0,

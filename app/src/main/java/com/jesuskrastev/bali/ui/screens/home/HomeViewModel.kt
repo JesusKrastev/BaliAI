@@ -18,7 +18,6 @@ import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.model.LessonNode
@@ -31,15 +30,11 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
-/** Coins charged to start an official exam; also quoted in Home's "not enough coins" dialog. */
-internal const val EXAM_COST_COINS = 100
-
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
-    private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
     private val pathRepository: PathRepository,
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
@@ -54,7 +49,6 @@ class HomeViewModel @Inject constructor(
     private val _isPathLoading = MutableStateFlow(false)
     private val _pathError = MutableStateFlow<String?>(null)
 
-    private val _showNoCoinsDialog = MutableStateFlow(false)
     private val _dailyTip = MutableStateFlow("")
 
     /** Guards [AnalyticsTracker.firstStepsShown] so it fires once per Home, not per recomposition. */
@@ -118,7 +112,6 @@ class HomeViewModel @Inject constructor(
         testResultRepository.count(),
         answerRepository.getRecentMistakes(),
         testResultRepository.getAverageScore(),
-        _showNoCoinsDialog,
         _dailyTip,
         _pathNodes,
         _isPathLoading,
@@ -132,15 +125,14 @@ class HomeViewModel @Inject constructor(
         val totalTests = flows[1] as Int
         val mistakes = flows[2] as List<*>
         val avgScore = flows[3] as Double? ?: 0.0
-        val showNoCoinsDialog = flows[4] as Boolean
-        val dailyTip = flows[5] as String
-        val pathNodes = flows[6] as List<*>?
-        val isPathLoading = flows[7] as Boolean
-        val pathError = flows[8] as String?
-        val profilePictureUrl = flows[9] as String?
-        val userEmail = flows[10] as String?
-        val hasTakenExam = flows[11] as Boolean
-        val firstStepReward = flows[12] as FirstStepReward?
+        val dailyTip = flows[4] as String
+        val pathNodes = flows[5] as List<*>?
+        val isPathLoading = flows[6] as Boolean
+        val pathError = flows[7] as String?
+        val profilePictureUrl = flows[8] as String?
+        val userEmail = flows[9] as String?
+        val hasTakenExam = flows[10] as Boolean
+        val firstStepReward = flows[11] as FirstStepReward?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -155,14 +147,20 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail
             )
         } else {
+            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
+            // Counted from practiceDays like the streak screens: user.weekSessions is only
+            // refreshed on the next practice, so it can still hold last week's number.
+            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
+                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, System.currentTimeMillis()),
                 streak = user.currentStreak,
-                weekSessions = user.weekSessions,
-                weeklyGoal = remoteConfigProvider.getWeeklyGoal(),
-                weekProgressPercent = ((user.weekSessions.toFloat() / remoteConfigProvider.getWeeklyGoal().coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100),
+                weekSessions = weekSessions,
+                weeklyGoal = weeklyGoal,
+                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
@@ -171,9 +169,8 @@ class HomeViewModel @Inject constructor(
                 coinsCount = user.coins,
                 streakFreezes = user.streakFreezes,
                 highestStreak = user.highestStreak,
-                showNoCoinsDialog = showNoCoinsDialog,
                 dailyTip = dailyTip,
-                weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays),
+                weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
@@ -198,19 +195,21 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun startExam(onSuccess: () -> Unit) {
+    /**
+     * Saves the exam date picked on the plan card; from then on the card counts down to it.
+     *
+     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
+     */
+    fun setExamDate(pickerMillis: Long) {
+        val examDay = localDayFromPickerMillis(pickerMillis)
+        val hadPlanDate = uiState.value.plan.targetMillis != null
         viewModelScope.launch {
-            val success = decrementCoinsUseCase(EXAM_COST_COINS)
-            if (success) {
-                onSuccess()
-            } else {
-                _showNoCoinsDialog.value = true
-            }
+            userRepository.updateExamDate(examDay)
+            analyticsTracker.examDateSet(
+                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
+                hadPlanDate = hadPlanDate
+            )
         }
-    }
-
-    fun dismissNoCoinsDialog() {
-        _showNoCoinsDialog.value = false
     }
 
     /** Reports that the first-steps card is on screen; only the first call per Home is tracked. */

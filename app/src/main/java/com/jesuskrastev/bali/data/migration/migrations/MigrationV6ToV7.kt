@@ -7,31 +7,23 @@ import javax.inject.Inject
  * Migración v6 → v7
  *
  * Cambios:
- * - Registra tres campos nuevos en el documento de usuario, que alimentan la tarjeta
- *   "Tus primeros pasos" de Home:
- *   - `firstStepsStartedAt` (Long): cuándo se inscribió la cuenta en la tarjeta. 0 o ausente
- *     significa "nunca inscrita".
- *   - `firstStepsDone` (List<String>): ids de las tareas ya completadas y cobradas.
- *   - `firstStepsDismissed` (Boolean): true cuando el alumno ocultó la tarjeta.
+ * - Añade el campo opcional `planTargetMillis` al documento `users/{userId}`: el día para el
+ *   que el plan del onboarding prometió el carnet ("Puedes tener tu carnet antes del…"), que
+ *   Home enseña en la tarjeta del plan.
  *
- * No hay nada que rellenar, y es a propósito: la inscripción se hace al crear la cuenta
- * (`AuthViewModel`), de modo que las cuentas que ya existen quedan sin `firstStepsStartedAt` y
- * no ven nunca la tarjeta. Esta migración NO debe escribir `firstStepsStartedAt`: también se
- * ejecuta sobre cuentas recién creadas por esta versión (su documento aún no trae
- * `schemaVersion`), y pisarlo les quitaría la tarjeta. Si algún día se decide enseñársela a los
- * suscriptores existentes, se hará en una migración posterior que inscriba solo a quien no
- * tenga el campo.
- *
- * Existe para que `schemaVersion` refleje la estructura real del documento y para dejar
- * registrado el cambio, tal y como exige el flujo de migraciones del proyecto.
+ * No hay datos que rellenar: la fecha solo se conoce al terminar el onboarding, así que los
+ * usuarios anteriores no la tienen y no se puede reconstruir (el ritmo de estudio con el que se
+ * calculó nunca se guardó). Un documento sin el campo se lee como 0, que el mapper convierte en
+ * null, y Home les pide la fecha del examen. La migración existe para que `schemaVersion`
+ * refleje la estructura real del documento y para dejar registrado el cambio, tal y como exige
+ * el flujo de migraciones del proyecto.
  */
 class MigrationV6ToV7 @Inject constructor() : FirestoreMigration {
 
     override val targetVersion: Int = 7
     override val description: String =
-        "Registrar los campos firstStepsStartedAt/firstStepsDone/firstStepsDismissed (tarjeta de primeros pasos)"
+        "Registrar el campo planTargetMillis (fecha prometida por el plan del onboarding)"
 
-    override suspend fun migrate(userId: String) {
-        // Intencionadamente vacía: ver la documentación de la clase.
-    }
+    /** Nada que escribir: ver el KDoc de la clase. */
+    override suspend fun migrate(userId: String) = Unit
 }

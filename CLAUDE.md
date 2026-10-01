@@ -61,14 +61,14 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 13, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 14, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
   in the app: Firebase proxies the call and App Check attests the caller. Models are configured in
   `di/GeminiModule.kt`, one qualifier per use (`@TutorModel`, `@QuestionsModel`, `@PathNodesModel`).
   Note the project is on Kotlin 2.0.21, so Firebase BOM 34.x will not compile against it.
-- **Payments**: RevenueCat 9.23.1
+- **Payments**: RevenueCat 10.16.0 (`purchases` + `purchases-ui`: paywall and Customer Center)
 - **Push**: OneSignal + Firebase Messaging
 - **Analytics**: Mixpanel + PostHog + Firebase Analytics (all three tracked via `AnalyticsTracker`)
 - **Images**: Coil 2.7.0 with SVG support
@@ -157,7 +157,8 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 ## Important Rules
 
 - **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
-- **First-steps card state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV6ToV7` must NEVER write `firstStepsStartedAt`: it also runs on accounts created by this version and would switch their card off.
+- **First-steps card state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV7ToV8` must NEVER write `firstStepsStartedAt`: it also runs on accounts created by this version and would switch their card off.
+- **Build every Play upload (internal included) from a branch that contains the latest published release.** A build cut from an older base has a lower Room `version` than what testers already have installed; Room has no downgrade path, so the app crashes on open for every one of them (it happened with 1.2.2 → a feature branch cut from 1.2.1). The same goes for Firestore migration numbers: two branches must never both add a `MigrationV{N}To{N+1}`.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
@@ -172,11 +173,8 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 The sweep of the whole codebase is finished (migrations were intentionally excluded). These findings were **not** fixed because they need a product/design decision, not a guess. Delete each line once decided.
 
 - **Free practice is unreachable.** The Topics and Mistakes screens were deleted (nothing linked to them), which leaves `TestRoute()` without a node (free practice) and `TestRoute.topic` / `TestViewModel.setTopic` as dead paths: `TestRoute` is only navigated to from Home's learning-path nodes. Remove them (plus `TestViewModelTest`'s `setTopic` test and `ScreenNameTest`'s route string) or give free practice a new entry point.
-- **No subscription-management entry.** `CustomerCenterLauncher` is not used anywhere; Settings has no "manage subscription" row.
 - Streak freezes have no visual feedback: `StreakStatus.FROZEN` is implemented in `StreakScreen` / `LessonStreakScreen` but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
-- The learning-path node popup (`FloatingNodePopup` in `HomeScreen.kt`) shows a flat "+20 XP" / "+6 XP". Those are the *maximum* practice values from `IncrementXpUseCase` (≥95% accuracy; repeat = ×0.3), not what the user will necessarily earn.
 - `SectionHeaderCard` prints "SECCIÓN n, UNIDAD n" using the same index for both numbers.
 - `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
 - **First-steps card (day 0–1): who sees it and for how long.** Only accounts created from this version are enrolled, so subscribers who already exist never see it (a later migration could enrol those with no `firstStepsStartedAt`). It has no expiry: it stays until the three tasks and the simulacro are done or the student dismisses it (dismissing gives up the pending coins).
-- **The first simulacro still costs coins in code.** `EXAM_COST_COINS = 100` is still charged by `HomeViewModel.startExam`, and Home's "¡Sin monedas!" dialog quotes it. The first-steps card's closing button goes through that same path, so it works either way; making simulacros free (idea 015) is a separate change that is not in this repo yet.
 - `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.
