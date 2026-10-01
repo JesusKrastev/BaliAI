@@ -11,7 +11,7 @@ const val FIRST_STEPS_BONUS_COINS = 30
  * @property coins reward paid once, the first time the task is completed.
  */
 enum class FirstStepTask(val id: String, val coins: Int) {
-    /** Finish a practice test from the learning path. */
+    /** Finish a test. Home's card opens a lesson with written questions, never a Gemini test. */
     FIRST_TEST("first_test", 30),
 
     /** Get an answer from the AI tutor chat. */

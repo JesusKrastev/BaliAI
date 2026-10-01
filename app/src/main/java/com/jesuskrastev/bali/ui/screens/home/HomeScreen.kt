@@ -132,13 +132,14 @@ fun HomeScreen(
         // Pinned above the bottom navigation so the day-0 tasks stay in sight while scrolling;
         // the Scaffold lifts the FAB above it and pads the path so nothing is hidden behind it.
         bottomBar = {
-            val firstUnlockedNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
+            // Always a lesson with written questions, never a Gemini test: see firstStepTestNodeOf.
+            val firstTestNode = uiState.firstStepTestNode
             FirstStepsBar(
                 progress = uiState.firstSteps,
                 reward = uiState.firstStepReward,
                 onTaskClick = { task ->
                     when (task) {
-                        FirstStepTask.FIRST_TEST -> firstUnlockedNode?.let { node ->
+                        FirstStepTask.FIRST_TEST -> firstTestNode?.let { node ->
                             onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
                         }
                         FirstStepTask.ASK_BALI -> onChatClick()
@@ -155,7 +156,7 @@ fun HomeScreen(
                 },
                 onRewardShown = viewModel::dismissFirstStepReward,
                 onShown = viewModel::onFirstStepsShown,
-                isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstUnlockedNode != null }
+                isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstTestNode != null }
             )
         },
         floatingActionButton = {

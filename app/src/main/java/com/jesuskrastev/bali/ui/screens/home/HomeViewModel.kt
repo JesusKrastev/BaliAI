@@ -178,6 +178,7 @@ class HomeViewModel @Inject constructor(
                 // The card stays up until everything is done *and* the closing simulacro was
                 // taken, so an unfinished task keeps its coins available even after an exam.
                 firstSteps = user.firstSteps.takeIf { it.isActive && !(it.isComplete && hasTakenExam) },
+                firstStepTestNode = firstStepTestNodeOf(typedPathNodes),
                 firstStepReward = firstStepReward
             )
         }

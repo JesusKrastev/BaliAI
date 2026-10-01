@@ -54,6 +54,8 @@ data class HomeUiState(
     val pathError: String? = null,
     /** Progress to show in the "Tus primeros pasos" card, or null when the card must stay hidden. */
     val firstSteps: FirstStepsProgress? = null,
+    /** Lesson the "Haz tu primer test" step opens (see [firstStepTestNodeOf]), or null when there is none. */
+    val firstStepTestNode: LessonNode? = null,
     /** Coins just earned on another screen that Home has yet to celebrate, if any. */
     val firstStepReward: FirstStepReward? = null
 )
