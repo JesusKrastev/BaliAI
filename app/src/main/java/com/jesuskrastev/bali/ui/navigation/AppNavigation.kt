@@ -541,10 +541,7 @@ fun AppNavigation(
 
             composable<ChatRoute> {
                 val viewModel: ChatViewModel = hiltViewModel()
-                ChatScreen(
-                    viewModel = viewModel,
-                    onBackClick = { navController.popBackStack() }
-                )
+                ChatScreen(viewModel = viewModel)
             }
             }
         }

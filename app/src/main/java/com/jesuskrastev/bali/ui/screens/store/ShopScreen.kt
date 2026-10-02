@@ -352,10 +352,13 @@ fun ShopItemRow(
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = if (canBuy) 1f else 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
+                // Smaller than the 56 dp circle on purpose: the recovery gem fills its whole canvas
+                // (its corners are 0.59 of the side away from the centre) and drawn at 56 dp the
+                // circle cut its edges off. At 40 dp it sits inside with a margin.
                 Image(
                     painter = painterResource(id = imageRes),
                     contentDescription = null,
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(40.dp),
                     alpha = if (canBuy) 1f else 0.4f
                 )
             }
