@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.di
 
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV11ToV12
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV12ToV13
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
@@ -10,7 +12,6 @@ import com.jesuskrastev.bali.data.migration.migrations.MigrationV6ToV7
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV7ToV8
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV8ToV9
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV9ToV10
-import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
 import dagger.Module
 import dagger.Provides
@@ -77,6 +78,11 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV10ToV11(migration: MigrationV10ToV11): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV11ToV12(migration: MigrationV11ToV12): FirestoreMigration = migration
 
     /** Registers the coin-shop inventory migration for authenticated profiles (v12 is reserved). */
     @Provides

@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.XpEarned
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -51,13 +53,15 @@ data class GameSessionUiState(
  * Each mini-game composable drives its own round-by-round timing and interaction locally
  * (reflexes, timers, gestures are ephemeral UI concerns); this ViewModel only tracks how many
  * rounds were won and, once the session ends, applies the same XP/coins/streak rewards a full
- * test grants via [IncrementXpUseCase], [IncrementCoinsUseCase] and [IncrementStreakUseCase].
+ * test grants via [IncrementXpUseCase], [IncrementCoinsUseCase] and [IncrementStreakUseCase],
+ * plus the one-off first-steps prize through [CompleteFirstStepUseCase].
  */
 @HiltViewModel
 class GameViewModel @Inject constructor(
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
+    private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val analyticsTracker: AnalyticsTracker,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GameSessionUiState())
@@ -112,6 +116,9 @@ class GameViewModel @Inject constructor(
         )
         val coinsGained = incrementCoinsUseCase(accuracy)
         incrementStreakUseCase()
+        // Separate prize on top of coinsGained: the first finished session is the "Juega un
+        // minijuego" step of Home's first-steps bar.
+        completeFirstStepUseCase(FirstStepTask.PLAY_GAME)?.let(analyticsTracker::firstStepRewarded)
         analyticsTracker.gameCompleted(game.id, finalScore, ROUNDS_PER_SESSION, durationSeconds)
 
         _uiState.update {

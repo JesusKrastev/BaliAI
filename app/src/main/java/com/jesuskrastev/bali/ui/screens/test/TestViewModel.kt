@@ -13,6 +13,7 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.DrivingTopic
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
@@ -20,6 +21,7 @@ import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -98,6 +100,7 @@ class TestViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
+    private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val pathRepository: PathRepository,
     private val analytics: AnalyticsTracker,
     private val soundEffects: SoundEffects,
@@ -543,6 +546,13 @@ class TestViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Scores the finished test, pays its XP, coins and streak (plus the one-off first-test
+     * prize), saves the result and answers, and advances the learning path when the test came
+     * from a node.
+     *
+     * @return the summary the result screens show.
+     */
     private suspend fun calculateResult(): TestSummary {
         val state = _uiState.value
         val correct = state.questions.indices.count { index ->
@@ -569,6 +579,9 @@ class TestViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
+        // Separate prize on top of coinsGained (which stays what the test itself pays): the very
+        // first finished test is the "Haz tu primer test" step of Home's first-steps bar.
+        completeFirstStepUseCase(FirstStepTask.FIRST_TEST)?.let(analytics::firstStepRewarded)
 
         // Read BEFORE this result is saved below. When they cannot be read, nothing is celebrated
         // as a first win: a celebration that may repeat is worse than one that is missed.

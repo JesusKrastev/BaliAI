@@ -10,16 +10,13 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Transaction
 import com.google.firebase.firestore.WriteBatch
 import com.google.firebase.firestore.snapshots
-import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
-import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +30,11 @@ class FirestoreUserDao @Inject constructor(
 
     companion object {
         private const val BATCH_LIMIT = 500
+
+        /** Document fields of the first-steps bar; mirrored by [UserFirestore]. */
+        const val FIRST_STEPS_STARTED_AT = "firstStepsStartedAt"
+        const val FIRST_STEPS_DONE = "firstStepsDone"
+        const val FIRST_STEPS_DISMISSED = "firstStepsDismissed"
     }
 
     // --- User Operations ---
@@ -46,10 +48,6 @@ class FirestoreUserDao @Inject constructor(
         return collection.document(userId).snapshots().map {
             it.toObject(UserFirestore::class.java)
         }
-    }
-
-    suspend fun updateUser(userId: String, user: User) {
-        collection.document(userId).set(user.toFirestore(), SetOptions.merge()).await()
     }
 
     suspend fun updateFields(userId: String, updates: Map<String, Any>) {
@@ -238,6 +236,51 @@ class FirestoreUserDao @Inject constructor(
         collection.document(userId)
             .set(mapOf("streakBetTarget" to 0), SetOptions.merge())
             .await()
+    }
+
+    /**
+     * Records [taskId] in the user's `firstStepsDone` and pays its coins inside one Firestore
+     * transaction, so the "already done?" check and the payout are a single indivisible step:
+     * two devices (or two rapid calls) finishing the same task can't both be paid. Nothing is
+     * written when the account was never enrolled (`firstStepsStartedAt` is 0), the bar was
+     * dismissed, or the task is already in the list.
+     *
+     * @param userId the Firestore user to update.
+     * @param taskId the [com.jesuskrastev.bali.domain.model.FirstStepTask.id] just completed.
+     * @param taskCoins coins paid for this task.
+     * @param allTaskIds ids of every task; when [taskId] completes the set, [bonusCoins] is added.
+     * @param bonusCoins extra coins for completing every task.
+     * @return the coins paid, or 0 when nothing was written.
+     */
+    suspend fun completeFirstStep(
+        userId: String,
+        taskId: String,
+        taskCoins: Int,
+        allTaskIds: Collection<String>,
+        bonusCoins: Int
+    ): Int {
+        val docRef = collection.document(userId)
+        return firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val enrolled = (snapshot.getLong(FIRST_STEPS_STARTED_AT) ?: 0L) > 0L
+            val dismissed = snapshot.getBoolean(FIRST_STEPS_DISMISSED) ?: false
+            val done = (snapshot.get(FIRST_STEPS_DONE) as? List<*>).orEmpty().filterIsInstance<String>()
+
+            if (!enrolled || dismissed || taskId in done) {
+                0
+            } else {
+                val completesAll = (done + taskId).containsAll(allTaskIds)
+                val paid = taskCoins + if (completesAll) bonusCoins else 0
+                transaction.update(
+                    docRef,
+                    mapOf(
+                        FIRST_STEPS_DONE to FieldValue.arrayUnion(taskId),
+                        "coins" to FieldValue.increment(paid.toLong())
+                    )
+                )
+                paid
+            }
+        }.await()
     }
 
     // --- Test Results Operations ---

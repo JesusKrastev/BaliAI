@@ -1,6 +1,6 @@
 ﻿package com.jesuskrastev.bali.data.repository
 
-import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
@@ -9,14 +9,16 @@ import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -121,6 +123,39 @@ class UserRepositoryImpl @Inject constructor(
     override suspend fun decrementCoinsIfEnough(amount: Int): Boolean = withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.decrementCoinsIfEnough(userId, amount) },
         actionLocal = { userDao.decrementCoinsIfEnough(amount) == 1 }
+    )
+
+    /**
+     * See [UserRepository.completeFirstStep]. First steps live on the Firestore account only, so a
+     * signed-out user (who can't reach Home anyway) has nothing to record. A failed write is
+     * reported to Crashlytics and swallowed: it must never break the test, chat or game the
+     * student just finished.
+     */
+    override suspend fun completeFirstStep(task: FirstStepTask): Int = withAuthRouting(
+        actionRemote = { userId ->
+            try {
+                firestoreUserDao.completeFirstStep(
+                    userId = userId,
+                    taskId = task.id,
+                    taskCoins = task.coins,
+                    allTaskIds = FirstStepTask.entries.map { it.id },
+                    bonusCoins = FIRST_STEPS_BONUS_COINS
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FirebaseCrashlytics.getInstance().recordException(e)
+                0
+            }
+        },
+        actionLocal = { 0 }
+    )
+
+    /** See [UserRepository.dismissFirstSteps]. */
+    override suspend fun dismissFirstSteps() = withAuthRouting(
+        actionRemote = { userId ->
+            firestoreUserDao.updateFields(userId, mapOf(FirestoreUserDao.FIRST_STEPS_DISMISSED to true))
+        },
+        actionLocal = {}
     )
 
     override suspend fun updateStreakFreezes(count: Int) = updateField(

@@ -9,6 +9,8 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.jesuskrastev.bali.domain.model.ChatMessage
 import com.jesuskrastev.bali.domain.model.ChatRole
 import com.jesuskrastev.bali.domain.usecase.AskDrivingTutorUseCase
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import com.jesuskrastev.bali.util.MainDispatcherRule
@@ -37,13 +39,15 @@ class ChatScreenScreenshotTest {
     /** Builds the chat on top of [history], with fakes instead of Firebase and Gemini. */
     private fun chatWith(history: List<ChatMessage>): ChatViewModel {
         val chatRepository = FakeChatRepository(history)
+        val userRepository = FakeUserRepository()
         return ChatViewModel(
             chatRepository = chatRepository,
             askDrivingTutorUseCase = AskDrivingTutorUseCase(
                 chatRepository = chatRepository,
                 aiTutorRepository = FakeAiTutorRepository(),
-                userRepository = FakeUserRepository()
+                userRepository = userRepository
             ),
+            completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
             analytics = RecordingChatAnalytics()
         )
     }

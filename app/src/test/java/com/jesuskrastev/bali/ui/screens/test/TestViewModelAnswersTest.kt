@@ -5,6 +5,8 @@ import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.DrivingTopic
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -44,6 +46,7 @@ class TestViewModelAnswersTest {
             incrementStreakUseCase = IncrementStreakUseCase(userRepository),
             incrementXpUseCase = IncrementXpUseCase(userRepository),
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
+            completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
             pathRepository = FakePathRepository(),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),

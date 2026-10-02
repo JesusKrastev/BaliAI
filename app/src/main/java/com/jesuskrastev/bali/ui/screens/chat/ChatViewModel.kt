@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.model.ChatRole
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.repository.ChatRepository
 import com.jesuskrastev.bali.domain.usecase.AskDrivingTutorUseCase
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,11 +26,15 @@ import javax.inject.Inject
  * The transcript is never held here as the source of truth — it is observed from
  * [ChatRepository], so a message written on another device (or restored after a
  * reinstall) shows up without any extra plumbing.
+ *
+ * The first answered question also completes a step of Home's first-steps bar, through
+ * [CompleteFirstStepUseCase].
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val askDrivingTutorUseCase: AskDrivingTutorUseCase,
+    private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val analytics: AnalyticsTracker
 ) : ViewModel() {
 
@@ -122,7 +128,11 @@ class ChatViewModel @Inject constructor(
     private fun deliver(question: String, persistQuestion: Boolean) {
         viewModelScope.launch {
             askDrivingTutorUseCase(question, persistQuestion)
-                .onSuccess { _uiState.update { state -> reducer.onSendSucceeded(state) } }
+                .onSuccess {
+                    _uiState.update { state -> reducer.onSendSucceeded(state) }
+                    // A reply from Bali is the "Pregúntale una duda a Bali" step of Home's bar.
+                    completeFirstStepUseCase(FirstStepTask.ASK_BALI)?.let(analytics::firstStepRewarded)
+                }
                 .onFailure { cause ->
                     if (cause is CancellationException) throw cause
                     analytics.chatMessageFailed(cause::class.simpleName ?: "Unknown")

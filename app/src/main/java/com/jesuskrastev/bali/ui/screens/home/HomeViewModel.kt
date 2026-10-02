@@ -10,9 +10,12 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
@@ -41,6 +44,7 @@ class HomeViewModel @Inject constructor(
     private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
     private val settleStreak: SettleStreakUseCase,
+    private val pendingFirstStepRewards: PendingFirstStepRewards,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -48,6 +52,9 @@ class HomeViewModel @Inject constructor(
     private val _pathError = MutableStateFlow<String?>(null)
 
     private val _dailyTip = MutableStateFlow("")
+
+    /** Guards [AnalyticsTracker.firstStepsShown] so it fires once per Home, not per recomposition. */
+    private var hasTrackedFirstStepsShown = false
 
     private val _pathNodes: StateFlow<List<LessonNode>?> = authRepository.currentUserFlow
         .flatMapLatest { userId -> 
@@ -114,7 +121,9 @@ class HomeViewModel @Inject constructor(
         _isPathLoading,
         _pathError,
         authRepository.currentUserPhotoUrlFlow,
-        authRepository.currentUserEmailFlow
+        authRepository.currentUserEmailFlow,
+        testResultRepository.get().map { results -> results.any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY } },
+        pendingFirstStepRewards.next
     ) { flows ->
         val user = flows[0] as User?
         val totalTests = flows[1] as Int
@@ -126,6 +135,8 @@ class HomeViewModel @Inject constructor(
         val pathError = flows[7] as String?
         val profilePictureUrl = flows[8] as String?
         val userEmail = flows[9] as String?
+        val hasTakenExam = flows[10] as Boolean
+        val firstStepReward = flows[11] as FirstStepReward?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -161,7 +172,12 @@ class HomeViewModel @Inject constructor(
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
-                pathError = pathError
+                pathError = pathError,
+                // The bar stays up until everything is done *and* the closing simulacro was
+                // taken, so an unfinished task keeps its coins available even after an exam.
+                firstSteps = user.firstSteps.takeIf { it.isActive && !(it.isComplete && hasTakenExam) },
+                firstStepTestNode = firstStepTestNodeOf(typedPathNodes),
+                firstStepReward = firstStepReward
             )
         }
     }.stateIn(
@@ -176,6 +192,35 @@ class HomeViewModel @Inject constructor(
             analyticsTracker.logout()
             analyticsTracker.resetUser()
         }
+    }
+
+    /** Reports that the first-steps bar is on screen; only the first call per Home is tracked. */
+    fun onFirstStepsShown() {
+        if (hasTrackedFirstStepsShown) return
+        hasTrackedFirstStepsShown = true
+        analyticsTracker.firstStepsShown(tasksDone = uiState.value.firstSteps?.doneCount ?: 0)
+    }
+
+    /** Reports that the student tapped the bar's closing "haz tu primer simulacro" button. */
+    fun onFirstStepsExamClicked() {
+        analyticsTracker.firstStepsExamClicked()
+    }
+
+    /**
+     * Hides the first-steps bar for good. Tasks stop paying from here on, so the screen asks
+     * for confirmation before calling this while coins are still pending.
+     */
+    fun dismissFirstSteps() {
+        val tasksDone = uiState.value.firstSteps?.doneCount ?: 0
+        viewModelScope.launch {
+            userRepository.dismissFirstSteps()
+            analyticsTracker.firstStepsDismissed(tasksDone)
+        }
+    }
+
+    /** Marks the reward on screen as celebrated so the next queued one (if any) can show. */
+    fun dismissFirstStepReward() {
+        pendingFirstStepRewards.consume()
     }
 
     fun generateNextPathNodesCount(count: Int = 5) {
