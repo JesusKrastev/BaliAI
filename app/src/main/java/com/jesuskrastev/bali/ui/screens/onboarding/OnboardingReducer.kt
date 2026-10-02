@@ -16,6 +16,25 @@ class OnboardingReducer {
     fun calculateProgress(index: Int, totalSteps: Int): Float = index.toFloat() / (totalSteps - 1)
 
     /**
+     * Picks the step that "back" leads to.
+     *
+     * The "building your plan" screen is skipped on the way back: it advances on its own and
+     * shows no controls, so landing on it again would strand the user there. For the same
+     * reason going back is refused while it is on screen.
+     *
+     * @param order the steps of the flow, in the order they are shown
+     * @param current the step currently on screen
+     * @return the step to show, or null when the user cannot go back from [current]: it is
+     *   the first one, the plan is being built, or it is not part of [order] at all
+     */
+    fun previousStep(order: List<OnboardingStep>, current: OnboardingStep): OnboardingStep? {
+        val index = order.indexOf(current)
+        if (index <= 0 || current == OnboardingStep.Processing) return null
+        val previous = order[index - 1]
+        return if (previous == OnboardingStep.Processing) order.getOrNull(index - 2) else previous
+    }
+
+    /**
      * Decides whether the bottom "continue" button is tappable.
      * Informational steps have nothing to answer, so they are always enabled.
      *
