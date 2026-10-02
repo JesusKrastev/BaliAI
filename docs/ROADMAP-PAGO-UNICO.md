@@ -103,7 +103,7 @@ Para planificar una ruta vale; para preguntar «¿aprobaste?» o contar los día
 | Área | Estado actual |
 |------|---------------|
 | Notificaciones | OneSignal + FCM. Solo hay un canal (`Bali AI`, `IMPORTANCE_HIGH`). `onMessageReceived` está vacío. **Nadie pide `POST_NOTIFICATIONS`.** `OneSignal.login(uid)` se hace tras iniciar sesión, pero no se envían *tags* ni eventos. |
-| Hora de estudio | No existe. `User.kt` documenta que «study time» no se persiste a propósito. |
+| Hora de estudio | No existe en esta rama. **Existió y se eliminó** en el commit `164b384` (2026-08-02, refactor del «arco emocional»), junto con `OneSignal.Notifications.requestPermission(false)`. `User.kt` documenta que «study time» no se persiste a propósito. PostHog muestra además una **build 1.2.2** (1 usuario, 30-sep) que emite `o21_study_time`, `o22_notifications`, `exam_date_set` y `notifications_permission_result`: no está en esta rama (¿trabajo local?). Hay que reconciliarla antes de implementar 2.1 para no duplicar. |
 | Racha | El servidor (Cloud Function **que no está en este repo**) calcula `currentStreak`. En cliente solo se registran `practiceDays` y `weekSessions`. `StreakStatus.FROZEN` nunca se produce. |
 | Gamificación existente | XP, niveles, monedas (8–10 por sesión), congeladores de racha (120 monedas, máx. 2), 5 minijuegos, tienda solo de monedas. Ya existe `confetti.json` (Lottie). |
 | Monetización | RevenueCat 10.16.0, entitlement `premium`, **hard paywall** tras el onboarding, oferta *win-back* mensual con descuento (`winback_monthly_discount`). `Purchases.configure(appUserID = null)` → ID anónimo; **no hay `Purchases.logIn(uid)`**. El flujo es `PAYWALL → LOGIN`, es decir, se paga antes de tener cuenta. |
@@ -498,8 +498,9 @@ Ya existe base sólida (XP, niveles, monedas, rachas, congeladores, minijuegos).
   RevenueCat cifra la renovación anual mediana en educación en torno al 24 % (edición 2026): la suscripción
   rara vez compone aquí.
 - **Lo que advierte RevenueCat sobre *lifetime*:** canibaliza clientes fieles de alto LTV, limita *upsells* y
-  complica el soporte; en educación recomienda evitarlo. Su razonamiento se basa en retención larga (idiomas,
-  música). **Bali no tiene ese caso**, así que el riesgo de «regalar» LTV es pequeño.
+  complica el soporte; en educación recomienda evitarlo. *(Lo sé por un resumen de búsqueda, no por el
+  artículo.)* Ese consejo presupone retención larga (idiomas, música). Que Bali sea el caso contrario es una
+  **hipótesis de producto, no un dato**: la sección 4.1-bis la contrasta con tus eventos reales.
 - **Lo que sí aplica:** (1) todo el ingreso llega en un único instante, así que **la conversión del paywall lo es
   todo**; (2) los costes (IA, Firebase, soporte) **continúan** después de cobrar; (3) sin recurrencia, el
   crecimiento depende de traer usuarios nuevos constantemente.
@@ -507,6 +508,39 @@ Ya existe base sólida (XP, niveles, monedas, rachas, congeladores, minijuegos).
   de 2× a ~12× el precio anual). Para Bali: `precio ≥ precio mensual actual × meses medios hasta aprobar`.
   **No he podido ver los precios actuales** (están en RevenueCat/Play Console, no en el repo): pásame precio actual,
   conversión del paywall y meses medios hasta aprobar, y valido que 30 € cuadra.
+
+### 4.1-bis Qué dicen tus datos reales (PostHog, consulta del 2026-10-02)
+
+No hay conector de RevenueCat en este entorno, pero sus webhooks llegan a PostHog como `rc_*`. **Solo desde
+~24-26 sept y con 9 eventos en total**, así que *no sirven para medir retención*; sirven para ver el patrón.
+
+| Hecho | Dato |
+|-------|------|
+| Productos | `baliai_premium_monthly_v1` a **11,38 €** (la *win-back* a 5,66 €, ≈ −50 %) y `baliai_premium_weekly_v1`. *(No sé si «revenue» es bruto o neto de comisión: confírmalo.)* |
+| Cancelaciones | Las dos bajas del semanal son `UNSUBSCRIBE`, ~31 días después de empezar. El comprador de la *win-back* **desactivó la renovación 6 h después de pagar**: pagó exactamente un periodo y lo dejó. Hay además 1 `BILLING_ERROR`. |
+| Embudo (60 días, personas únicas) | 406 instalaciones → 238 inician onboarding → 96 lo terminan → **136 ven el paywall** → **33 pulsan comprar → 28 se salen de la hoja de Google Play** → 2 compras iniciales registradas. |
+| Aviso | Las fechas del producto «semanal» abarcan 31 días, lo que no parece un ciclo semanal: revísalo en RevenueCat antes de fiarte de ellas. |
+
+**Lectura.** (1) Lo poco que hay es coherente con «pagan un periodo y se van»: comprar y apagar la renovación
+el mismo día indica que quieren *acceso por un tiempo*, no una suscripción. (2) El mayor escape observable **no
+es el LTV, es la hoja de compra**: ~85 % de quien pulsa comprar la cancela. «Pago único, sin renovaciones» ataca
+justo esa duda… o la agrava si 29,99 € asusta más que 11,38 €. Solo un A/B lo dice.
+
+**La desigualdad que decide.** Pasar a pago único compensa si
+`conversión_nueva ≥ conversión_actual × (ingreso por pagador actual ÷ 29,99)`.
+Con un ingreso por pagador actual de ~11–15 € (≈ 1 periodo pagado), la conversión puede caer hasta el
+**~38–49 % de la actual** y facturar lo mismo por visita al paywall. Bruto contra bruto.
+
+**Lo que necesito sacar del panel de RevenueCat** (no está en este repo ni en PostHog todavía):
+1. *Subscription retention* por producto: % aún suscrito en el periodo 1, 2 y 3. Es el dato que confirma o
+   desmiente «la mayoría cancela el primer mes».
+2. *Realized LTV por cliente* a 30 y 60 días.
+3. *Conversion to paying* por *offering* (antes y después de la *win-back*).
+4. Tasa de reembolsos y reparto voluntario (`UNSUBSCRIBE`) vs. fallo de cobro (`BILLING_ERROR`).
+
+**Alternativa a probar frente al *lifetime*:** un **plan prepago de Google Play** (p. ej. 3 meses, sin
+renovación). Se paga una vez, no hay baja que gestionar y el acceso caduca solo, lo que **acota el coste de IA**
+y encaja con una ventana de estudio corta. Verifica en Play Console y RevenueCat que tu configuración lo admite.
 
 ### 4.2 Economía por usuario (ilustrativa — sustituir con datos reales)
 
@@ -612,6 +646,8 @@ conversión (una conversión más alta con peores reembolsos o IA puede ser peor
 - **F. Pase Express** (7 días, ~9,99 €) solo para quien declara examen en < 3 días. Cuidado con la canibalización:
   limitar por *Targeting* y vigilar el ingreso neto del segmento.
 - **G. Paywall multipágina** vs. una página.
+- **H. Estructura de compra:** pago único 29,99 € vs. **plan prepago de 3 meses** (sin renovación) vs. suscripción
+  actual (ver 4.1-bis).
 
 ### 4.7 Garantía «aprueba o te devolvemos» (a evaluar, no a lanzar ya)
 
