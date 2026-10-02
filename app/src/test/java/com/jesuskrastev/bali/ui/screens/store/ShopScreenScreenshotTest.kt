@@ -2,6 +2,9 @@ package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.jesuskrastev.bali.domain.model.DailyStreak
@@ -32,7 +35,7 @@ class ShopScreenScreenshotTest {
      * @param user the profile the shop reads
      * @param darkTheme whether to draw the dark theme
      */
-    private fun captureShop(user: User, darkTheme: Boolean = false) {
+    private fun captureShop(user: User, darkTheme: Boolean = false, openInfoOf: String? = null) {
         val users = FakeUserRepository().apply { runBlocking { insert(user) } }
         val decrement = DecrementCoinsUseCase(users)
         val viewModel = ShopViewModel(users, decrement, RecoverStreakUseCase(users, decrement))
@@ -41,7 +44,13 @@ class ShopScreenScreenshotTest {
                 ShopScreen(onBackClick = {}, viewModel = viewModel)
             }
         }
-        composeTestRule.onRoot().captureRoboImage()
+        if (openInfoOf != null) {
+            composeTestRule.onNodeWithContentDescription("Más información sobre $openInfoOf").performClick()
+            // A dialog is a second window with its own root: capture that one.
+            composeTestRule.onAllNodes(isRoot())[1].captureRoboImage()
+        } else {
+            composeTestRule.onRoot().captureRoboImage()
+        }
     }
 
     /** A streak of 12 days that ended yesterday, so the recovery is on sale. */
@@ -64,6 +73,14 @@ class ShopScreenScreenshotTest {
 
     @Test
     fun captureShopScreen_nothingToRecover() = captureShop(User(coins = 450))
+
+    @Test
+    fun captureShopScreen_infoDialogOfTheDisabledRecovery() =
+        captureShop(User(coins = 450), openInfoOf = "Recuperador de racha")
+
+    @Test
+    fun captureShopScreen_infoDialogOfTheFreezer() =
+        captureShop(lostYesterday(coins = 450), openInfoOf = "Congelador de racha")
 
     @Test
     fun captureShopScreen_streakLost_darkTheme() = captureShop(lostYesterday(coins = 450), darkTheme = true)
