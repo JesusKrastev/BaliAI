@@ -26,4 +26,13 @@ interface SoundEffects {
 
     /** Plays the soft sound for an answer that was wrong. */
     fun playWrong()
+
+    /** Plays the short fanfare of a result worth celebrating: a passed lesson, game or exam. */
+    fun playLessonComplete()
+
+    /**
+     * Plays the quiet closing tone of a result that is not celebrated (a failed exam, a low
+     * score): it marks the end of the session without a fanfare that would contradict the result.
+     */
+    fun playSoftFinish()
 }

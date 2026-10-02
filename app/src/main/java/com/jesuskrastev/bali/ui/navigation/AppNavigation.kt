@@ -79,6 +79,7 @@ import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
+import com.jesuskrastev.bali.ui.screens.test.ResultSoundViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
@@ -181,10 +182,14 @@ data class TestResultRoute(
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
     val newLevel: Int = 0,
+    val newTotalXp: Int = 0,
     val coinsGained: Int = 0,
     val newStreakDays: Int = -1,
     val isFailedExam: Boolean = false,
-    val isPassedExam: Boolean = false
+    val isPassedExam: Boolean = false,
+    val isFirstWin: Boolean = false,
+    val isNewRecord: Boolean = false,
+    val previousBestScore: Int = -1
 )
 
 /**
@@ -204,10 +209,14 @@ private fun TestSummary.toResultRoute() = TestResultRoute(
     bonusStreak = bonusStreak,
     leveledUp = leveledUp,
     newLevel = newLevel,
+    newTotalXp = newTotalXp,
     coinsGained = coinsGained,
     newStreakDays = newStreakDays,
     isFailedExam = isFailedExam,
-    isPassedExam = isPassedExam
+    isPassedExam = isPassedExam,
+    isFirstWin = isFirstWin,
+    isNewRecord = isNewRecord,
+    previousBestScore = previousBestScore
 )
 
 /**
@@ -432,6 +441,7 @@ fun AppNavigation(
 
             composable<TestResultRoute> { backStackEntry ->
                 val route: TestResultRoute = backStackEntry.toRoute()
+                val resultSound: ResultSoundViewModel = hiltViewModel()
                 TestResultScreen(
                     xpGained = route.xpGained,
                     baseXp = route.baseXp,
@@ -442,10 +452,15 @@ fun AppNavigation(
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
                     newLevel = route.newLevel,
+                    newTotalXp = route.newTotalXp,
                     score = route.score,
                     total = route.total,
                     isFailedExam = route.isFailedExam,
                     isPassedExam = route.isPassedExam,
+                    isFirstWin = route.isFirstWin,
+                    isNewRecord = route.isNewRecord,
+                    previousBestScore = route.previousBestScore,
+                    onResultShown = resultSound::play,
                     onContinueClick = {
                         navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreakDays)) {
                             popUpTo(HomeRoute) { inclusive = false }
