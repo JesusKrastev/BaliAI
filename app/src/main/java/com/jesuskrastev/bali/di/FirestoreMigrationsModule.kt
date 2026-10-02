@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.di
 
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
@@ -70,6 +71,11 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV9ToV10(migration: MigrationV9ToV10): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV10ToV11(migration: MigrationV10ToV11): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

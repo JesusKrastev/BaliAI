@@ -10,6 +10,7 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -17,6 +18,7 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -387,13 +389,18 @@ class ExamViewModel @Inject constructor(
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
+                    // The official exam mixes every topic and its questions carry none, so the
+                    // answer has no topic; the question id and the mode are still saved.
                     answerRepository.insert(
                         Answer(
                             date = Date(),
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = null,
+                            mode = AnswerMode.OFFICIAL_EXAM
                         )
                     )
                 }
