@@ -10,6 +10,7 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
@@ -354,13 +355,13 @@ class ExamViewModel @Inject constructor(
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
 
         // Un examen de la DGT de 30 preguntas se aprueba con 3 fallos o menos (27 correctas)
-        val isPassed = correct >= 27
+        val isPassed = ExamRules.isPassed(correct)
         var newStreakDays = -1
 
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
         // content again" — otherwise a 100-coin exam would silently pay full XP every time.
-        val isRepeat = testResultRepository.get().first().any { it.category == OFFICIAL_EXAM_CATEGORY }
+        val isRepeat = testResultRepository.get().first().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -375,7 +376,7 @@ class ExamViewModel @Inject constructor(
         withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
                 TestResult(
-                    category = OFFICIAL_EXAM_CATEGORY,
+                    category = ExamRules.OFFICIAL_EXAM_CATEGORY,
                     score = correct,
                     total = state.questions.size,
                     date = Date(),
@@ -431,9 +432,6 @@ class ExamViewModel @Inject constructor(
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"
-
-        /** [TestResult.category] used for every official-exam attempt, win or lose. */
-        private const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
     }
 
     @Serializable

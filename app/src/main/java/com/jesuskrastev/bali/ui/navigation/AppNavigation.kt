@@ -82,6 +82,7 @@ import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import com.jesuskrastev.bali.ui.screens.test.TestViewModel
+import com.jesuskrastev.bali.ui.screens.stats.StatsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
@@ -128,6 +129,9 @@ object ExamRoute
 
 @Serializable
 object ShopRoute
+
+@Serializable
+object StatsRoute
 
 @Serializable
 object SuggestionsRoute
@@ -321,6 +325,9 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
+                    },
+                    onStatsClick = {
+                        navController.navigate(StatsRoute)
                     },
                     onManageSubscriptionClick = {
                         navController.navigate(CustomerCenterRoute)
@@ -518,6 +525,10 @@ fun AppNavigation(
                         }
                     }
                 )
+            }
+
+            composable<StatsRoute> {
+                StatsScreen(onBackClick = { navController.popBackStack() })
             }
 
             composable<SuggestionsRoute> {
