@@ -3,7 +3,9 @@ package com.jesuskrastev.bali.ui.screens.stats
 import com.jesuskrastev.bali.domain.model.ReadinessLevel
 import com.jesuskrastev.bali.domain.model.ReadinessResult
 import com.jesuskrastev.bali.domain.usecase.CalculateReadinessUseCase
-import kotlin.math.abs
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * What the readiness card says for one verdict.
@@ -91,18 +93,104 @@ fun recentGoalText(): String =
     "Objetivo antes del examen: ${CalculateReadinessUseCase.RECENT_GOAL} de ${CalculateReadinessUseCase.RECENT_WINDOW}"
 
 /**
- * Words the distance to the exam date.
+ * What the countdown card says for one date.
  *
- * @param daysToExam days until the exam, negative once it has passed
- * @return "Tu examen es hoy", "Tu examen es mañana", "Faltan 12 días para tu examen" or
- *   "Tu examen fue hace 3 días"
+ * @property stage label at the top, which names the stretch the student is in
+ * @property number the big figure: the days left, or "MAÑANA" / "HOY" in the last two days
+ * @property unit what [number] counts, in capitals
+ * @property date the date itself, worded as an exam date or as the onboarding promise
+ * @property headline the urgency message
+ * @property detail what the days left mean for today, in sessions and mock exams
  */
-fun examCountdownText(daysToExam: Int): String = when {
-    daysToExam == 0 -> "Tu examen es hoy"
-    daysToExam == 1 -> "Tu examen es mañana"
-    daysToExam > 1 -> "Faltan $daysToExam días para tu examen"
-    daysToExam == -1 -> "Tu examen fue ayer"
-    else -> "Tu examen fue hace ${abs(daysToExam)} días"
+data class CountdownCopy(
+    val stage: String,
+    val number: String,
+    val unit: String,
+    val date: String,
+    val headline: String,
+    val detail: String
+)
+
+/**
+ * Writes the countdown card's text. The urgency comes from real figures — the days left, the
+ * sessions still possible, whether today is done and how many mock exams are missing — so no
+ * sentence invents a deadline, and none promises a result.
+ *
+ * @param plan the date being counted down to
+ * @param readiness the verdict, for the mock exams still missing
+ * @param studiedToday whether today already has a study session
+ * @return the texts to show, or null when [plan] has no date and the card asks for one instead
+ */
+fun examCountdownCopyOf(plan: PlanSummary, readiness: ReadinessResult, studiedToday: Boolean): CountdownCopy? {
+    val target = plan.targetMillis ?: return null
+    val days = plan.daysLeft
+    val urgency = plan.urgency()
+    val isExam = plan.isExamDate
+    val dateFormat = SimpleDateFormat(if (isExam) "EEEE, d 'de' MMMM" else "d 'de' MMMM", Locale("es", "ES"))
+    val date = dateFormat.format(Date(target)).let {
+        if (isExam) it.replaceFirstChar { first -> first.uppercase() } else "Carnet antes del $it"
+    }
+    val subject = if (isExam) "tu examen" else "tu fecha meta"
+
+    return CountdownCopy(
+        stage = when (urgency) {
+            PlanUrgency.NO_DATE, PlanUrgency.ON_TRACK -> "CUENTA ATRÁS"
+            PlanUrgency.MONTH -> "ÚLTIMO MES"
+            PlanUrgency.TWO_WEEKS -> "ÚLTIMAS 2 SEMANAS"
+            PlanUrgency.FINAL_WEEK, PlanUrgency.TOMORROW -> "RECTA FINAL"
+            PlanUrgency.TODAY -> "HA LLEGADO EL DÍA"
+        },
+        number = when (urgency) {
+            PlanUrgency.TODAY -> "HOY"
+            PlanUrgency.TOMORROW -> "MAÑANA"
+            else -> "$days"
+        },
+        unit = if (days <= 1) "ES ${subject.uppercase()}" else "DÍAS PARA ${subject.uppercase()}",
+        date = date,
+        headline = when (urgency) {
+            PlanUrgency.NO_DATE, PlanUrgency.ON_TRACK -> "Tienes tiempo, pero se acaba."
+            PlanUrgency.MONTH -> "Queda menos de un mes."
+            PlanUrgency.TWO_WEEKS -> "Quedan dos semanas o menos."
+            PlanUrgency.FINAL_WEEK -> "Última semana: no hay días de sobra."
+            PlanUrgency.TOMORROW -> if (isExam) "Mañana te examinas." else "Mañana vence tu fecha meta."
+            PlanUrgency.TODAY -> if (isExam) "Hoy es tu examen." else "Hoy vence tu fecha meta."
+        },
+        detail = when (urgency) {
+            PlanUrgency.TODAY ->
+                if (isExam) "Respira, lee cada pregunta entera y confía en lo que has practicado."
+                else "Si tu examen es otro día, cámbiala para seguir con la cuenta atrás."
+            PlanUrgency.TOMORROW ->
+                if (studiedToday) "Hoy ya has estudiado: descansa y llega con la cabeza fría."
+                else "Haz un repaso corto hoy y descansa: es tu último día de estudio."
+            else -> sessionsLeftText(days, studiedToday) + mocksMissingText(readiness)
+        }
+    )
+}
+
+/**
+ * Says how many study sessions are still possible before the date, counting today until it is done.
+ *
+ * @param daysLeft days until the date, at least 2
+ * @param studiedToday whether today already has a session
+ * @return e.g. "Tienes 14 sesiones por delante y la de hoy aún no está hecha."
+ */
+private fun sessionsLeftText(daysLeft: Int, studiedToday: Boolean): String {
+    if (!studiedToday) return "Tienes $daysLeft sesiones por delante y la de hoy aún no está hecha."
+    val remaining = daysLeft - 1
+    val verb = if (remaining == 1) "te queda" else "te quedan"
+    return "Hoy ya has estudiado: $verb ${plural(remaining, "sesión", "sesiones")} más."
+}
+
+/**
+ * Adds the mock exams still missing for a verdict, which is the other thing that needs time.
+ *
+ * @param readiness the verdict
+ * @return a sentence starting with a space, or an empty string when the verdict is already shown
+ */
+private fun mocksMissingText(readiness: ReadinessResult): String {
+    if (readiness.level != ReadinessLevel.NOT_ENOUGH_DATA || readiness.mocksMissing <= 0) return ""
+    val verb = if (readiness.mocksMissing == 1) "te falta" else "te faltan"
+    return " Y $verb ${plural(readiness.mocksMissing, "simulacro")} para saber si estás listo."
 }
 
 /**

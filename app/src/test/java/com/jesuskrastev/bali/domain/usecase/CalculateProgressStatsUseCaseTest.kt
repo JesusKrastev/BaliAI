@@ -35,7 +35,6 @@ class CalculateProgressStatsUseCaseTest {
         assertThat(stats.accuracy).isNull()
         assertThat(stats.topics).isEmpty()
         assertThat(stats.practiceSessions).isEqualTo(0)
-        assertThat(stats.daysToExam).isNull()
         assertThat(stats.week).hasSize(7)
         assertThat(stats.studyDays).hasSize(28)
         assertThat(stats.studyDaysCount).isEqualTo(0)
@@ -116,17 +115,6 @@ class CalculateProgressStatsUseCaseTest {
         assertThat(stats.studyDays[26]).isTrue()
         assertThat(stats.studyDays[22]).isTrue()
         assertThat(stats.studyDaysCount).isEqualTo(3)
-    }
-
-    @Test
-    fun `days to the exam are calendar days and negative once it has passed`() {
-        val future = useCase(emptyList(), emptyList(), User(examDateMillis = day(12)), now)
-        val today = useCase(emptyList(), emptyList(), User(examDateMillis = day(0)), now)
-        val past = useCase(emptyList(), emptyList(), User(examDateMillis = day(-3)), now)
-
-        assertThat(future.daysToExam).isEqualTo(12)
-        assertThat(today.daysToExam).isEqualTo(0)
-        assertThat(past.daysToExam).isEqualTo(-3)
     }
 
     @Test

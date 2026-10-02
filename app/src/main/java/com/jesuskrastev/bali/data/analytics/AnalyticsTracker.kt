@@ -551,10 +551,10 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
-    // ── PLAN (Home) ─────────────────────────────────────────────────────────
+    // ── EXAM DATE (Statistics) ──────────────────────────────────────────────
 
     /**
-     * Tracks that the user set their exam date from Home's plan card.
+     * Tracks that the user set their exam date from the statistics countdown.
      *
      * @param daysUntil calendar days from today to the chosen exam day
      * @param hadPlanDate true when the card was already counting down to a date (so this is a
@@ -564,21 +564,6 @@ open class AnalyticsTracker @Inject constructor(
         putInt("days_until", daysUntil)
         putBoolean("had_plan_date", hadPlanDate)
     }
-
-    /**
-     * Tracks a tap on the study button of Home's plan card, which opens the next unlocked lesson.
-     *
-     * @param daysLeft calendar days from today to the date the card counts down to
-     * @param practicedToday true when today already had a session, so the button read "Seguir
-     *   practicando" instead of "Empezar la sesión de hoy"
-     * @param weekSessions sessions done so far this week
-     */
-    open fun planStudyClicked(daysLeft: Int, practicedToday: Boolean, weekSessions: Int) =
-        log("plan_study_clicked") {
-            putInt("days_left", daysLeft)
-            putBoolean("practiced_today", practicedToday)
-            putInt("week_sessions", weekSessions)
-        }
 
     /**
      * Tracks that the user opened the statistics screen and what it told them, so the verdict can

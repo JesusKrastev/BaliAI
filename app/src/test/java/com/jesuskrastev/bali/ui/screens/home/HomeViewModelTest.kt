@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
-import org.mockito.kotlin.whenever
 import org.junit.Rule
 import org.junit.Test
 import com.google.common.truth.Truth.assertThat
@@ -27,7 +26,6 @@ import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
-import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -54,7 +52,6 @@ class HomeViewModelTest {
 
     @Before
     fun setup() {
-        whenever(remoteConfigProvider.getWeeklyGoal()).thenReturn(5)
         viewModel = HomeViewModel(
             userRepository = fakeUserRepository,
             testResultRepository = fakeTestResultRepository,
@@ -78,32 +75,6 @@ class HomeViewModelTest {
         fakeUserRepository.setCoinsForTest(250)
 
         assertThat(viewModel.uiState.value.coinsCount).isEqualTo(250)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `setting the exam date makes the plan card count down to it`() = runTest {
-        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        val inTenDays = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(10)
-
-        viewModel.setExamDate(pickerMillisFromLocalDay(inTenDays))
-
-        val plan = viewModel.uiState.value.plan
-        assertThat(plan.isExamDate).isTrue()
-        assertThat(plan.daysLeft).isEqualTo(10)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `the plan date saved at onboarding shows as the promise`() = runTest {
-        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        val promise = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(21)
-
-        fakeUserRepository.setPlanDatesForTest(examDateMillis = null, planTargetMillis = promise)
-
-        val plan = viewModel.uiState.value.plan
-        assertThat(plan.targetMillis).isEqualTo(promise)
-        assertThat(plan.isExamDate).isFalse()
         collectJob.cancel()
     }
 }
