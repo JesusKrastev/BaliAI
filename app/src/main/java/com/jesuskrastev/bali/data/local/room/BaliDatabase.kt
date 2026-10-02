@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,21 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /**
+         * Adds what an answer needs to be told apart later: the question's id, the topic of its
+         * session and where it was given. The columns are nullable with no default and stay null
+         * on the answers already saved; they are not backfilled, because the question id of an
+         * old answer is worked out from its text when read (`Answer.resolvedQuestionId`).
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            /** One nullable TEXT column each; existing rows keep NULL. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE answers ADD COLUMN questionId TEXT")
+                database.execSQL("ALTER TABLE answers ADD COLUMN topic TEXT")
+                database.execSQL("ALTER TABLE answers ADD COLUMN mode TEXT")
+            }
+        }
+
         /** Adds the streak that was just lost and the day it ended, so it can be bought back. */
         val MIGRATION_16_17 = object : Migration(16, 17) {
             /** Both columns start at zero: nobody has a recoverable streak yet. */

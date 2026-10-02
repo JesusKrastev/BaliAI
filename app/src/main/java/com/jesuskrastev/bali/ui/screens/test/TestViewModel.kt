@@ -11,6 +11,8 @@ import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.DrivingTopic
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -20,6 +22,7 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -488,7 +491,10 @@ class TestViewModel @Inject constructor(
                 )
             )
 
-            // 2. Save individual answers
+            // 2. Save individual answers, each tagged with its question id, the session's topic
+            // (when the category names one) and where it was given
+            val topic = DrivingTopic.fromCategory(state.category)
+            val mode = AnswerMode.fromNodeType(aiNodeType)
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
@@ -498,7 +504,10 @@ class TestViewModel @Inject constructor(
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = topic,
+                            mode = mode
                         )
                     )
                 }

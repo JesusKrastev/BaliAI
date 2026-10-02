@@ -26,6 +26,14 @@ enum class DrivingTopic(val displayName: String, private val keywords: List<Stri
 
     companion object {
         /**
+         * Reads a stored topic back.
+         *
+         * @param tag the enum name saved with an answer, null for answers without a topic
+         * @return the topic, or null when [tag] is null or names a topic this version does not know
+         */
+        fun fromTag(tag: String?): DrivingTopic? = entries.firstOrNull { it.name == tag }
+
+        /**
          * Finds the topic a practice category belongs to.
          *
          * The category is compared without accents or case. "Marcas viales" is checked before
