@@ -113,4 +113,45 @@ class OnboardingReducerTest {
         assertThat(reducer.calculateProgress(index = 0, totalSteps = 25)).isEqualTo(0f)
         assertThat(reducer.calculateProgress(index = 24, totalSteps = 25)).isEqualTo(1f)
     }
+
+    private val shortFlow = listOf(
+        OnboardingStep.Motivation,
+        OnboardingStep.SocialProof,
+        OnboardingStep.Processing,
+        OnboardingStep.PlanReveal,
+        OnboardingStep.Pact
+    )
+
+    @Test
+    fun `back leads to the screen shown just before`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.SocialProof))
+            .isEqualTo(OnboardingStep.Motivation)
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Pact))
+            .isEqualTo(OnboardingStep.PlanReveal)
+    }
+
+    @Test
+    fun `there is nothing to go back to from the first screen`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Motivation)).isNull()
+    }
+
+    @Test
+    fun `back from the plan reveal skips the plan being built`() {
+        // The building screen advances on its own and has no controls: landing on it again
+        // would leave the user stuck there.
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.PlanReveal))
+            .isEqualTo(OnboardingStep.SocialProof)
+    }
+
+    @Test
+    fun `back is refused while the plan is being built`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Processing)).isNull()
+    }
+
+    @Test
+    fun `back is refused outside the flow`() {
+        // The paywall and the finished state are not part of the order.
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.PaywallPending)).isNull()
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Completed)).isNull()
+    }
 }

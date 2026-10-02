@@ -138,6 +138,12 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object Completed : OnboardingStep()
 }
 
+/**
+ * Everything the onboarding screen draws.
+ *
+ * @property canGoBack whether the back arrow and the system back gesture can step back a screen
+ * @property isMovingBack whether the last move went backwards, so the screens slide the other way
+ */
 data class OnboardingUiState(
     val currentStep: OnboardingStep = OnboardingStep.Motivation,
     val data: OnboardingData = OnboardingData(),
@@ -147,7 +153,8 @@ data class OnboardingUiState(
     val canGoBack: Boolean = false,
     val canGoNext: Boolean = false,
     val isProcessingFinished: Boolean = false,
-    val isRequestingNotifications: Boolean = false
+    val isRequestingNotifications: Boolean = false,
+    val isMovingBack: Boolean = false
 )
 
 @HiltViewModel
@@ -183,6 +190,12 @@ class OnboardingViewModel @Inject constructor(
         OnboardingStep.Pact
     )
 
+    /**
+     * Steps already reported to analytics in this run, so that going back and forward again
+     * counts each screen once, as the funnel expects.
+     */
+    private val reportedSteps = mutableSetOf<OnboardingStep>()
+
     init {
         updateMascotMessage()
         analyticsTracker.onboardingStarted()
@@ -196,11 +209,15 @@ class OnboardingViewModel @Inject constructor(
      * never drift out of sync with the real order. The `o` prefix is not decoration:
      * Firebase silently drops events whose name starts with a digit.
      *
+     * A screen is reported only the first time it is reached: coming back to it with the back
+     * arrow and moving on again must not count it twice.
+     *
      * @param step the step that just became visible
      */
     private fun trackStepReached(step: OnboardingStep) {
         val position = stepsOrder.indexOf(step)
         if (position < 0 || step.analyticsName.isBlank()) return
+        if (!reportedSteps.add(step)) return
         analyticsTracker.onboardingStepReached(funnelEventName(position, step.analyticsName))
     }
 
@@ -344,7 +361,8 @@ class OnboardingViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 currentStep = nextStep,
-                progress = reducer.calculateProgress(currentIndex + 1, stepsOrder.size)
+                progress = reducer.calculateProgress(currentIndex + 1, stepsOrder.size),
+                isMovingBack = false
             )
         }
         trackStepReached(nextStep)
@@ -409,20 +427,27 @@ class OnboardingViewModel @Inject constructor(
         learningPreference?.let { put("learning_preference", it) }
     }
 
-    /** Moves back one step, if the current one is not the first. */
+    /**
+     * Moves back one step and keeps every answer given so far.
+     *
+     * The move is ignored where [OnboardingReducer.previousStep] refuses it (the first step,
+     * and the plan being built) and while Android's permission dialog is open, because its
+     * answer would then land on a different screen from the one that asked.
+     */
     private fun goToPreviousStep() {
-        val currentIndex = stepsOrder.indexOf(_uiState.value.currentStep)
-        if (currentIndex > 0) {
-            val prevStep = stepsOrder[currentIndex - 1]
-            _uiState.update {
-                it.copy(
-                    currentStep = prevStep,
-                    progress = reducer.calculateProgress(currentIndex - 1, stepsOrder.size)
-                )
-            }
-            updateMascotMessage()
-            updateNavigationState()
+        val state = _uiState.value
+        if (state.isRequestingNotifications) return
+        val previousStep = reducer.previousStep(stepsOrder, state.currentStep) ?: return
+
+        _uiState.update {
+            it.copy(
+                currentStep = previousStep,
+                progress = reducer.calculateProgress(stepsOrder.indexOf(previousStep), stepsOrder.size),
+                isMovingBack = true
+            )
         }
+        updateMascotMessage()
+        updateNavigationState()
     }
 
     /** Runs the faked "building your plan" progress bar and then continues the flow. */
@@ -432,11 +457,13 @@ class OnboardingViewModel @Inject constructor(
                 currentStep = OnboardingStep.Processing,
                 progress = 1f,
                 isProcessingFinished = false,
-                processingProgress = 0f
+                processingProgress = 0f,
+                isMovingBack = false
             )
         }
         trackStepReached(OnboardingStep.Processing)
         updateMascotMessage()
+        updateNavigationState()
         viewModelScope.launch {
             val totalSteps = 100
             for (i in 1..totalSteps) {
@@ -454,12 +481,8 @@ class OnboardingViewModel @Inject constructor(
     private fun updateNavigationState() {
         val state = _uiState.value
         val canGoNext = reducer.shouldEnableNextButton(state.currentStep, state.data)
-        _uiState.update {
-            it.copy(
-                canGoNext = canGoNext,
-                canGoBack = stepsOrder.indexOf(state.currentStep) > 0
-            )
-        }
+        val canGoBack = reducer.previousStep(stepsOrder, state.currentStep) != null
+        _uiState.update { it.copy(canGoNext = canGoNext, canGoBack = canGoBack) }
     }
 
     /** Refreshes the mascot line for the current step and collected data. */
