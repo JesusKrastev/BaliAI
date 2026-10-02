@@ -85,18 +85,17 @@ class DailyStreakTest {
     }
 
     @Test
-    fun `missed days after freezes lower momentum one level each`() {
+    fun `more missed days than freezes end the streak and keep the freezes`() {
         val settled = studiedOn(5, 6, start = empty.copy(freezes = 1)).settledAt(at(10, 9))
 
-        assertThat(settled.current).isEqualTo(1)
-        assertThat(settled.freezes).isEqualTo(0)
-        assertThat(settled.frozenDays.map(DailyStreak::epochDay))
-            .containsExactly(DailyStreak.epochDay(at(10, 7)))
+        assertThat(settled.current).isEqualTo(0)
+        assertThat(settled.freezes).isEqualTo(1)
+        assertThat(settled.frozenDays).isEmpty()
     }
 
     @Test
-    fun `after momentum reaches zero, the next session starts again at one and keeps the record`() {
-        val streak = studiedOn(5, 6, 7, 12)
+    fun `after the streak ends, the next session starts again at one and keeps the record`() {
+        val streak = studiedOn(5, 6, 7, 10)
 
         assertThat(streak.current).isEqualTo(1)
         assertThat(streak.highest).isEqualTo(3)
@@ -116,22 +115,6 @@ class DailyStreakTest {
 
         assertThat(once.settledAt(at(10, 7, hour = 18))).isEqualTo(once)
         assertThat(once.freezes).isEqualTo(1)
-    }
-
-    @Test
-    fun `settling twice does not decay the same missed day twice`() {
-        val once = studiedOn(5, 6, 7).settledAt(at(10, 9))
-
-        assertThat(once.current).isEqualTo(2)
-        assertThat(once.settledAt(at(10, 9, hour = 18))).isEqualTo(once)
-    }
-
-    @Test
-    fun `daily practice caps the speedometer at seven`() {
-        val streak = studiedOn(1, 2, 3, 4, 5, 6, 7, 8)
-
-        assertThat(streak.current).isEqualTo(DailyStreak.MAX_LEVEL)
-        assertThat(streak.highest).isEqualTo(DailyStreak.MAX_LEVEL)
     }
 
     @Test
@@ -185,5 +168,125 @@ class DailyStreakTest {
         val day = DailyStreak.epochDay(at(10, 25, hour = 15))
 
         assertThat(DailyStreak.epochDay(DailyStreak.startOfDayMillis(day))).isEqualTo(day)
+    }
+
+    @Test
+    fun `the streak is lost at midnight, not before`() {
+        val streak = studiedOn(5, 6)
+
+        assertThat(streak.settledAt(at(10, 7, hour = 23)).current).isEqualTo(2)
+        assertThat(streak.settledAt(at(10, 8, hour = 0)).current).isEqualTo(0)
+    }
+
+    @Test
+    fun `missing one day without a freeze keeps the lost streak to recover`() {
+        val settled = studiedOn(5, 6, 7).settledAt(at(10, 9))
+
+        assertThat(settled.current).isEqualTo(0)
+        assertThat(settled.lostStreak).isEqualTo(3)
+        assertThat(DailyStreak.epochDay(settled.lostStreakDayMillis))
+            .isEqualTo(DailyStreak.epochDay(at(10, 8)))
+        assertThat(settled.recoverableStreakAt(at(10, 9))).isEqualTo(3)
+    }
+
+    @Test
+    fun `a streak lost more than a day ago cannot be recovered`() {
+        val settled = studiedOn(5, 6, 7).settledAt(at(10, 10))
+
+        assertThat(settled.lostStreak).isEqualTo(0)
+        assertThat(settled.recoverableStreakAt(at(10, 10))).isEqualTo(0)
+    }
+
+    @Test
+    fun `the recovery window closes at the next midnight`() {
+        val settled = studiedOn(5, 6, 7).settledAt(at(10, 9))
+
+        assertThat(settled.recoverableStreakAt(at(10, 9, hour = 23))).isEqualTo(3)
+        assertThat(settled.settledAt(at(10, 10, hour = 0)).lostStreak).isEqualTo(0)
+        assertThat(settled.settledAt(at(10, 10, hour = 0)).recoverableStreakAt(at(10, 10, hour = 0)))
+            .isEqualTo(0)
+    }
+
+    @Test
+    fun `settling twice keeps the same lost streak`() {
+        val once = studiedOn(5, 6, 7).settledAt(at(10, 9))
+
+        assertThat(once.settledAt(at(10, 9, hour = 20))).isEqualTo(once)
+    }
+
+    @Test
+    fun `a covered day loses nothing and leaves nothing to recover`() {
+        val settled = studiedOn(5, 6, start = empty.copy(freezes = 1)).settledAt(at(10, 8))
+
+        assertThat(settled.current).isEqualTo(2)
+        assertThat(settled.lostStreak).isEqualTo(0)
+    }
+
+    @Test
+    fun `recovering restores the whole count and covers the missed day`() {
+        val recovered = studiedOn(5, 6, 7).recoveredAt(at(10, 9))
+
+        assertThat(recovered.current).isEqualTo(3)
+        assertThat(recovered.highest).isEqualTo(3)
+        assertThat(recovered.lostStreak).isEqualTo(0)
+        assertThat(recovered.frozenDays.map(DailyStreak::epochDay))
+            .containsExactly(DailyStreak.epochDay(at(10, 8)))
+        assertThat(recovered.freezes).isEqualTo(0)
+    }
+
+    @Test
+    fun `studying after recovering adds to the restored streak`() {
+        val streak = studiedOn(5, 6, 7).recoveredAt(at(10, 9)).practicedAt(at(10, 9, hour = 20))
+
+        assertThat(streak.current).isEqualTo(4)
+        assertThat(streak.highest).isEqualTo(4)
+    }
+
+    @Test
+    fun `recovering after already studying today counts today too`() {
+        val studiedToday = studiedOn(5, 6, 7).practicedAt(at(10, 9))
+        assertThat(studiedToday.current).isEqualTo(1)
+        assertThat(studiedToday.recoverableStreakAt(at(10, 9, hour = 20))).isEqualTo(3)
+
+        val recovered = studiedToday.recoveredAt(at(10, 9, hour = 20))
+
+        assertThat(recovered.current).isEqualTo(4)
+        assertThat(recovered.highest).isEqualTo(4)
+        assertThat(recovered.lostStreak).isEqualTo(0)
+    }
+
+    @Test
+    fun `a recovered streak survives the following days like any other`() {
+        val recovered = studiedOn(5, 6, 7).recoveredAt(at(10, 9))
+
+        assertThat(recovered.settledAt(at(10, 9, hour = 23)).current).isEqualTo(3)
+        assertThat(recovered.settledAt(at(10, 10)).current).isEqualTo(0)
+        assertThat(recovered.settledAt(at(10, 10)).recoverableStreakAt(at(10, 10))).isEqualTo(3)
+    }
+
+    @Test
+    fun `recovering twice or with nothing lost changes nothing`() {
+        val recovered = studiedOn(5, 6, 7).recoveredAt(at(10, 9))
+
+        assertThat(recovered.recoveredAt(at(10, 9, hour = 12))).isEqualTo(recovered)
+        assertThat(studiedOn(5, 6).recoveredAt(at(10, 7))).isEqualTo(studiedOn(5, 6))
+    }
+
+    @Test
+    fun `recovering too late changes nothing`() {
+        val lost = studiedOn(5, 6, 7).settledAt(at(10, 9))
+
+        assertThat(lost.recoveredAt(at(10, 10)).current).isEqualTo(0)
+    }
+
+    @Test
+    fun `a recovery does not touch the record when the streak was below it`() {
+        val record = studiedOn(1, 2, 3, 4, 5, 6)
+        val lower = studiedOn(8, 9, start = record)
+
+        val recovered = lower.recoveredAt(at(10, 11))
+
+        assertThat(recovered.current).isEqualTo(2)
+        assertThat(recovered.highest).isEqualTo(6)
     }
 }

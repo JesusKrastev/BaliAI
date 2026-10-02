@@ -1,49 +1,25 @@
 package com.jesuskrastev.bali.data.migration.migrations
 
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.perf.metrics.AddTrace
-import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
-import com.jesuskrastev.bali.domain.model.DailyStreak
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 /**
- * Migrates the daily streak into the seven-level speedometer model.
+ * Migración v8 → v9: reservada, no hace nada.
  *
- * Existing counts are capped at [DailyStreak.MAX_LEVEL] and a settlement marker is seeded from
- * the last practice day, preventing historical missed days from being charged repeatedly.
+ * La build de internal del 1.2.2 usó este número para el velocímetro de racha (D-019), que
+ * recortaba la racha a 7. Se descartó (D-021) y no debe llegar a producción, pero hay cuentas
+ * que ya están en v9: reutilizar el número para otra cosa haría que se saltaran la migración
+ * (E-017). Se queda vacía para que quien viene de v8 pase por la misma versión.
  */
-class MigrationV8ToV9 @Inject constructor(
-    private val firestore: FirebaseFirestore
-) : FirestoreMigration {
+class MigrationV8ToV9 @Inject constructor() : FirestoreMigration {
 
     override val targetVersion: Int = 9
-    override val description: String = "Convertir la racha diaria al velocímetro de siete niveles"
+    override val description: String = "Versión reservada (velocímetro de racha descartado)"
 
     /**
-     * Caps the legacy streak fields and seeds their single-settlement marker for [userId].
+     * Does nothing: see the class comment.
      *
-     * @param userId identifier of the Firestore profile to migrate
+     * @param userId the user being migrated, unused
      */
-    @AddTrace(name = "firestore_migration_streak_speedometer")
-    override suspend fun migrate(userId: String) {
-        val userRef = firestore.collection("env")
-            .document(BuildConfig.BUILD_TYPE)
-            .collection("users")
-            .document(userId)
-        val snapshot = userRef.get().await()
-        val current = (snapshot.getLong("currentStreak") ?: 0L).toInt()
-        val highest = (snapshot.getLong("highestStreak") ?: 0L).toInt()
-        val lastPractice = snapshot.getLong("lastPracticeTimestamp") ?: 0L
-
-        val cappedCurrent = current.coerceIn(0, DailyStreak.MAX_LEVEL)
-        userRef.update(
-            mapOf(
-                "currentStreak" to cappedCurrent,
-                "highestStreak" to highest.coerceIn(0, DailyStreak.MAX_LEVEL).coerceAtLeast(cappedCurrent),
-                "lastStreakSettledDayMillis" to lastPractice
-            )
-        ).await()
-    }
+    override suspend fun migrate(userId: String) = Unit
 }

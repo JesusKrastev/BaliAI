@@ -16,35 +16,21 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.R
-import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
 import com.jesuskrastev.bali.ui.screens.home.StreakStatus
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
 
 /** Light blue of the days a freeze covered, taken from the freezer illustration. */
 private val FreezeBlue = Color(0xFF38BDF8)
@@ -113,100 +99,6 @@ internal fun StreakFlame(lit: Boolean, size: Dp, modifier: Modifier = Modifier) 
         alpha = if (lit) 1f else 0.45f,
         modifier = modifier.size(size)
     )
-}
-
-/**
- * Draws the animated seven-level speedometer that represents current streak momentum.
- *
- * @param level current momentum from zero to [DailyStreak.MAX_LEVEL]
- * @param modifier applied to the gauge canvas
- */
-@Composable
-internal fun StreakSpeedometer(level: Int, modifier: Modifier = Modifier) {
-    val safeLevel = level.coerceIn(0, DailyStreak.MAX_LEVEL)
-    val animatedLevel by animateFloatAsState(
-        targetValue = safeLevel.toFloat(),
-        animationSpec = tween(durationMillis = 850),
-        label = "streak_speedometer_needle"
-    )
-    val primary = MaterialTheme.colorScheme.primary
-    val muted = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)
-
-    Box(
-        modifier = modifier
-            .size(width = 272.dp, height = 184.dp)
-            .semantics { contentDescription = "Ritmo de racha: $safeLevel de ${DailyStreak.MAX_LEVEL}" }
-            .drawBehind {
-                val radius = min(size.width, size.height) * 0.43f
-                val center = Offset(x = size.width / 2f, y = size.height * 0.76f)
-                val arcBounds = Rect(
-                    left = center.x - radius,
-                    top = center.y - radius,
-                    right = center.x + radius,
-                    bottom = center.y + radius
-                )
-                val startAngle = 145f
-                val sweepAngle = 250f
-                val stroke = Stroke(width = 13.dp.toPx(), cap = StrokeCap.Round)
-
-                drawArc(
-                    color = muted,
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    style = stroke,
-                    topLeft = arcBounds.topLeft,
-                    size = arcBounds.size
-                )
-                drawArc(
-                    color = primary,
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle * (animatedLevel / DailyStreak.MAX_LEVEL),
-                    useCenter = false,
-                    style = stroke,
-                    topLeft = arcBounds.topLeft,
-                    size = arcBounds.size
-                )
-                repeat(DailyStreak.MAX_LEVEL + 1) { index ->
-                    val angle = Math.toRadians((startAngle + sweepAngle * index / DailyStreak.MAX_LEVEL).toDouble())
-                    val outer = Offset(
-                        center.x + cos(angle).toFloat() * (radius + 12.dp.toPx()),
-                        center.y + sin(angle).toFloat() * (radius + 12.dp.toPx())
-                    )
-                    val inner = Offset(
-                        center.x + cos(angle).toFloat() * (radius - 2.dp.toPx()),
-                        center.y + sin(angle).toFloat() * (radius - 2.dp.toPx())
-                    )
-                    drawLine(muted, outer, inner, strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-                }
-                val needleAngle = Math.toRadians(
-                    (startAngle + sweepAngle * animatedLevel / DailyStreak.MAX_LEVEL).toDouble()
-                )
-                val needleEnd = Offset(
-                    center.x + cos(needleAngle).toFloat() * radius * 0.73f,
-                    center.y + sin(needleAngle).toFloat() * radius * 0.73f
-                )
-                drawLine(primary, center, needleEnd, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
-                drawCircle(primary, radius = 9.dp.toPx(), center = center)
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = safeLevel.toString(),
-                fontSize = 54.sp,
-                lineHeight = 54.sp,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "/ ${DailyStreak.MAX_LEVEL}",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
 }
 
 /**

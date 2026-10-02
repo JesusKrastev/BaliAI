@@ -4,26 +4,29 @@ import java.util.Calendar
 import java.util.TimeZone
 
 /**
- * The daily streak momentum: a seven-level gauge filled by a daily test, mock exam or mini-game.
+ * The daily streak: consecutive days with at least one test, mock exam or mini-game.
  *
  * Days are the user's local calendar days, stored as the millis of their local midnight (the
  * same values [User.practiceDays] always held). The app is the only one that computes the
  * streak; no server job touches it.
  *
  * Rules:
- * - Studying raises momentum by one, once per day, up to [MAX_LEVEL].
- * - A missed day spends a freeze first, keeping momentum unchanged and recording the protected
- *   day in [frozenDays]. Remaining missed days reduce momentum one level each.
- * - Momentum reaches zero only after enough unprotected missed days; each missed day is settled
- *   at most once through [lastSettledDayMillis].
+ * - Studying extends the streak by one, once per day.
+ * - A day without study is covered by a streak freeze while any are left: the freeze is spent
+ *   and the day is recorded in [frozenDays], so it can be shown.
+ * - With more missed days than freezes the streak goes back to 0, and the freezes are kept: a
+ *   freeze that cannot save the streak is not spent. There is no grace day.
+ * - A streak lost by missing exactly one day can be bought back with [recoveredAt] during the
+ *   day after the missed one: its whole count is kept in [lostStreak] until then.
  *
- * @property current current momentum level, from 0 to [MAX_LEVEL]
- * @property highest highest momentum level ever reached
+ * @property current consecutive days, counting today once the user has studied today
+ * @property highest the longest streak ever reached
  * @property freezes streak freezes still available
  * @property lastPracticeMillis when the user last started a study day, 0 if never
- * @property lastSettledDayMillis local midnight of the last absence already processed
  * @property practiceDays local midnights of the days with study, the last [HISTORY_DAYS] only
  * @property frozenDays local midnights of the days a freeze covered, the last [HISTORY_DAYS] only
+ * @property lostStreak count of the streak that was just lost and can still be recovered, 0 if none
+ * @property lostStreakDayMillis local midnight of the missed day that ended [lostStreak], 0 if none
  */
 data class DailyStreak(
     val current: Int,
@@ -32,7 +35,8 @@ data class DailyStreak(
     val lastPracticeMillis: Long,
     val practiceDays: List<Long>,
     val frozenDays: List<Long>,
-    val lastSettledDayMillis: Long = 0
+    val lostStreak: Int = 0,
+    val lostStreakDayMillis: Long = 0
 ) {
 
     /**
@@ -45,28 +49,66 @@ data class DailyStreak(
         practiceDays.any { epochDay(it) == epochDay(nowMillis) }
 
     /**
-     * Applies the days missed since the last processed day. Freezes keep momentum intact before
-     * each remaining missed day lowers it one level. Also drops history older than [HISTORY_DAYS].
+     * Applies the days missed since the last covered day: each is covered by a freeze while
+     * there are enough of them, otherwise the streak is lost, and a loss that can no longer be
+     * recovered is forgotten. Also drops history older than [HISTORY_DAYS].
      *
      * @param nowMillis the current time
      * @return the streak as it stands today, before any study today is counted
      */
     fun settledAt(nowMillis: Long): DailyStreak {
         val today = epochDay(nowMillis)
-        val trimmed = trimmedTo(today)
+        val lastCovered = (practiceDays + frozenDays).maxOfOrNull(::epochDay)
+        val trimmed = trimmedTo(today).withoutExpiredLoss(today)
         if (current == 0) return trimmed
-        val lastAccountedDay = trimmed.lastAccountedDay() ?: return trimmed.copy(current = 0)
-        val missedDays = (today - lastAccountedDay - 1).coerceAtLeast(0)
-        if (missedDays == 0L) return trimmed
+        if (lastCovered == null) return trimmed.copy(current = 0)
 
-        val protectedDays = minOf(missedDays, freezes.toLong()).toInt()
-        val decayedLevel = (current - (missedDays - protectedDays).toInt()).coerceAtLeast(0)
-        return trimmed.copy(
-            current = decayedLevel,
-            freezes = freezes - protectedDays,
-            frozenDays = trimmed.frozenDays +
-                (1..protectedDays).map { offset -> startOfDayMillis(lastAccountedDay + offset) },
-            lastSettledDayMillis = startOfDayMillis(today - 1)
+        val missedDays = today - lastCovered - 1
+        return when {
+            missedDays <= 0 -> trimmed
+            missedDays <= freezes -> trimmed.copy(
+                freezes = freezes - missedDays.toInt(),
+                frozenDays = trimmed.frozenDays +
+                    (lastCovered + 1 until today).map(::startOfDayMillis)
+            )
+            else -> trimmed.copy(
+                current = 0,
+                lostStreak = current,
+                lostStreakDayMillis = startOfDayMillis(lastCovered + 1)
+            ).withoutExpiredLoss(today)
+        }
+    }
+
+    /**
+     * The count a purchase of [recoveredAt] would bring back. Call it on a streak already
+     * settled to [nowMillis].
+     *
+     * @param nowMillis the current time
+     * @return the lost streak while it can still be recovered, 0 otherwise
+     */
+    fun recoverableStreakAt(nowMillis: Long): Int =
+        if (isRecoverableOn(epochDay(nowMillis))) lostStreak else 0
+
+    /**
+     * Brings back the streak lost by missing yesterday: its whole count returns (plus today,
+     * if the user already studied) and the missed day is recorded as covered so it cannot end
+     * the streak again. Charging the coins is the caller's job.
+     *
+     * @param nowMillis the current time
+     * @return the restored streak; equal to [settledAt] when there is nothing to recover
+     */
+    fun recoveredAt(nowMillis: Long): DailyStreak {
+        val settled = settledAt(nowMillis)
+        val lost = settled.recoverableStreakAt(nowMillis)
+        if (lost == 0) return settled
+
+        val restored = lost + settled.current
+        return settled.copy(
+            current = restored,
+            highest = maxOf(settled.highest, restored),
+            frozenDays = settled.frozenDays + settled.lostStreakDayMillis,
+            lostStreak = 0,
+            lostStreakDayMillis = 0
         )
     }
 
@@ -81,12 +123,11 @@ data class DailyStreak(
         val settled = settledAt(nowMillis)
         if (settled.hasPracticedOn(nowMillis)) return settled
 
-        val extended = (settled.current + 1).coerceAtMost(MAX_LEVEL)
+        val extended = settled.current + 1
         return settled.copy(
             current = extended,
             highest = maxOf(settled.highest, extended),
             lastPracticeMillis = nowMillis,
-            lastSettledDayMillis = startOfDayMillis(epochDay(nowMillis)),
             practiceDays = settled.practiceDays + startOfDayMillis(epochDay(nowMillis))
         )
     }
@@ -106,17 +147,34 @@ data class DailyStreak(
     }
 
     /**
-     * Finds the newest day already represented by activity, a freeze, or a previous settlement.
+     * Tells whether the lost streak can still be bought back on [today].
      *
-     * @return the latest accounted epoch day, or null when no streak history exists
+     * @param today the current epoch day
+     * @return true while [today] is no later than the day after the missed one
      */
-    private fun lastAccountedDay(): Long? =
-        (practiceDays + frozenDays + listOfNotNull(lastSettledDayMillis.takeIf { it > 0L }))
-            .maxOfOrNull(::epochDay)
+    private fun isRecoverableOn(today: Long): Boolean =
+        lostStreak > 0 && lostStreakDayMillis > 0 &&
+            today <= epochDay(lostStreakDayMillis) + RECOVERY_WINDOW_DAYS
+
+    /**
+     * Forgets a lost streak once it can no longer be recovered.
+     *
+     * @param today the current epoch day
+     * @return this streak, or a copy without the lost-streak fields
+     */
+    private fun withoutExpiredLoss(today: Long): DailyStreak =
+        if (isRecoverableOn(today) || (lostStreak == 0 && lostStreakDayMillis == 0L)) {
+            this
+        } else {
+            copy(lostStreak = 0, lostStreakDayMillis = 0)
+        }
 
     companion object {
-        /** Number of daily sessions required to reach full speed on the streak gauge. */
-        const val MAX_LEVEL = 7
+        /** Days after the missed one during which a lost streak can be recovered. */
+        const val RECOVERY_WINDOW_DAYS = 1
+
+        /** Coins a streak recovery costs: well above two freezes, so freezes keep their point. */
+        const val RECOVERY_COST_COINS = 300
 
         /** Days of study and freeze history kept: enough for a month view. */
         const val HISTORY_DAYS = 35
@@ -134,14 +192,14 @@ data class DailyStreak(
          * @return the profile's streak fields
          */
         fun of(user: User): DailyStreak = DailyStreak(
-            current = user.currentStreak.coerceIn(0, MAX_LEVEL),
-            highest = user.highestStreak.coerceIn(0, MAX_LEVEL)
-                .coerceAtLeast(user.currentStreak.coerceIn(0, MAX_LEVEL)),
+            current = user.currentStreak,
+            highest = user.highestStreak,
             freezes = user.streakFreezes,
             lastPracticeMillis = user.lastPracticeTimestamp,
-            lastSettledDayMillis = user.lastStreakSettledDayMillis,
             practiceDays = user.practiceDays,
-            frozenDays = user.frozenDays
+            frozenDays = user.frozenDays,
+            lostStreak = user.lostStreak,
+            lostStreakDayMillis = user.lostStreakDayMillis
         )
 
         /**
