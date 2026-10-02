@@ -5,9 +5,11 @@ import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.ui.screens.exam.ExamEvent
@@ -48,6 +50,7 @@ class ResultMilestonesViewModelTest {
             incrementStreakUseCase = IncrementStreakUseCase(userRepository),
             incrementXpUseCase = IncrementXpUseCase(userRepository),
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
+            completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
             pathRepository = FakePathRepository(),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),
