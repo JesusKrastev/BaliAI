@@ -552,19 +552,52 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
-    // ── EXAM DATE (Statistics) ──────────────────────────────────────────────
+    // ── EXAM DATE (Statistics, Home) ────────────────────────────────────────
 
     /**
-     * Tracks that the user set their exam date from the statistics countdown.
+     * Tracks that the user set their exam date, from the statistics countdown or from Home's plan chip.
      *
      * @param daysUntil calendar days from today to the chosen exam day
-     * @param hadPlanDate true when the card was already counting down to a date (so this is a
-     *   correction), false when it was asking for one
+     * @param hadPlanDate true when there was already a date being counted down to (so this is a
+     *   correction), false when the app was asking for one
+     * @param source where the date was set: "stats" or "home"
      */
-    open fun examDateSet(daysUntil: Int, hadPlanDate: Boolean) = log("exam_date_set") {
+    open fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String = "stats") = log("exam_date_set") {
         putInt("days_until", daysUntil)
         putBoolean("had_plan_date", hadPlanDate)
+        putString("source", source)
     }
+
+    // ── PLAN CHIP (Home) ────────────────────────────────────────────────────
+
+    /**
+     * Tracks a tap on the plan chip at the top of Home, which opens the plan sheet.
+     *
+     * @param stage what the chip showed: a lower-case [com.jesuskrastev.bali.ui.screens.stats.PlanUrgency]
+     *   name such as "final_week", or "date_passed" when the saved date is behind
+     * @param daysLeft days until the date, or null when there is no date ahead
+     * @param todayDone whether today already had a study session
+     */
+    open fun homePlanChipClicked(stage: String, daysLeft: Int?, todayDone: Boolean) =
+        log("home_plan_chip_clicked") {
+            putString("stage", stage)
+            daysLeft?.let { putInt("days_left", it) }
+            putBoolean("today_done", todayDone)
+        }
+
+    /**
+     * Tracks a button pressed on Home's plan sheet.
+     *
+     * @param action "start_session", "see_plan", "set_date" or "change_date"
+     * @param stage what the chip showed, as in [homePlanChipClicked]
+     * @param daysLeft days until the date, or null when there is no date ahead
+     */
+    open fun homePlanActionClicked(action: String, stage: String, daysLeft: Int?) =
+        log("home_plan_action_clicked") {
+            putString("action", action)
+            putString("stage", stage)
+            daysLeft?.let { putInt("days_left", it) }
+        }
 
     /**
      * Tracks that the user opened the statistics screen and what it told them, so the verdict can

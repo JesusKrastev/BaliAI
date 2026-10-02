@@ -3,10 +3,13 @@ package com.jesuskrastev.bali.ui.screens.onboarding
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
+import com.jesuskrastev.bali.domain.repository.NotificationsRepository
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
@@ -281,6 +284,134 @@ class OnboardingViewModelTest {
         assertThat(fakeAnalyticsTracker.notificationsAnswers).hasSize(1)
     }
 
+    @Test
+    fun `there is no way back from the first screen`() = runTest {
+        assertThat(viewModel.uiState.value.canGoBack).isFalse()
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Motivation)
+    }
+
+    @Test
+    fun `going back returns to the previous question and keeps its answer`() = runTest {
+        val motivation = OnboardingConfig.motivations.first()
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.TheoryBlocker)
+        assertThat(viewModel.uiState.value.canGoBack).isTrue()
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+
+        val state = viewModel.uiState.value
+        assertThat(state.currentStep).isEqualTo(OnboardingStep.Motivation)
+        assertThat(state.data.motivation).isEqualTo(motivation)
+        assertThat(state.canGoBack).isFalse()
+        assertThat(state.progress).isEqualTo(0f)
+        assertThat(state.mascotMessage)
+            .isEqualTo(OnboardingReducer().updateMascotMessage(OnboardingStep.Motivation, state.data))
+    }
+
+    @Test
+    fun `answering again after going back replaces the earlier answer`() = runTest {
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.last()))
+
+        assertThat(viewModel.uiState.value.data.motivation).isEqualTo(OnboardingConfig.motivations.last())
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.TheoryBlocker)
+    }
+
+    @Test
+    fun `the screens slide backwards only while going back`() = runTest {
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
+        assertThat(viewModel.uiState.value.isMovingBack).isFalse()
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        assertThat(viewModel.uiState.value.isMovingBack).isTrue()
+
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
+        assertThat(viewModel.uiState.value.isMovingBack).isFalse()
+    }
+
+    @Test
+    fun `coming back to a screen does not count it twice in the funnel`() = runTest {
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.last()))
+
+        assertThat(fakeAnalyticsTracker.onboardingSteps)
+            .containsExactly("o01_motivation", "o02_reasons")
+            .inOrder()
+    }
+
+    @Test
+    fun `going back from the plan reveal skips the plan being built`() = runTest {
+        advanceToSocialProof()
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.PlanReveal)
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.SocialProof)
+
+        // Moving on builds the plan again instead of jumping straight to the reveal.
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Processing)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.PlanReveal)
+    }
+
+    @Test
+    fun `going back is ignored while the plan is being built`() = runTest {
+        advanceToSocialProof()
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Processing)
+        assertThat(viewModel.uiState.value.canGoBack).isFalse()
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Processing)
+
+        // The plan still finishes and carries on to the reveal.
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.PlanReveal)
+    }
+
+    @Test
+    fun `the reminder offer can be answered again after coming back to it`() = runTest {
+        advanceToNotifications()
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Notifications)
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
+
+        assertThat(fakeNotificationsRepository.permissionRequests).isEqualTo(1)
+        assertThat(viewModel.uiState.value.data.notifications).isEqualTo(NotificationsAnswer.GRANTED)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+    }
+
+    @Test
+    fun `going back is ignored while the permission dialog is open`() = runTest {
+        val dialog = CompletableDeferred<Boolean>()
+        val dialogOpen = object : NotificationsRepository by FakeNotificationsRepository() {
+            override suspend fun requestPermission(): Boolean = dialog.await()
+        }
+        viewModel = OnboardingViewModel(fakeUserRepository, fakeAnalyticsTracker, dialogOpen)
+        advanceToNotifications()
+
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
+        assertThat(viewModel.uiState.value.isRequestingNotifications).isTrue()
+
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Notifications)
+
+        // The answer lands on the screen that asked, not on the one the user tried to reach.
+        dialog.complete(true)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+    }
+
     /**
      * Answers everything up to the study rhythm question, leaving the flow on
      * [OnboardingStep.WeeklyStudy].
@@ -305,6 +436,16 @@ class OnboardingViewModelTest {
         viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
         val night = OnboardingConfig.studyTimes.entries.first { it.value == StudySlot.NIGHT }.key
         viewModel.onEvent(OnboardingEvent.SelectStudyTime(night))
+    }
+
+    /**
+     * Answers everything up to the last question, leaving the flow on
+     * [OnboardingStep.SocialProof], one tap away from the plan being built.
+     */
+    private fun advanceToSocialProof() {
+        advanceToNotifications()
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
+        viewModel.onEvent(OnboardingEvent.SelectLearningPreference(OnboardingConfig.learningPreferences.first()))
     }
 
     /** Answers the whole diagnosis block, leaving the flow on [OnboardingStep.FutureImpact]. */

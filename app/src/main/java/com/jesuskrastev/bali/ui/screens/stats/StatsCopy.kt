@@ -126,20 +126,15 @@ fun examCountdownCopyOf(plan: PlanSummary, readiness: ReadinessResult, studiedTo
     val days = plan.daysLeft
     val urgency = plan.urgency()
     val isExam = plan.isExamDate
-    val dateFormat = SimpleDateFormat(if (isExam) "EEEE, d 'de' MMMM" else "d 'de' MMMM", Locale("es", "ES"))
-    val date = dateFormat.format(Date(target)).let {
-        if (isExam) it.replaceFirstChar { first -> first.uppercase() } else "Carnet antes del $it"
+    val date = if (isExam) {
+        planDayText(target, withWeekday = true).replaceFirstChar { it.uppercase() }
+    } else {
+        planPromiseText(target)
     }
-    val subject = if (isExam) "tu examen" else "tu fecha meta"
+    val subject = planSubjectOf(isExam)
 
     return CountdownCopy(
-        stage = when (urgency) {
-            PlanUrgency.NO_DATE, PlanUrgency.ON_TRACK -> "CUENTA ATRÁS"
-            PlanUrgency.MONTH -> "ÚLTIMO MES"
-            PlanUrgency.TWO_WEEKS -> "ÚLTIMAS 2 SEMANAS"
-            PlanUrgency.FINAL_WEEK, PlanUrgency.TOMORROW -> "RECTA FINAL"
-            PlanUrgency.TODAY -> "HA LLEGADO EL DÍA"
-        },
+        stage = stageLabelOf(urgency),
         number = when (urgency) {
             PlanUrgency.TODAY -> "HOY"
             PlanUrgency.TOMORROW -> "MAÑANA"
@@ -166,6 +161,50 @@ fun examCountdownCopyOf(plan: PlanSummary, readiness: ReadinessResult, studiedTo
         }
     )
 }
+
+/**
+ * Names the stretch a countdown is in. Home's plan chip and the statistics card both use it, so
+ * the two screens never call the same day by different names.
+ *
+ * @param urgency how close the date is
+ * @return the label in capitals, e.g. "RECTA FINAL"
+ */
+internal fun stageLabelOf(urgency: PlanUrgency): String = when (urgency) {
+    PlanUrgency.NO_DATE, PlanUrgency.ON_TRACK -> "CUENTA ATRÁS"
+    PlanUrgency.MONTH -> "ÚLTIMO MES"
+    PlanUrgency.TWO_WEEKS -> "ÚLTIMAS 2 SEMANAS"
+    PlanUrgency.FINAL_WEEK, PlanUrgency.TOMORROW -> "RECTA FINAL"
+    PlanUrgency.TODAY -> "HA LLEGADO EL DÍA"
+}
+
+/**
+ * Writes a plan's day in Spanish, in lower case.
+ *
+ * @param millis any instant on the day
+ * @param withWeekday whether to start with the day of the week
+ * @return e.g. "sábado, 14 de noviembre" or "14 de noviembre"
+ */
+internal fun planDayText(millis: Long, withWeekday: Boolean): String =
+    SimpleDateFormat(if (withWeekday) "EEEE, d 'de' MMMM" else "d 'de' MMMM", SPANISH).format(Date(millis))
+
+/**
+ * Words the date the onboarding plan promised, as the onboarding itself said it.
+ *
+ * @param millis the plan's date
+ * @return e.g. "Carnet antes del 14 de noviembre"
+ */
+internal fun planPromiseText(millis: Long): String = "Carnet antes del ${planDayText(millis, withWeekday = false)}"
+
+/**
+ * Names what a plan's date is, for sentences such as "faltan 5 días para tu examen".
+ *
+ * @param isExamDate whether the date is the student's own exam date
+ * @return "tu examen" or "tu fecha meta"
+ */
+internal fun planSubjectOf(isExamDate: Boolean): String = if (isExamDate) "tu examen" else "tu fecha meta"
+
+/** Locale every date on the plan is written in. */
+private val SPANISH = Locale("es", "ES")
 
 /**
  * Says how many study sessions are still possible before the date, counting today until it is done.

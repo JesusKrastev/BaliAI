@@ -40,9 +40,11 @@ class StatsViewModelTest {
     private class RecordingTracker : AnalyticsTracker(mock(), mock(), mock()) {
         val views = mutableListOf<Triple<String, Int, Int?>>()
         val examDates = mutableListOf<Pair<Int, Boolean>>()
+        val examDateSources = mutableListOf<String>()
 
-        override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean) {
+        override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String) {
             examDates += daysUntil to hadPlanDate
+            examDateSources += source
         }
 
         override fun readinessViewed(level: String, mocksTaken: Int, passPercent: Int?) {
@@ -153,6 +155,7 @@ class StatsViewModelTest {
         val plan = viewModel.uiState.first { it.plan.isExamDate }.plan
         assertThat(plan.daysLeft).isEqualTo(10)
         assertThat(tracker.examDates).containsExactly(10 to false)
+        assertThat(tracker.examDateSources).containsExactly("stats")
     }
 
     @Test

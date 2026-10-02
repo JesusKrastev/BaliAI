@@ -1,15 +1,19 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +28,9 @@ import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
  * decline — including of the paywall's one-time win-back offer — finishes the hosting activity
  * instead of returning to an earlier onboarding step, since there is no free-content step to
  * send the user back to.
+ *
+ * Before the paywall, the back arrow and the system back gesture step back one screen and keep
+ * the answers. On the first screen the gesture closes the app as usual.
  *
  * @param sharedTransitionScope scope used by the mascot transition
  * @param animatedVisibilityScope visibility scope of the onboarding destination
@@ -64,6 +71,13 @@ fun OnboardingScreen(
         return
     }
 
+    // The system back gesture does what the arrow does. While the plan is being built it is
+    // swallowed instead: letting it through would close the app and lose every answer.
+    BackHandler(enabled = uiState.canGoBack || uiState.currentStep == OnboardingStep.Processing) {
+        viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+    }
+    val focusManager = LocalFocusManager.current
+
     // AppNavigation's own Scaffold already reserves the status bar (top) and the
     // navigation bar (bottom) for this whole screen via NavHost's content padding, so this
     // inner Scaffold must not reserve system bar insets a second time here — that previously
@@ -76,7 +90,13 @@ fun OnboardingScreen(
         topBar = {
             OnboardingTopBar(
                 progress = uiState.progress,
-                visible = uiState.currentStep != OnboardingStep.Processing
+                visible = uiState.currentStep != OnboardingStep.Processing,
+                canGoBack = uiState.canGoBack,
+                onBack = {
+                    // Puts the name screen's keyboard away before the screen slides out.
+                    focusManager.clearFocus()
+                    viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
+                }
             )
         },
         bottomBar = { OnboardingBottomBar(uiState, viewModel) }
@@ -92,26 +112,41 @@ fun OnboardingScreen(
 }
 
 /**
- * Top progress bar of the flow.
+ * Top of the flow: the back arrow and the progress bar.
+ *
+ * The arrow's slot is kept even on the first screen, where there is nothing to go back to, so
+ * the bar does not change width when the arrow appears.
  *
  * @param progress completion ratio between 0f and 1f
  * @param visible whether the bar should be rendered at all
+ * @param canGoBack whether the arrow is shown
+ * @param onBack invoked when the arrow is tapped
  */
 @Composable
-private fun OnboardingTopBar(progress: Float, visible: Boolean) {
+private fun OnboardingTopBar(
+    progress: Float,
+    visible: Boolean,
+    canGoBack: Boolean,
+    onBack: () -> Unit
+) {
     if (!visible) return
-    Column(
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            // Less than the screens' 24 dp margin: the button and the glyph carry their own
+            // padding, which brings the visible arrow back onto that margin.
+            .padding(start = 8.dp, end = 24.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.weight(1f)) {
-                SmoothProgressBar(progress = progress)
+        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            if (canGoBack) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver")
+                }
             }
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            SmoothProgressBar(progress = progress)
         }
     }
 }
@@ -185,16 +220,25 @@ private fun OnboardingBody(
     }
 }
 
+/**
+ * The screen of the current step. It slides in from the right when the user moves on and from
+ * the left when they go back.
+ *
+ * @param state current onboarding state
+ * @param viewModel receiver of the events the step raises
+ */
 @Composable
 private fun OnboardingStepContent(
     state: OnboardingUiState,
     viewModel: OnboardingViewModel
 ) {
+    // 1 brings the new screen in from the right (moving on), -1 from the left (going back).
+    val direction = if (state.isMovingBack) -1 else 1
     AnimatedContent(
         targetState = state.currentStep,
         transitionSpec = {
-            slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300)) + fadeIn() togetherWith
-            slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300)) + fadeOut()
+            slideInHorizontally(initialOffsetX = { it * direction }, animationSpec = tween(300)) + fadeIn() togetherWith
+            slideOutHorizontally(targetOffsetX = { -it * direction }, animationSpec = tween(300)) + fadeOut()
         },
         label = "onboarding_step",
         modifier = Modifier

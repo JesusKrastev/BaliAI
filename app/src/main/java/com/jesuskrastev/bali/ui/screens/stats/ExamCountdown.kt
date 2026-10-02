@@ -277,19 +277,21 @@ private fun NoDateContent(onDateClick: () -> Unit) {
 /**
  * Small text button that opens the date picker, so a date the student already has can be corrected.
  * It says only "Cambiar" so it fits beside the longest stretch label; the date is right below it.
+ * Home's plan sheet uses it too.
  *
  * @param onClick opens the exam date picker
+ * @param contentColor colour of the icon and the label; the default suits the countdown's dark card
  */
 @Composable
-private fun ChangeDateButton(onClick: () -> Unit) {
+internal fun ChangeDateButton(onClick: () -> Unit, contentColor: Color = Color.White.copy(alpha = 0.7f)) {
     TextButton(
         onClick = onClick,
-        // Shifted by its own padding so the label lines up with the card's right edge.
+        // Shifted by its own padding so the label lines up with the container's right edge.
         modifier = Modifier
             .offset(x = 10.dp)
             .semantics { contentDescription = "Cambiar la fecha del examen" },
         contentPadding = PaddingValues(horizontal = 10.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = Color.White.copy(alpha = 0.7f))
+        colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
     ) {
         Icon(Icons.Rounded.EditCalendar, contentDescription = null, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))

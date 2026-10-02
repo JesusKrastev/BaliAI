@@ -323,7 +323,10 @@ fun AppNavigation(
                         // The first-steps bar's game task goes straight into a game; back returns to Home.
                         navController.navigate(GamePlayRoute(GameType.entries.first().id))
                     },
-                    onExamClick = openExam
+                    onExamClick = openExam,
+                    onSeePlanClick = {
+                        navController.navigateTopLevel(StatsRoute)
+                    }
                 )
             }
 

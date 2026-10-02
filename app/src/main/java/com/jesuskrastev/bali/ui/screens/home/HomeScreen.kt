@@ -76,34 +76,41 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Renders the home dashboard: streak/coins status, the scrollable learning-path graph and, while
- * the account has it, the day-0 "Tus primeros pasos" bar pinned above the app's bottom bar. The
- * AI-tutor chat opens from the app's bottom bar. The account menu that used to open from here as a
- * side drawer (profile, legal links, sign out) now lives in the Settings tab. The countdown to the
- * exam lives in the statistics screen, not here.
+ * Renders the home dashboard: the plan chip and the streak/coins status at the top, the
+ * scrollable learning-path graph and, while the account has it, the day-0 "Tus primeros pasos" bar
+ * pinned above the app's bottom bar. The AI-tutor chat opens from the app's bottom bar. The account
+ * menu that used to open from here as a side drawer (profile, legal links, sign out) now lives in
+ * the Settings tab. The full countdown to the exam lives in the statistics screen; Home only shows
+ * it as the small [HomePlanChip], which never pushes or covers the path.
  *
  * @param viewModel supplies [HomeUiState] and drives path generation
+ * @param planViewModel supplies the plan chip's state
  * @param onNodeTestClick invoked with a path node's title, description, id, and node-type name,
- *   when it is tapped; exam nodes open the mock exam directly, since it costs no coins
+ *   when it is tapped or opened from the plan sheet's study button; exam nodes open the mock exam
+ *   directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the Chat tab (the first-steps "ask Bali" task)
  * @param onPlayGameClick starts a mini-game straight away (the first-steps game task)
  * @param onExamClick starts the first simulacro (the first-steps closing action)
+ * @param onSeePlanClick opens the statistics tab, from the plan sheet
  * @param pathUnlockViewModel tells the path which nodes opened since Home last showed it
  */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
+    planViewModel: HomePlanViewModel = hiltViewModel(),
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
     onPlayGameClick: () -> Unit = {},
     onExamClick: () -> Unit = {},
+    onSeePlanClick: () -> Unit = {},
     pathUnlockViewModel: PathUnlockViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val nextNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
     val unlockState by pathUnlockViewModel.uiState.collectAsStateWithLifecycle()
     var showDismissFirstSteps by remember { mutableStateOf(false) }
 
@@ -130,7 +137,16 @@ fun HomeScreen(
                 practicedToday = uiState.practicedToday,
                 coinsCount = uiState.coinsCount,
                 onCoinsClick = onShopClick,
-                onStreakClick = onStreakClick
+                onStreakClick = onStreakClick,
+                leading = {
+                    HomePlanChip(
+                        viewModel = planViewModel,
+                        onStartSession = nextNode?.let { node ->
+                            { onNodeTestClick(node.title, node.description, node.id, node.nodeType.name) }
+                        },
+                        onSeePlan = onSeePlanClick
+                    )
+                }
             )
         },
         // Pinned right above the app's bottom bar so the day-0 tasks stay in sight while
@@ -186,7 +202,8 @@ fun HomeScreen(
 }
 
 /**
- * Shows the streak and coins pills anchored to the top of Home.
+ * Shows the streak and coins pills anchored to the top end of Home, with [leading] content (the
+ * plan chip) at the start. [leading] takes only the width the pills leave free.
  *
  * @param modifier layout modifier applied to the row
  * @param streak current daily streak count
@@ -194,6 +211,7 @@ fun HomeScreen(
  * @param coinsCount current coin balance
  * @param onCoinsClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
+ * @param leading content placed at the start of the row
  */
 @Composable
 fun UserStatusRow(
@@ -202,15 +220,18 @@ fun UserStatusRow(
     practicedToday: Boolean = true,
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
-    onStreakClick: () -> Unit = {}
+    onStreakClick: () -> Unit = {},
+    leading: @Composable () -> Unit = {}
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Box(modifier = Modifier.weight(1f)) { leading() }
+
         StatusPill(onClick = onStreakClick, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp), spacing = 4.dp) {
             Image(
                 painter = painterResource(id = R.drawable.streak_icon),
