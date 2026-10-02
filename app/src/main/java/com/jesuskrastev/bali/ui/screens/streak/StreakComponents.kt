@@ -93,7 +93,7 @@ internal fun StreakCard(
 @Composable
 internal fun StreakFlame(lit: Boolean, size: Dp, modifier: Modifier = Modifier) {
     Image(
-        painter = painterResource(id = R.drawable.streak),
+        painter = painterResource(id = R.drawable.streak_icon),
         contentDescription = null,
         colorFilter = if (lit) null else Greyscale,
         alpha = if (lit) 1f else 0.45f,
