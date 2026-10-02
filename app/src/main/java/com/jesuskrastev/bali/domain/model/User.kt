@@ -30,6 +30,8 @@ package com.jesuskrastev.bali.domain.model
  *   [DailyStreak.HISTORY_DAYS] only.
  * @property frozenDays Local midnights of the days a streak freeze covered, the last
  *   [DailyStreak.HISTORY_DAYS] only.
+ * @property firstSteps Progress through the day-0 "Tus primeros pasos" bar. Account-scoped and
+ *   Firestore-only: the local (Room) user never carries it, because Home is only reachable signed in.
  */
 data class User(
     val id: String = "",
@@ -49,5 +51,6 @@ data class User(
     val lostStreak: Int = 0,
     val lostStreakDayMillis: Long = 0,
     val practiceDays: List<Long> = emptyList(),
-    val frozenDays: List<Long> = emptyList()
+    val frozenDays: List<Long> = emptyList(),
+    val firstSteps: FirstStepsProgress = FirstStepsProgress()
 )

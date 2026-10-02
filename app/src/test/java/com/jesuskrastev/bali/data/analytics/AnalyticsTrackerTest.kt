@@ -3,6 +3,8 @@ package com.jesuskrastev.bali.data.analytics
 import android.os.Bundle
 import com.google.common.truth.Truth.assertThat
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.jesuskrastev.bali.domain.model.FirstStepReward
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.posthog.PostHogInterface
 import org.json.JSONObject
@@ -72,6 +74,26 @@ class AnalyticsTrackerTest {
             verify(posthog).reset()
             verify(posthog).register(AnalyticsTracker.KEY_ENVIRONMENT, environment)
         }
+    }
+
+    @Test
+    fun `a first-step reward is tracked with its task and coins`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.firstStepRewarded(FirstStepReward(FirstStepTask.ASK_BALI, coins = 20, completedAll = false))
+
+        verify(firebase).logEvent(eq("first_steps_task_completed"), bundle.capture())
+        assertThat(bundle.firstValue.getString("task")).isEqualTo("ask_bali")
+        assertThat(bundle.firstValue.getInt("coins")).isEqualTo(20)
+        verify(firebase, never()).logEvent(eq("first_steps_completed"), any())
+    }
+
+    @Test
+    fun `the last first step also sends the completion event`() {
+        tracker.firstStepRewarded(FirstStepReward(FirstStepTask.PLAY_GAME, coins = 50, completedAll = true))
+
+        verify(firebase).logEvent(eq("first_steps_task_completed"), any())
+        verify(firebase).logEvent(eq("first_steps_completed"), any())
     }
 
     @Test

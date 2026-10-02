@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.home
 
+import com.jesuskrastev.bali.domain.model.FirstStepReward
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.LessonNode
 
 enum class StreakStatus {
@@ -43,5 +45,11 @@ data class HomeUiState(
     val lastPracticeTimestamp: Long = 0L,
     val pathNodes: List<LessonNode> = emptyList(),
     val isPathLoading: Boolean = false,
-    val pathError: String? = null
+    val pathError: String? = null,
+    /** Progress to show in the "Tus primeros pasos" bar, or null when the bar must stay hidden. */
+    val firstSteps: FirstStepsProgress? = null,
+    /** Lesson the "Haz tu primer test" step opens (see [firstStepTestNodeOf]), or null when there is none. */
+    val firstStepTestNode: LessonNode? = null,
+    /** Coins just earned on another screen that Home has yet to celebrate, if any. */
+    val firstStepReward: FirstStepReward? = null
 )

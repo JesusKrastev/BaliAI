@@ -2,6 +2,10 @@ package com.jesuskrastev.bali.ui.screens.auth
 
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
+import com.jesuskrastev.bali.domain.model.FirstStepReward
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
@@ -12,13 +16,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 
-class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepository {
+class FakeUserRepository(
+    hasCompletedOnboarding: Boolean = true,
+    private val userExists: Boolean = true
+) : UserRepository {
     private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
     private val _hasCompletedOnboarding = MutableStateFlow(hasCompletedOnboarding)
 
+    /** Every profile handed to [uploadAll], i.e. every brand-new account created. */
+    val uploadedUsers = mutableListOf<User>()
+
     override fun get(): Flow<User?> = _user
 
-    override fun exists(userId: String?): Flow<Boolean> = flowOf(true)
+    override fun exists(userId: String?): Flow<Boolean> = flowOf(userExists)
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = _hasCompletedOnboarding
 
@@ -69,6 +79,27 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
     }
 
 
+    /** Mirrors the Firestore transaction: pays once, only while enrolled and not dismissed. */
+    override suspend fun completeFirstStep(task: FirstStepTask): Int {
+        val user = _user.value ?: return 0
+        val progress = user.firstSteps
+        if (!progress.isActive || progress.isDone(task)) return 0
+
+        val completed = progress.completed + task
+        val paid = task.coins + if (completed.containsAll(FirstStepTask.entries)) FIRST_STEPS_BONUS_COINS else 0
+        _user.value = user.copy(coins = user.coins + paid, firstSteps = progress.copy(completed = completed))
+        return paid
+    }
+
+    override suspend fun dismissFirstSteps() {
+        _user.update { it?.copy(firstSteps = it.firstSteps.copy(dismissed = true)) }
+    }
+
+    /** Test-only helper that puts the account in the first-steps window with [completed] already done. */
+    fun enrollInFirstStepsForTest(completed: Set<FirstStepTask> = emptySet()) {
+        _user.update { it?.copy(firstSteps = FirstStepsProgress.startingAt(1_000L).copy(completed = completed)) }
+    }
+
     override suspend fun updateExamDate(examDateMillis: Long) {
         _user.update { it?.copy(examDateMillis = examDateMillis) }
     }
@@ -79,6 +110,7 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
     }
 
     override suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit> {
+        uploadedUsers.add(user)
         return Result.success(Unit)
     }
 
@@ -91,9 +123,9 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
     override suspend fun getSchemaVersion(): Int = 1
 }
 
-class FakeTestResultRepository : TestResultRepository {
+class FakeTestResultRepository(private val results: List<TestResult> = emptyList()) : TestResultRepository {
     override fun getRecent(): Flow<List<TestResult>> = flowOf(emptyList())
-    override fun get(): Flow<List<TestResult>> = flowOf(emptyList())
+    override fun get(): Flow<List<TestResult>> = flowOf(results)
     override suspend fun insert(result: TestResult): String = "test_id"
     override fun count(): Flow<Int> = flowOf(0)
     override fun getAverageScore(): Flow<Double?> = flowOf(0.0)
@@ -146,6 +178,11 @@ class FakeAnalyticsTracker(
     val gameStartedEvents = mutableListOf<String>()
     val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
     val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
+    val firstStepsShownEvents = mutableListOf<Int>()
+    val firstStepRewards = mutableListOf<FirstStepReward>()
+    val firstStepsDismissedEvents = mutableListOf<Int>()
+    var firstStepsExamClicks = 0
+        private set
     val notificationsAnswers = mutableListOf<Pair<String, String?>>()
 
     override fun notificationsPermissionAnswered(result: String, studySlot: String?) {
@@ -170,6 +207,10 @@ class FakeAnalyticsTracker(
         gameCompletedEvents.add(GameCompletedEvent(gameId, score, totalRounds, durationSeconds))
     }
     override fun gameAbandoned(gameId: String, roundIndex: Int) { gameAbandonedEvents.add(gameId to roundIndex) }
+    override fun firstStepsShown(tasksDone: Int) { firstStepsShownEvents.add(tasksDone) }
+    override fun firstStepRewarded(reward: FirstStepReward) { firstStepRewards.add(reward) }
+    override fun firstStepsExamClicked() { firstStepsExamClicks++ }
+    override fun firstStepsDismissed(tasksDone: Int) { firstStepsDismissedEvents.add(tasksDone) }
 
     fun clear() {
         identifiedUsers.clear()
@@ -179,6 +220,10 @@ class FakeAnalyticsTracker(
         gameStartedEvents.clear()
         gameCompletedEvents.clear()
         gameAbandonedEvents.clear()
+        firstStepsShownEvents.clear()
+        firstStepRewards.clear()
+        firstStepsDismissedEvents.clear()
+        firstStepsExamClicks = 0
         notificationsAnswers.clear()
     }
 }

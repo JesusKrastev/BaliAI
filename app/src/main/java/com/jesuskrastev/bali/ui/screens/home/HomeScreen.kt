@@ -64,6 +64,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
@@ -75,8 +76,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Renders the home dashboard: the plan chip and the streak/coins status at the top, and the
- * scrollable learning-path graph. The AI-tutor chat opens from the app's bottom bar. The account
+ * Renders the home dashboard: the plan chip and the streak/coins status at the top, the
+ * scrollable learning-path graph and, while the account has it, the day-0 "Tus primeros pasos" bar
+ * pinned above the app's bottom bar. The AI-tutor chat opens from the app's bottom bar. The account
  * menu that used to open from here as a side drawer (profile, legal links, sign out) now lives in
  * the Settings tab. The full countdown to the exam lives in the statistics screen; Home only shows
  * it as the small [HomePlanChip], which never pushes or covers the path.
@@ -88,6 +90,9 @@ import kotlin.math.sin
  *   directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
+ * @param onChatClick opens the Chat tab (the first-steps "ask Bali" task)
+ * @param onPlayGameClick starts a mini-game straight away (the first-steps game task)
+ * @param onExamClick starts the first simulacro (the first-steps closing action)
  * @param onSeePlanClick opens the statistics tab, from the plan sheet
  * @param pathUnlockViewModel tells the path which nodes opened since Home last showed it
  */
@@ -98,12 +103,27 @@ fun HomeScreen(
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
+    onChatClick: () -> Unit = {},
+    onPlayGameClick: () -> Unit = {},
+    onExamClick: () -> Unit = {},
     onSeePlanClick: () -> Unit = {},
     pathUnlockViewModel: PathUnlockViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val nextNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
     val unlockState by pathUnlockViewModel.uiState.collectAsStateWithLifecycle()
+    var showDismissFirstSteps by remember { mutableStateOf(false) }
+
+    uiState.firstSteps?.takeIf { showDismissFirstSteps }?.let { progress ->
+        DismissFirstStepsDialog(
+            pendingCoins = progress.pendingCoins,
+            onConfirm = {
+                showDismissFirstSteps = false
+                viewModel.dismissFirstSteps()
+            },
+            onCancel = { showDismissFirstSteps = false }
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -127,6 +147,37 @@ fun HomeScreen(
                         onSeePlan = onSeePlanClick
                     )
                 }
+            )
+        },
+        // Pinned right above the app's bottom bar so the day-0 tasks stay in sight while
+        // scrolling; the Scaffold pads the path by its height so the end of the path stays
+        // reachable above it.
+        bottomBar = {
+            // Always a lesson with written questions, never a Gemini test: see firstStepTestNodeOf.
+            val firstTestNode = uiState.firstStepTestNode
+            FirstStepsBar(
+                progress = uiState.firstSteps,
+                reward = uiState.firstStepReward,
+                onTaskClick = { task ->
+                    when (task) {
+                        FirstStepTask.FIRST_TEST -> firstTestNode?.let { node ->
+                            onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                        }
+                        FirstStepTask.ASK_BALI -> onChatClick()
+                        FirstStepTask.PLAY_GAME -> onPlayGameClick()
+                    }
+                },
+                onExamClick = {
+                    viewModel.onFirstStepsExamClicked()
+                    onExamClick()
+                },
+                onDismissClick = {
+                    // Nothing is lost once everything is paid, so only ask when it costs coins.
+                    if (uiState.firstSteps?.isComplete == true) viewModel.dismissFirstSteps() else showDismissFirstSteps = true
+                },
+                onRewardShown = viewModel::dismissFirstStepReward,
+                onShown = viewModel::onFirstStepsShown,
+                isTaskEnabled = { task -> task != FirstStepTask.FIRST_TEST || firstTestNode != null }
             )
         }
     ) { paddingValues ->

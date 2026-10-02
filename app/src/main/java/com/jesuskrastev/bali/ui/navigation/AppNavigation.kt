@@ -296,13 +296,15 @@ fun AppNavigation(
 
             composable<HomeRoute> {
                 val viewModel: HomeViewModel = hiltViewModel()
+                // Mock exams are free for subscribers (idea 015): no coin check, from a path
+                // node or from the first-steps bar alike.
+                val openExam = { navController.navigate(ExamRoute) }
 
                 HomeScreen(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            // Mock exams are free for subscribers (idea 015): no coin check.
-                            navController.navigate(ExamRoute)
+                            openExam()
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }
@@ -313,6 +315,15 @@ fun AppNavigation(
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
                     },
+                    // The first-steps bar's chat task opens the Chat tab, as the bottom bar does (D-028).
+                    onChatClick = {
+                        navController.navigateTopLevel(ChatRoute)
+                    },
+                    onPlayGameClick = {
+                        // The first-steps bar's game task goes straight into a game; back returns to Home.
+                        navController.navigate(GamePlayRoute(GameType.entries.first().id))
+                    },
+                    onExamClick = openExam,
                     onSeePlanClick = {
                         navController.navigateTopLevel(StatsRoute)
                     }

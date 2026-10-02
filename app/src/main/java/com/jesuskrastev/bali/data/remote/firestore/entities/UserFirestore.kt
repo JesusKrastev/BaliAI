@@ -22,5 +22,8 @@ data class UserFirestore(
     val practiceDays: List<Long> = emptyList(),
     val frozenDays: List<Long> = emptyList(),
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),
-    val fcmToken: String = ""
+    val fcmToken: String = "",
+    val firstStepsStartedAt: Long = 0L,
+    val firstStepsDone: List<String> = emptyList(),
+    val firstStepsDismissed: Boolean = false
 )

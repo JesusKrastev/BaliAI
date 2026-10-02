@@ -1,13 +1,17 @@
 package com.jesuskrastev.bali.ui.screens.games
 
 import com.google.common.truth.Truth.assertThat
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
@@ -33,6 +37,8 @@ class GameViewModelTest {
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
+    private val pendingRewards = PendingFirstStepRewards()
+    private val fakeCompleteFirstStepUseCase = CompleteFirstStepUseCase(fakeUserRepository, pendingRewards)
 
     private lateinit var viewModel: GameViewModel
 
@@ -42,6 +48,7 @@ class GameViewModelTest {
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
             incrementStreakUseCase = fakeIncrementStreakUseCase,
+            completeFirstStepUseCase = fakeCompleteFirstStepUseCase,
             analyticsTracker = fakeAnalyticsTracker,
         )
     }
@@ -125,5 +132,44 @@ class GameViewModelTest {
         viewModel.abandonSession()
 
         assertThat(fakeAnalyticsTracker.gameAbandonedEvents).containsExactly("senal" to 1)
+    }
+
+    @Test
+    fun `finishing a session completes the play-a-game step for an enrolled account`() = runTest {
+        fakeUserRepository.enrollInFirstStepsForTest()
+        viewModel.startSession(GameType.SENAL)
+
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+
+        val user = fakeUserRepository.get().first()!!
+        assertThat(user.firstSteps.completed).containsExactly(FirstStepTask.PLAY_GAME)
+        assertThat(pendingRewards.next.first()?.task).isEqualTo(FirstStepTask.PLAY_GAME)
+        assertThat(fakeAnalyticsTracker.firstStepRewards.map { it.task }).containsExactly(FirstStepTask.PLAY_GAME)
+    }
+
+    @Test
+    fun `replaying a game does not pay the play-a-game step twice`() = runTest {
+        fakeUserRepository.enrollInFirstStepsForTest()
+        viewModel.startSession(GameType.SENAL)
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+        val coinsAfterFirstSession = fakeUserRepository.get().first()!!.coins
+
+        viewModel.replay()
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+
+        // The second session still pays its normal coins, but no first-steps reward on top.
+        val secondSessionCoins = fakeUserRepository.get().first()!!.coins - coinsAfterFirstSession
+        assertThat(secondSessionCoins).isAtMost(10)
+        assertThat(fakeAnalyticsTracker.firstStepRewards).hasSize(1)
+    }
+
+    @Test
+    fun `an account that never saw the card earns no first-steps reward from a game`() = runTest {
+        viewModel.startSession(GameType.SENAL)
+
+        repeat(ROUNDS_PER_SESSION) { viewModel.recordRound(won = true) }
+
+        assertThat(fakeUserRepository.get().first()!!.firstSteps.completed).isEmpty()
+        assertThat(fakeAnalyticsTracker.firstStepRewards).isEmpty()
     }
 }

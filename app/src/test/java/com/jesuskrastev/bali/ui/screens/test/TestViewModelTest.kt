@@ -8,13 +8,21 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.type.GenerateContentResponse
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -42,6 +50,8 @@ class TestViewModelTest {
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
+    private val pendingRewards = PendingFirstStepRewards()
+    private val fakeCompleteFirstStepUseCase = CompleteFirstStepUseCase(fakeUserRepository, pendingRewards)
 
     private lateinit var viewModel: TestViewModel
 
@@ -55,6 +65,7 @@ class TestViewModelTest {
             incrementStreakUseCase = fakeIncrementStreakUseCase,
             incrementXpUseCase = fakeIncrementXpUseCase,
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
+            completeFirstStepUseCase = fakeCompleteFirstStepUseCase,
             pathRepository = fakePathRepository,
             analytics = mock<AnalyticsTracker>(),
             soundEffects = fakeSoundEffects,
@@ -96,6 +107,25 @@ class TestViewModelTest {
         viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
         assertThat(viewModel.uiState.value.category).isEqualTo("Conductor")
         collectJob.cancel()
+    }
+
+    @Test
+    fun `finishing a test completes the first-test step for an enrolled account`() = runTest {
+        fakeUserRepository.enrollInFirstStepsForTest()
+        viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
+        val summary = CompletableDeferred<TestSummary>()
+
+        viewModel.onEvent(TestEvent.FinishTest { summary.complete(it) })
+
+        // calculateResult saves on Dispatchers.IO and then resumes on Main. Wait for it for
+        // real (the timeout runs on a real dispatcher, not on runTest's virtual clock): if the
+        // test ended first, that tail would resume after MainDispatcherRule reset Main and leak
+        // an exception into whichever test runs next.
+        withContext(Dispatchers.Default) { withTimeout(10_000) { summary.await() } }
+
+        val user = fakeUserRepository.get().first()!!
+        assertThat(user.firstSteps.completed).containsExactly(FirstStepTask.FIRST_TEST)
+        assertThat(pendingRewards.next.first()?.task).isEqualTo(FirstStepTask.FIRST_TEST)
     }
 
     @Test
