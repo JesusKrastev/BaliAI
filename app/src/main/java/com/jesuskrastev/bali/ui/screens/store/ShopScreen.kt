@@ -98,7 +98,7 @@ fun ShopScreen(
                     )
                     val recoverable = uiState.recoverableStreak > 0
                     ShopItemRow(
-                        imageRes = R.drawable.streak_icon,
+                        imageRes = R.drawable.streak_recovery,
                         title = "Recuperador",
                         infoDescription = "Más información sobre ${shopItemTitle(ShopItem.StreakRecovery)}",
                         subtitle = if (recoverable) {
@@ -183,7 +183,7 @@ fun PurchaseConfirmationContent(
                     }
                     ShopItem.StreakRecovery -> {
                         Image(
-                            painter = painterResource(id = R.drawable.streak_icon),
+                            painter = painterResource(id = R.drawable.streak_recovery),
                             contentDescription = null,
                             modifier = Modifier.size(60.dp)
                         )
@@ -416,7 +416,7 @@ fun ShopItemInfoDialog(item: ShopItem, onDismiss: () -> Unit) {
                 painter = painterResource(
                     id = when (item) {
                         ShopItem.StreakFreezer -> R.drawable.streak_freezer
-                        ShopItem.StreakRecovery -> R.drawable.streak_icon
+                        ShopItem.StreakRecovery -> R.drawable.streak_recovery
                     }
                 ),
                 contentDescription = null,

@@ -55,6 +55,7 @@ class AppBottomBarScreenshotTest {
                     NavHost(navController = navController, startDestination = start) {
                         composable<HomeRoute> {}
                         composable<ChatRoute> {}
+                        composable<StatsRoute> {}
                     }
                     Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                         AppBottomBar(
@@ -62,7 +63,8 @@ class AppBottomBarScreenshotTest {
                             onHomeClick = {},
                             onGamesClick = {},
                             onSettingsClick = {},
-                            onChatClick = {}
+                            onChatClick = {},
+                            onStatsClick = {}
                         )
                     }
                 }
@@ -79,6 +81,12 @@ class AppBottomBarScreenshotTest {
 
     @Test
     fun chatSelected() = capture("chat_light", darkTheme = false, start = ChatRoute)
+
+    @Test
+    fun statsSelected() = capture("stats_light", darkTheme = false, start = StatsRoute)
+
+    @Test
+    fun statsSelectedDark() = capture("stats_dark", darkTheme = true, start = StatsRoute)
 
     @Test
     fun chatSelectedDark() = capture("chat_dark", darkTheme = true, start = ChatRoute)

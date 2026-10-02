@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
@@ -238,6 +239,7 @@ fun AppNavigation(
     val showBottomBar = currentDestination?.let { destination ->
         destination.hasRoute<HomeRoute>() ||
             destination.hasRoute<ChatRoute>() ||
+            destination.hasRoute<StatsRoute>() ||
             destination.hasRoute<GamesRoute>() ||
             destination.hasRoute<SettingsRoute>()
     } == true
@@ -252,6 +254,7 @@ fun AppNavigation(
                         onGamesClick = { navController.navigateTopLevel(GamesRoute) },
                         onSettingsClick = { navController.navigateTopLevel(SettingsRoute) },
                         onChatClick = { navController.navigateTopLevel(ChatRoute) },
+                        onStatsClick = { navController.navigateTopLevel(StatsRoute) },
                     )
                 }
             },
@@ -325,9 +328,6 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
-                    },
-                    onStatsClick = {
-                        navController.navigate(StatsRoute)
                     },
                     onManageSubscriptionClick = {
                         navController.navigate(CustomerCenterRoute)
@@ -528,7 +528,7 @@ fun AppNavigation(
             }
 
             composable<StatsRoute> {
-                StatsScreen(onBackClick = { navController.popBackStack() })
+                StatsScreen()
             }
 
             composable<SuggestionsRoute> {
@@ -552,14 +552,16 @@ fun AppNavigation(
 }
 
 /**
- * Renders the primary app navigation: Home, the AI tutor chat, Games and Settings. The chat is a
- * tab like the others, so the bar stays visible while it is open.
+ * Renders the primary app navigation: Home, the AI tutor chat, the statistics, Games and
+ * Settings. The chat and the statistics are tabs like the others, so the bar stays visible
+ * while they are open.
  *
  * @param currentDestination back stack entry's destination, used to highlight the active tab
  * @param onHomeClick navigates to [HomeRoute]
  * @param onGamesClick navigates to [GamesRoute]
  * @param onSettingsClick navigates to [SettingsRoute]
  * @param onChatClick navigates to [ChatRoute]
+ * @param onStatsClick navigates to [StatsRoute]
  */
 @Composable
 internal fun AppBottomBar(
@@ -568,6 +570,7 @@ internal fun AppBottomBar(
     onGamesClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onChatClick: () -> Unit,
+    onStatsClick: () -> Unit,
 ) {
     // The bar's background is drawn flush to the true bottom edge (behind the system nav bar,
     // matching edge-to-edge), but the tappable row is lifted above it by the real nav bar inset
@@ -597,7 +600,7 @@ internal fun AppBottomBar(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(start = 18.dp, top = 4.dp, end = 18.dp, bottom = 8.dp + navBarInset),
+                .padding(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 8.dp + navBarInset),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -613,6 +616,13 @@ internal fun AppBottomBar(
                 icon = Icons.Rounded.ChatBubble,
                 selected = currentDestination?.hasRoute<ChatRoute>() == true,
                 onClick = onChatClick,
+                modifier = Modifier.weight(1f),
+            )
+            BaliBottomBarItem(
+                label = "Progreso", // "Estadísticas" no cabe en una pestaña de cinco y se parte en dos líneas
+                icon = Icons.Rounded.BarChart,
+                selected = currentDestination?.hasRoute<StatsRoute>() == true,
+                onClick = onStatsClick,
                 modifier = Modifier.weight(1f),
             )
             BaliBottomBarItem(
@@ -699,7 +709,7 @@ private fun BaliBottomBarItem(
                 onClick = onClick,
                 role = Role.Tab,
             )
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top,
     ) {
@@ -731,6 +741,7 @@ private fun BaliBottomBarItem(
             color = labelColor,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+            maxLines = 1,
         )
         Spacer(modifier = Modifier.height(3.dp))
         Box(
