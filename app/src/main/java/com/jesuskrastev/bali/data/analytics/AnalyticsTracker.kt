@@ -580,6 +580,21 @@ open class AnalyticsTracker @Inject constructor(
             putInt("week_sessions", weekSessions)
         }
 
+    /**
+     * Tracks that the user opened the statistics screen and what it told them, so the verdict can
+     * later be compared with the real exam result.
+     *
+     * @param level the [com.jesuskrastev.bali.domain.model.ReadinessLevel] name shown
+     * @param mocksTaken mock exams completed when the screen opened
+     * @param passPercent shown chance of passing from 0 to 100, or null when no percentage was shown
+     */
+    open fun readinessViewed(level: String, mocksTaken: Int, passPercent: Int?) =
+        log("readiness_viewed") {
+            putString("level", level)
+            putInt("mocks_taken", mocksTaken)
+            passPercent?.let { putInt("pass_percent", it) }
+        }
+
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 
     /**
