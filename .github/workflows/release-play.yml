@@ -36,6 +36,27 @@ jobs:
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
 
     steps:
+      # Una build solo llega a Play desde la linea principal. Las dos que rompieron la migracion
+      # de Firestore salieron de aqui lanzadas a mano sobre ramas sin fusionar (E-017).
+      - name: Comprobar rama de origen
+        env:
+          REF: ${{ github.ref }}
+          TRACK: ${{ inputs.track || 'internal' }}
+        run: |
+          case "$REF" in
+            refs/heads/develop|refs/heads/main|refs/heads/release/*|refs/heads/hotfix/*|refs/tags/v*) ;;
+            *) echo "::error::$REF no puede subir a Play: fusiona la rama en develop o abre una release/*."
+               exit 1 ;;
+          esac
+          if [ "$TRACK" = "production" ]; then
+            case "$REF" in
+              refs/heads/main|refs/tags/v*) ;;
+              *) echo "::error::Produccion solo sale de main o de un tag v*, no de $REF."
+                 exit 1 ;;
+            esac
+          fi
+          echo "OK: $REF -> $TRACK"
+
       - uses: actions/checkout@v4
 
       - name: Set up JDK 21
