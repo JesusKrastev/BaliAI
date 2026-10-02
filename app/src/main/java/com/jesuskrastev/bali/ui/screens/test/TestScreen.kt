@@ -6,7 +6,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -17,18 +16,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,19 +37,29 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
+import com.jesuskrastev.bali.ui.theme.BaliFlameColors
+import com.jesuskrastev.bali.ui.theme.BaliPrimaryDark
+import kotlinx.coroutines.launch
+
+/** Peak scale of the run label's pulse when the run reaches [ComboTier.HOT]. */
+private const val COMBO_PULSE_HOT = 1.25f
+
+/** Peak scale of the run label's pulse when the run reaches [ComboTier.ON_FIRE]. */
+private const val COMBO_PULSE_ON_FIRE = 1.4f
 
 /**
  * Title content shared by the quiz top bars (practice, mistakes review, exam): an optional
- * "N SEGUIDAS" streak label above a rounded progress bar, followed by any [footer] content.
+ * "N SEGUIDAS" run label above a rounded progress bar, followed by any [footer] content. The
+ * label grows with the run (see [ComboTier]) and pulses once on the answer that reaches five and
+ * the one that reaches ten.
  *
  * @param currentIndex zero-based index of the question being answered
  * @param totalQuestions number of questions in the session; must be greater than zero
  * @param sessionStreak consecutive correct answers in this session
- * @param isAnswerChecked true once the current answer has been checked; the streak label only
+ * @param isAnswerChecked true once the current answer has been checked; the run label only
  *   shows then, and only from two correct answers in a row
  * @param footer extra content drawn under the progress bar (for example the exam timer)
  */
@@ -60,19 +71,26 @@ fun QuizProgressTitle(
     isAnswerChecked: Boolean,
     footer: @Composable ColumnScope.() -> Unit = {}
 ) {
+    val tier = ComboTier.of(sessionStreak)
+    val pulse = remember { Animatable(1f) }
+    // The question whose answer last pulsed the label, saved so a rotation does not replay it.
+    var pulsedQuestion by rememberSaveable { mutableIntStateOf(-1) }
+
+    LaunchedEffect(isAnswerChecked, currentIndex) {
+        if (isAnswerChecked && isComboThreshold(sessionStreak) && pulsedQuestion != currentIndex) {
+            pulsedQuestion = currentIndex
+            val peak = if (tier == ComboTier.ON_FIRE) COMBO_PULSE_ON_FIRE else COMBO_PULSE_HOT
+            pulse.animateTo(peak, tween(durationMillis = 140, easing = FastOutSlowInEasing))
+            pulse.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow))
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        if (sessionStreak >= 2 && isAnswerChecked) {
-            Text(
-                text = "$sessionStreak SEGUIDAS",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(start = 8.dp)
-            )
+        if (isAnswerChecked && tier != ComboTier.HIDDEN) {
+            ComboLabel(run = sessionStreak, tier = tier, scale = { pulse.value })
             Spacer(modifier = Modifier.height(4.dp))
         }
         LinearProgressIndicator(
@@ -86,6 +104,54 @@ fun QuizProgressTitle(
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         footer()
+    }
+}
+
+/**
+ * The "N SEGUIDAS" label in the size and colour of its tier: plain orange for a short run, then
+ * bigger with the app's flame, and in the flame's gradient from ten on. Its height stays within
+ * 20dp so the exam's top bar, which also holds the timer, still fits.
+ *
+ * @param run consecutive correct answers, at least two
+ * @param tier the tier of [run]; never [ComboTier.HIDDEN]
+ * @param scale current pulse scale, read at draw time so the pulse does not recompose
+ */
+@Composable
+private fun ComboLabel(run: Int, tier: ComboTier, scale: () -> Float) {
+    val (style, flameSize) = when (tier) {
+        ComboTier.ON_FIRE -> TextStyle(
+            brush = Brush.horizontalGradient(BaliFlameColors),
+            fontSize = 16.sp,
+            lineHeight = 20.sp
+        ) to 20.dp
+        ComboTier.HOT -> TextStyle(color = BaliPrimaryDark, fontSize = 13.sp, lineHeight = 18.sp) to 16.dp
+        else -> MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary) to null
+    }
+    Row(
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .graphicsLayer {
+                val pulseScale = scale()
+                scaleX = pulseScale
+                scaleY = pulseScale
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (flameSize != null) {
+            Image(
+                painter = painterResource(id = R.drawable.streak_icon),
+                contentDescription = null,
+                modifier = Modifier.size(flameSize)
+            )
+        }
+        Text(
+            text = "$run SEGUIDAS",
+            style = style,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
     }
 }
 
@@ -412,8 +478,19 @@ fun TestContentView(
     }
 }
 
+/** Peak scale of the hop a correct answer makes when it is checked. */
+private const val CORRECT_HOP_SCALE = 1.04f
+
+/** Extra green the card flashes with when a correct answer is checked, fading back in 600 ms. */
+private const val CORRECT_FLASH_ALPHA = 0.22f
+
 /**
  * Selectable answer option that reflects the check result once the answer has been verified.
+ *
+ * When the user's own choice turns out correct, the card makes a short hop, flashes green and
+ * pops its tick, at the moment the right-answer sound plays. Only that flip celebrates: a card
+ * that first appears already answered (after a rotation or when scrolled back into view) stays
+ * still, and a wrong answer gets no animation at all.
  *
  * @param modifier layout modifier applied to the card
  * @param text answer text
@@ -431,6 +508,30 @@ fun OptionCard(
     wasSelectedAndIncorrect: Boolean,
     onClick: () -> Unit
 ) {
+    val celebrate = isSelected && isCorrect == true
+    val hop = remember { Animatable(1f) }
+    val flash = remember { Animatable(0f) }
+    val tickScale = remember { Animatable(1f) }
+    val wasCelebrating = remember { mutableStateOf(celebrate) }
+
+    LaunchedEffect(celebrate) {
+        val flippedToCorrect = celebrate && !wasCelebrating.value
+        wasCelebrating.value = celebrate
+        if (!flippedToCorrect) return@LaunchedEffect
+        launch {
+            hop.animateTo(CORRECT_HOP_SCALE, tween(durationMillis = 110, easing = FastOutSlowInEasing))
+            hop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium))
+        }
+        launch {
+            flash.snapTo(1f)
+            flash.animateTo(0f, tween(durationMillis = 600))
+        }
+        launch {
+            tickScale.snapTo(0.4f)
+            tickScale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMedium))
+        }
+    }
+
     val borderColor = when {
         isCorrect == true -> BaliAccentGreen
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error
@@ -439,7 +540,7 @@ fun OptionCard(
     }
 
     val containerColor = when {
-        isCorrect == true -> BaliAccentGreen.copy(alpha = 0.1f)
+        isCorrect == true -> BaliAccentGreen.copy(alpha = 0.1f + CORRECT_FLASH_ALPHA * flash.value)
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surface
@@ -447,7 +548,12 @@ fun OptionCard(
 
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = hop.value
+                scaleY = hop.value
+            },
         shape = RoundedCornerShape(20.dp),
         color = containerColor,
         border = BorderStroke(width = if (isSelected || isCorrect != null) 2.dp else 1.dp, color = borderColor),
@@ -457,26 +563,32 @@ fun OptionCard(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isMarked = isSelected || isCorrect == true
             Box(
                 modifier = Modifier
                     .size(24.dp)
                     .border(
                         width = 2.dp,
-                        color = if (isSelected || isCorrect == true) borderColor else MaterialTheme.colorScheme.outline,
+                        color = if (isMarked) borderColor else MaterialTheme.colorScheme.outline,
                         shape = CircleShape
                     )
                     .background(
-                        color = if (isSelected || isCorrect == true) borderColor else Color.Transparent,
+                        color = if (isMarked) borderColor else Color.Transparent,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (isSelected || isCorrect == true) {
+                if (isMarked) {
                     Icon(
                         imageVector = if (wasSelectedAndIncorrect) Icons.Rounded.Close else Icons.Rounded.Check,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer {
+                                scaleX = tickScale.value
+                                scaleY = tickScale.value
+                            }
                     )
                 }
             }
