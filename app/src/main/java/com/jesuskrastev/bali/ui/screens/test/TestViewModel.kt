@@ -14,6 +14,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.DrivingTopic
 import com.jesuskrastev.bali.domain.model.NodeStatus
+import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
@@ -66,12 +67,20 @@ data class TestSummary(
     val leveledUp: Boolean,
     /** The level after this result; 0 when unknown. The result screen names it when [leveledUp]. */
     val newLevel: Int = 0,
+    /** The user's experience after this result, to fill the level bar; 0 when unknown. */
+    val newTotalXp: Int = 0,
     val coinsGained: Int,
     val newStreakDays: Int,
     /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
     val isFailedExam: Boolean = false,
     /** True only for an official exam at or above the DGT pass mark; the result screen stamps it "APROBADO". */
-    val isPassedExam: Boolean = false
+    val isPassedExam: Boolean = false,
+    /** True when this is the user's first win ever; the result screen celebrates it once. */
+    val isFirstWin: Boolean = false,
+    /** True when this exam beats every earlier one; needs at least one earlier exam. */
+    val isNewRecord: Boolean = false,
+    /** Best score of the earlier exams, shown with the record; -1 when there was none. */
+    val previousBestScore: Int = -1
 )
 
 @HiltViewModel
@@ -479,6 +488,12 @@ class TestViewModel @Inject constructor(
 
         val coinsGained = incrementCoinsUseCase(accuracy)
 
+        // Read BEFORE this result is saved below. When they cannot be read, nothing is celebrated
+        // as a first win: a celebration that may repeat is worse than one that is missed.
+        val previousResults = runCatching { testResultRepository.get().first() }.getOrNull()
+        val isFirstWin = previousResults != null &&
+            ResultMilestones.isFirstWin(previousResults, accuracy >= ResultMilestones.WIN_ACCURACY)
+
         withContext(Dispatchers.IO) {
             // 1. Save test result
             val testId = testResultRepository.insert(
@@ -563,8 +578,10 @@ class TestViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             newLevel = xpEarned.newLevel,
+            newTotalXp = xpEarned.newTotalXp,
             coinsGained = coinsGained,
-            newStreakDays = newStreakDays
+            newStreakDays = newStreakDays,
+            isFirstWin = isFirstWin
         )
     }
 

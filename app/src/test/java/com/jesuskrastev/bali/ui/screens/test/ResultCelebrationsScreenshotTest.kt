@@ -12,7 +12,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Captures the result screen's big celebrations: the passed-exam stamp and the level-up overlay. */
+/**
+ * Captures the result screen's celebrations: the passed-exam stamp, the full-screen overlays (level,
+ * record, first win), the counting level bar and the message of a failed exam.
+ */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-xxhdpi")
 @RunWith(RobolectricTestRunner::class)
@@ -34,7 +37,11 @@ class ResultCelebrationsScreenshotTest {
         isPassedExam: Boolean = false,
         leveledUp: Boolean = false,
         score: Int = 28,
-        total: Int = 30
+        total: Int = 30,
+        isFailedExam: Boolean = false,
+        isNewRecord: Boolean = false,
+        isFirstWin: Boolean = false,
+        newTotalXp: Int = 0
     ) {
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent {
@@ -46,11 +53,16 @@ class ResultCelebrationsScreenshotTest {
                     bonusStreak = 10,
                     leveledUp = leveledUp,
                     newLevel = 7,
+                    newTotalXp = newTotalXp,
                     durationSeconds = 1_284,
                     accuracy = score * 100 / total,
                     score = score,
                     total = total,
                     isPassedExam = isPassedExam,
+                    isFailedExam = isFailedExam,
+                    isNewRecord = isNewRecord,
+                    previousBestScore = 25,
+                    isFirstWin = isFirstWin,
                     onContinueClick = {}
                 )
             }
@@ -69,5 +81,27 @@ class ResultCelebrationsScreenshotTest {
     fun passedExamDark() = capture("passed_exam_dark", atMillis = 1_400, darkTheme = true, isPassedExam = true)
 
     @Test
-    fun levelUp() = capture("level_up", atMillis = 1_500, leveledUp = true, score = 8, total = 10)
+    fun levelUp() = capture("level_up", atMillis = 3_000, leveledUp = true, score = 8, total = 10)
+
+    @Test
+    fun levelBarCounting() = capture(
+        "level_bar_counting", atMillis = 900, score = 8, total = 10,
+        newTotalXp = com.jesuskrastev.bali.domain.util.LevelCalculator.totalXpForLevel(6) + 30
+    )
+
+    @Test
+    fun newRecordOverlay() = capture(
+        "new_record", atMillis = 4_500, isPassedExam = true, isNewRecord = true, score = 29
+    )
+
+    @Test
+    fun newRecordOverlayOnAFailedExam() = capture(
+        "new_record_failed", atMillis = 3_000, isFailedExam = true, isNewRecord = true, score = 26
+    )
+
+    @Test
+    fun firstWinOverlay() = capture("first_win", atMillis = 3_000, isFirstWin = true, score = 8, total = 10)
+
+    @Test
+    fun failedExam() = capture("failed_exam", atMillis = 1_400, isFailedExam = true, score = 26)
 }

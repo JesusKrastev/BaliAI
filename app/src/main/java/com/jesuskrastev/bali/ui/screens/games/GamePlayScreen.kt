@@ -26,6 +26,8 @@ import com.jesuskrastev.bali.ui.screens.games.mechanics.LegalOMultaGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PrioridadCruceGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PuntosCarneGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.SenalRelampagoGame
+import com.jesuskrastev.bali.ui.screens.test.ResultKind
+import com.jesuskrastev.bali.ui.screens.test.ResultSoundViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 
 /**
@@ -54,6 +56,7 @@ fun GamePlayScreen(
             if (rewards == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
+                val resultSound: ResultSoundViewModel = hiltViewModel()
                 TestResultScreen(
                     xpGained = rewards.xpEarned.xpGained,
                     baseXp = rewards.xpEarned.baseXp,
@@ -62,8 +65,12 @@ fun GamePlayScreen(
                     bonusStreak = rewards.xpEarned.bonusStreak,
                     leveledUp = rewards.xpEarned.levelUp,
                     newLevel = rewards.xpEarned.newLevel,
+                    newTotalXp = rewards.xpEarned.newTotalXp,
                     durationSeconds = rewards.durationSeconds,
                     accuracy = rewards.accuracy,
+                    total = ROUNDS_PER_SESSION,
+                    kind = ResultKind.GAME,
+                    onResultShown = resultSound::play,
                     onContinueClick = onBackClick,
                     secondaryActionLabel = "JUGAR OTRA VEZ",
                     onSecondaryActionClick = viewModel::replay,
