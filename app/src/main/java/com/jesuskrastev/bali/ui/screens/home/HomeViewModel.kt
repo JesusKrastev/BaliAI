@@ -12,7 +12,7 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.TestResult
-import com.jesuskrastev.bali.domain.model.TestResult.Companion.OFFICIAL_EXAM_CATEGORY
+import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
@@ -20,8 +20,9 @@ import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.LessonNode
-import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +43,7 @@ class HomeViewModel @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
+    private val settleStreak: SettleStreakUseCase,
     private val pendingFirstStepRewards: PendingFirstStepRewards,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -63,6 +65,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
+        // Days missed since the last visit spend freezes or end the streak before it is shown.
+        viewModelScope.launch { settleStreak() }
         viewModelScope.launch {
             remoteConfigProvider.fetchAndActivate()
         }
@@ -118,7 +122,7 @@ class HomeViewModel @Inject constructor(
         _pathError,
         authRepository.currentUserPhotoUrlFlow,
         authRepository.currentUserEmailFlow,
-        testResultRepository.get().map { results -> results.any { it.category == OFFICIAL_EXAM_CATEGORY } },
+        testResultRepository.get().map { results -> results.any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY } },
         pendingFirstStepRewards.next
     ) { flows ->
         val user = flows[0] as User?
@@ -147,35 +151,29 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail
             )
         } else {
-            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
-            // Counted from practiceDays like the streak screens: user.weekSessions is only
-            // refreshed on the next practice, so it can still hold last week's number.
-            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
+            val now = System.currentTimeMillis()
+            // Settled here too, so a lost streak never flashes as alive while the save lands.
+            val streak = DailyStreak.of(user).settledAt(now)
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
-                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, System.currentTimeMillis()),
-                streak = user.currentStreak,
-                weekSessions = weekSessions,
-                weeklyGoal = weeklyGoal,
-                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
+                streak = streak.current,
+                practicedToday = streak.hasPracticedOn(now),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
                 xpLevel = user.level,
                 mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
-                streakFreezes = user.streakFreezes,
-                highestStreak = user.highestStreak,
+                streakFreezes = streak.freezes,
+                highestStreak = streak.highest,
                 dailyTip = dailyTip,
-                weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
                 pathError = pathError,
-                // The card stays up until everything is done *and* the closing simulacro was
+                // The bar stays up until everything is done *and* the closing simulacro was
                 // taken, so an unfinished task keeps its coins available even after an exam.
                 firstSteps = user.firstSteps.takeIf { it.isActive && !(it.isComplete && hasTakenExam) },
                 firstStepTestNode = firstStepTestNodeOf(typedPathNodes),
@@ -196,37 +194,20 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Saves the exam date picked on the plan card; from then on the card counts down to it.
-     *
-     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
-     */
-    fun setExamDate(pickerMillis: Long) {
-        val examDay = localDayFromPickerMillis(pickerMillis)
-        val hadPlanDate = uiState.value.plan.targetMillis != null
-        viewModelScope.launch {
-            userRepository.updateExamDate(examDay)
-            analyticsTracker.examDateSet(
-                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
-                hadPlanDate = hadPlanDate
-            )
-        }
-    }
-
-    /** Reports that the first-steps card is on screen; only the first call per Home is tracked. */
+    /** Reports that the first-steps bar is on screen; only the first call per Home is tracked. */
     fun onFirstStepsShown() {
         if (hasTrackedFirstStepsShown) return
         hasTrackedFirstStepsShown = true
         analyticsTracker.firstStepsShown(tasksDone = uiState.value.firstSteps?.doneCount ?: 0)
     }
 
-    /** Reports that the student tapped the card's closing "haz tu primer simulacro" button. */
+    /** Reports that the student tapped the bar's closing "haz tu primer simulacro" button. */
     fun onFirstStepsExamClicked() {
         analyticsTracker.firstStepsExamClicked()
     }
 
     /**
-     * Hides the first-steps card for good. Tasks stop paying from here on, so the screen asks
+     * Hides the first-steps bar for good. Tasks stop paying from here on, so the screen asks
      * for confirmation before calling this while coins are still pending.
      */
     fun dismissFirstSteps() {

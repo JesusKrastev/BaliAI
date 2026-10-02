@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.domain.usecase
 import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,35 @@ class CompleteFirstStepUseCaseTest {
     }
 
     @Test
+    fun `the bonus is celebrated when the account paid it even if the local snapshot is behind`() = runTest {
+        // Another phone already did the other two tasks: the cached profile here still shows
+        // none, but the account (the repository) pays the last task plus the bonus.
+        userRepository.enrollInFirstStepsForTest()
+        val accountAhead = object : UserRepository by userRepository {
+            override suspend fun completeFirstStep(task: FirstStepTask): Int = task.coins + FIRST_STEPS_BONUS_COINS
+        }
+
+        val reward = CompleteFirstStepUseCase(accountAhead, pendingRewards)(FirstStepTask.PLAY_GAME)
+
+        assertThat(reward?.completedAll).isTrue()
+        assertThat(reward?.coins).isEqualTo(FirstStepTask.PLAY_GAME.coins + FIRST_STEPS_BONUS_COINS)
+    }
+
+    @Test
+    fun `a task the account refuses to pay is not celebrated`() = runTest {
+        // The cached profile says pending, but the account already has it (done on another phone).
+        userRepository.enrollInFirstStepsForTest()
+        val accountAhead = object : UserRepository by userRepository {
+            override suspend fun completeFirstStep(task: FirstStepTask): Int = 0
+        }
+
+        val reward = CompleteFirstStepUseCase(accountAhead, pendingRewards)(FirstStepTask.ASK_BALI)
+
+        assertThat(reward).isNull()
+        assertThat(pendingRewards.next.first()).isNull()
+    }
+
+    @Test
     fun `completing all three in any order pays 100 coins in total`() = runTest {
         userRepository.enrollInFirstStepsForTest()
         val coinsBefore = coins()
@@ -77,7 +107,7 @@ class CompleteFirstStepUseCaseTest {
     }
 
     @Test
-    fun `a dismissed card stops paying`() = runTest {
+    fun `a dismissed bar stops paying`() = runTest {
         userRepository.enrollInFirstStepsForTest()
         userRepository.dismissFirstSteps()
         val coinsBefore = coins()

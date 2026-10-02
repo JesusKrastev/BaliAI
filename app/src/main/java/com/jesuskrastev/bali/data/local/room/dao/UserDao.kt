@@ -15,17 +15,26 @@ interface UserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(preferences: UserEntity)
 
-    @Query("UPDATE users SET currentStreak = :streak, lastPracticeTimestamp = :timestamp, practiceDays = :practiceDaysStr")
-    suspend fun updateStreak(streak: Int, timestamp: Long, practiceDaysStr: String)
-
-    @Query("UPDATE users SET weekSessions = :weekSessions, currentWeekStart = :currentWeekStart, lastPracticeTimestamp = :timestamp, practiceDays = :practiceDaysStr")
-    suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, timestamp: Long, practiceDaysStr: String)
+    /** Writes every daily-streak field at once; the day lists are JSON arrays of local midnights. */
+    @Query(
+        "UPDATE users SET currentStreak = :current, highestStreak = :highest, " +
+            "streakFreezes = :freezes, lastPracticeTimestamp = :lastPracticeMillis, " +
+            "lostStreak = :lostStreak, lostStreakDayMillis = :lostStreakDayMillis, " +
+            "practiceDays = :practiceDaysJson, frozenDays = :frozenDaysJson"
+    )
+    suspend fun updateStreak(
+        current: Int,
+        highest: Int,
+        freezes: Int,
+        lastPracticeMillis: Long,
+        lostStreak: Int,
+        lostStreakDayMillis: Long,
+        practiceDaysJson: String,
+        frozenDaysJson: String
+    )
 
     @Query("UPDATE users SET xp = :xp, level = :level")
     suspend fun updateXp(xp: Int, level: Int)
-
-    @Query("UPDATE users SET currentStreak = 0")
-    suspend fun resetStreak()
 
     /** Atomically adds [amount] to the local user's coin balance in one SQL statement. */
     @Query("UPDATE users SET coins = coins + :amount")
@@ -45,9 +54,6 @@ interface UserDao {
 
     @Query("UPDATE users SET streakFreezes = :count")
     suspend fun updateStreakFreezes(count: Int)
-
-    @Query("UPDATE users SET highestStreak = :highestStreak")
-    suspend fun updateHighestStreak(highestStreak: Int)
 
     /**
      * Replaces the exam date with the one the user picked on Home's plan card.

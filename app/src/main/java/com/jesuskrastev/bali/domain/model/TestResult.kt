@@ -19,9 +19,4 @@ data class TestResult(
     val total: Int,
     val date: Date,
     val isPassed: Boolean
-) {
-    companion object {
-        /** [category] stored for a full official-exam simulation, as opposed to a practice test. */
-        const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
-    }
-}
+)

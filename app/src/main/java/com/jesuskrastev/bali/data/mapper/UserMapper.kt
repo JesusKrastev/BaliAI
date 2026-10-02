@@ -21,9 +21,10 @@ fun UserEntity.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )
 
 fun User.toEntity(): UserEntity = UserEntity(
@@ -41,9 +42,10 @@ fun User.toEntity(): UserEntity = UserEntity(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )
 
 fun User.toFirestore(): UserFirestore = UserFirestore(
@@ -61,9 +63,10 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart,
+    frozenDays = frozenDays,
     firstStepsStartedAt = firstSteps.startedAtMillis,
     firstStepsDone = firstSteps.completed.map { it.id },
     firstStepsDismissed = firstSteps.dismissed
@@ -84,9 +87,10 @@ fun UserFirestore.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart,
+    frozenDays = frozenDays,
     firstSteps = FirstStepsProgress(
         startedAtMillis = firstStepsStartedAt,
         // Ids this build does not know (written by a newer version) are ignored, not crashed on.

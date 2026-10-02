@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 14,
+    version = 18,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,55 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /**
+         * Adds what an answer needs to be told apart later: the question's id, the topic of its
+         * session and where it was given. The columns are nullable with no default and stay null
+         * on the answers already saved; they are not backfilled, because the question id of an
+         * old answer is worked out from its text when read (`Answer.resolvedQuestionId`).
+         */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            /** One nullable TEXT column each; existing rows keep NULL. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE answers ADD COLUMN questionId TEXT")
+                database.execSQL("ALTER TABLE answers ADD COLUMN topic TEXT")
+                database.execSQL("ALTER TABLE answers ADD COLUMN mode TEXT")
+            }
+        }
+
+        /** Adds the streak that was just lost and the day it ended, so it can be bought back. */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            /** Both columns start at zero: nobody has a recoverable streak yet. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN lostStreak INTEGER NOT NULL DEFAULT 0")
+                database.execSQL(
+                    "ALTER TABLE users ADD COLUMN lostStreakDayMillis INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
+         * Reserved slot: the 1.2.2 internal build added `lastStreakSettledDayMillis` for the
+         * discarded streak speedometer (D-019), so some devices are already at version 16 with
+         * that column. It stays in the table, unused, so their schema keeps matching; the
+         * speedometer's cap of the streak at 7 is deliberately not applied here.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            /** Adds the unused marker column so a device upgrading from 15 matches one already at 16. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE users ADD COLUMN lastStreakSettledDayMillis INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Days a streak freeze covered, for the daily streak. The default matches the
+                // entity's @ColumnInfo so Room's schema check passes.
+                database.execSQL("ALTER TABLE users ADD COLUMN frozenDays TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         val MIGRATION_13_14 = object : Migration(13, 14) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Day the onboarding plan promised the license by, kept for Home's plan card.

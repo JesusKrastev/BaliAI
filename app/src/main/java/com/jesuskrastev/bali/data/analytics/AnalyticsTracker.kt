@@ -176,6 +176,19 @@ open class AnalyticsTracker @Inject constructor(
         putInt("step_index", stepIndex)
     }
 
+    /**
+     * Tracks the answer to the onboarding screen that offers study reminders.
+     *
+     * @param result `granted` (said yes and Android allowed it), `denied` (said yes but
+     *   refused the system dialog) or `declined` (tapped "Ahora no", no system dialog shown)
+     * @param studySlot the part of the day picked on the previous screen, e.g. `night`
+     */
+    open fun notificationsPermissionAnswered(result: String, studySlot: String?) =
+        log("notifications_permission_result") {
+            putString("result", result)
+            studySlot?.let { putString("study_slot", it) }
+        }
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**
@@ -539,10 +552,10 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
-    // ── PLAN (Home) ─────────────────────────────────────────────────────────
+    // ── EXAM DATE (Statistics) ──────────────────────────────────────────────
 
     /**
-     * Tracks that the user set their exam date from Home's plan card.
+     * Tracks that the user set their exam date from the statistics countdown.
      *
      * @param daysUntil calendar days from today to the chosen exam day
      * @param hadPlanDate true when the card was already counting down to a date (so this is a
@@ -552,6 +565,21 @@ open class AnalyticsTracker @Inject constructor(
         putInt("days_until", daysUntil)
         putBoolean("had_plan_date", hadPlanDate)
     }
+
+    /**
+     * Tracks that the user opened the statistics screen and what it told them, so the verdict can
+     * later be compared with the real exam result.
+     *
+     * @param level the [com.jesuskrastev.bali.domain.model.ReadinessLevel] name shown
+     * @param mocksTaken mock exams completed when the screen opened
+     * @param passPercent shown chance of passing from 0 to 100, or null when no percentage was shown
+     */
+    open fun readinessViewed(level: String, mocksTaken: Int, passPercent: Int?) =
+        log("readiness_viewed") {
+            putString("level", level)
+            putInt("mocks_taken", mocksTaken)
+            passPercent?.let { putInt("pass_percent", it) }
+        }
 
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 
@@ -591,10 +619,10 @@ open class AnalyticsTracker @Inject constructor(
         putInt("round_index", roundIndex)
     }
 
-    // ── FIRST STEPS (day-0 card on Home) ────────────────────────────────────
+    // ── FIRST STEPS (day-0 bar on Home) ────────────────────────────────────
 
     /**
-     * Tracks that the first-steps card reached the screen. Sent once per Home instance, so it
+     * Tracks that the first-steps bar reached the screen. Sent once per Home instance, so it
      * counts students who saw it rather than every recomposition.
      *
      * @param tasksDone how many of the tasks the student had already completed
@@ -624,7 +652,7 @@ open class AnalyticsTracker @Inject constructor(
     open fun firstStepsExamClicked() = log("first_steps_exam_clicked")
 
     /**
-     * Tracks that the student hid the card, giving up the coins still pending.
+     * Tracks that the student hid the bar, giving up the coins still pending.
      *
      * @param tasksDone how many tasks they had completed when they dismissed it
      */

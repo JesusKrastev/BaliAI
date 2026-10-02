@@ -27,7 +27,7 @@ import javax.inject.Inject
  * [ChatRepository], so a message written on another device (or restored after a
  * reinstall) shows up without any extra plumbing.
  *
- * The first answered question also completes a step of Home's first-steps card, through
+ * The first answered question also completes a step of Home's first-steps bar, through
  * [CompleteFirstStepUseCase].
  */
 @HiltViewModel
@@ -130,7 +130,7 @@ class ChatViewModel @Inject constructor(
             askDrivingTutorUseCase(question, persistQuestion)
                 .onSuccess {
                     _uiState.update { state -> reducer.onSendSucceeded(state) }
-                    // A reply from Bali is the "Pregúntale una duda a Bali" step of Home's card.
+                    // A reply from Bali is the "Pregúntale una duda a Bali" step of Home's bar.
                     completeFirstStepUseCase(FirstStepTask.ASK_BALI)?.let(analytics::firstStepRewarded)
                 }
                 .onFailure { cause ->

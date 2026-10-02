@@ -16,7 +16,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.jesuskrastev.bali.R
-import com.onesignal.OneSignal
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -119,11 +118,17 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
         }
     }
 
+    /**
+     * Signs in to Firebase with a Google ID token. OneSignal is linked to the account by
+     * `SyncNotificationTagsUseCase`, which reacts to the new session.
+     *
+     * @param idToken the Google ID token from the credential picker
+     * @return success, or the Firebase error
+     */
     override suspend fun signInWithGoogleCredential(idToken: String): Result<Unit> {
         return try {
             val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
             auth.signInWithCredential(firebaseCredential).await()
-            auth.currentUser?.uid?.let { OneSignal.login(it) }
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e("AuthRepository", "Error autenticando con Firebase", e)

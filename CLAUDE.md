@@ -61,7 +61,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 14, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 18, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
@@ -141,6 +141,41 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
 - When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel + PostHog), never call any of those SDKs directly from a ViewModel.
 
+## Branches and releases
+
+`develop` is the feature branch: every feature starts from it and comes back to it, so a problem in
+one feature is handled in that feature's branch only. `main` is what is in production. The why and
+the edge cases live in the brain: `05-Patrones\patron-ramas-git.md` and D-024.
+
+- **Start every feature from the latest `develop`** — never from another feature, `release/*`,
+  `main` or a `test/*` branch: `git fetch origin && git worktree add ../BaliAI-<slug> -b feature/<slug> origin/develop`.
+  One feature = one branch = one PR. A bug already in `develop` gets a `fix/<slug>` branch, same way.
+- **Never stack branches.** If feature B needs A, wait until A is in `develop` and branch B from there.
+- **A problem in a feature is fixed in its own branch.** Nothing else is touched until it merges.
+- Keep a long feature current with `git merge origin/develop` (no rebase + force-push; the squash hides the merges).
+- **Into `develop` only through a PR, squash-merged**, with PR Checks green and once the user says the
+  feature is ready. The PR title becomes the single commit in `develop`: write it like a commit
+  subject. Never `gh pr merge --admin` unless the user asks. GitHub deletes the remote branch on
+  merge; delete the local branch and its worktree too (brain `BaliAI-errores` E-016 for compiled worktrees).
+- **Migration numbers are claimed when the PR merges, not when the branch is created** (Room
+  `BaliDatabase.version` and `MigrationV{N}To{N+1}`). Before opening the PR, merge `origin/develop`
+  and renumber if another feature took the number. A number that reached Play is never reused,
+  even if its code was reverted (E-017).
+- **A feature branch never goes to Play.** Try it on a phone with a local debug build. Play builds
+  come only from `develop`, `release/*`, `hotfix/*`, `main` or a `v*` tag (`release-play.yml`
+  refuses anything else; production only from `main` or a tag).
+- **Undo a merged feature** with `git revert <its squash commit>` in a `fix/` branch + PR. If it
+  carried a migration that reached Play, keep the migration and add a new forward one instead.
+- **Release:** `release/X.Y.Z` from `origin/develop`, bump `versionName`, PR `release/X.Y.Z → main`
+  (each push uploads a release candidate to Play internal). Fixes found while testing: `fix/<slug>`
+  from the release branch, PR into it. When it is good: merge with a **merge commit** (never squash
+  into `main`), tag `vX.Y.Z` on `main` and push the tag, then PR `main → develop` with a merge commit.
+- **Hotfix:** `hotfix/X.Y.Z` from `main`, PR → `main`, tag, PR `main → develop`.
+- Never push a `v*` tag for an old commit: every `v*` push builds and uploads to Play internal.
+- No `test/*` integration branches: `develop` is the integration branch. Rulesets
+  (`.github/rulesets/`) block direct and force pushes to `develop` and `main`, require PR Checks, and
+  only let `release/*` / `hotfix/*` into `main`.
+
 ## Code Quality
 
 - ALWAYS refactor code opportunistically when touching a file — improve naming, reduce duplication, simplify logic, and clean up dead code. Leave every file cleaner than you found it.
@@ -157,13 +192,13 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 ## Important Rules
 
 - **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
-- **First-steps card state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV7ToV8` must NEVER write `firstStepsStartedAt`: it also runs on accounts created by this version and would switch their card off.
-- **Build every Play upload (internal included) from a branch that contains the latest published release.** A build cut from an older base has a lower Room `version` than what testers already have installed; Room has no downgrade path, so the app crashes on open for every one of them (it happened with 1.2.2 → a feature branch cut from 1.2.1). The same goes for Firestore migration numbers: two branches must never both add a `MigrationV{N}To{N+1}`.
+- **First-steps bar state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV11ToV12` must NEVER write `firstStepsStartedAt`: it also runs on accounts just created (their document starts at schema v1) and would switch their bar off.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
 - `RobolectricDetector.isRobolectric()` (root package) guards skip SDK initialization (OneSignal, Mixpanel, PostHog, RevenueCat) in unit tests — called from `BaliApplication.onCreate()` and from the Mixpanel/PostHog Hilt modules. NEVER remove this guard, and never reimplement the check inline (e.g. `Build.FINGERPRINT == "robolectric"`) instead of calling it — those SDKs crash under Robolectric.
-- `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date plus a two-digit counter for that day's builds, so several builds can be uploaded per day. NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
+- `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date (UTC) plus `NN`, the quarter-hour of the UTC day (00-95), so a later build always has a higher code whichever workflow builds it and several builds can be uploaded per day (two in the same quarter-hour collide and Play rejects the second: re-run later). NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
+- The daily streak is computed only in the app (`domain/model/DailyStreak.kt`); no server job may write `currentStreak`, `streakFreezes` or `frozenDays`. The Cloud Functions deployed in `bali-ai-facc4` have **no source in this repo** (only the compiled bundle in Cloud Storage): list them with `firebase functions:list --project bali-ai-facc4` before assuming what the backend does.
 - The `lintVitalAnalyze/Report/Release` tasks are explicitly disabled in `build.gradle.kts` due to a KSP/Lint bug — do not re-enable them.
 - All API keys are injected via `BuildConfig` fields resolved by the `secret(key, default)` helper in `app/build.gradle.kts`, which reads `local.properties` first and falls back to environment variables (that is how CI supplies them). NEVER hardcode keys in source files.
 - Release signing is driven by `RELEASE_KEYSTORE_PATH` / `RELEASE_STORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD` through the same `secret()` helper. When `RELEASE_KEYSTORE_PATH` is absent the `release` build type falls back to the debug keystore so local `bundleRelease` still works — that fallback artifact is NOT uploadable to Play.
@@ -173,8 +208,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 The sweep of the whole codebase is finished (migrations were intentionally excluded). These findings were **not** fixed because they need a product/design decision, not a guess. Delete each line once decided.
 
 - **Free practice is unreachable.** The Topics and Mistakes screens were deleted (nothing linked to them), which leaves `TestRoute()` without a node (free practice) and `TestRoute.topic` / `TestViewModel.setTopic` as dead paths: `TestRoute` is only navigated to from Home's learning-path nodes. Remove them (plus `TestViewModelTest`'s `setTopic` test and `ScreenNameTest`'s route string) or give free practice a new entry point.
-- Streak freezes have no visual feedback: `StreakStatus.FROZEN` is implemented in `StreakScreen` / `LessonStreakScreen` but never produced — `StreakUiHelper.generateWeeklyStreak()` has no data source for "which day was frozen" (no `frozenDays`-style field on `User`). Streak evaluation runs server-side in a Cloud Function this repo doesn't contain.
 - `SectionHeaderCard` prints "SECCIÓN n, UNIDAD n" using the same index for both numbers.
 - `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
-- **First-steps card (day 0–1): who sees it and for how long.** Only accounts created from this version are enrolled, so subscribers who already exist never see it (a later migration could enrol those with no `firstStepsStartedAt`). It has no expiry: it stays until the three tasks and the simulacro are done or the student dismisses it (dismissing gives up the pending coins).
+- **First-steps bar (day 0–1): who sees it and for how long.** Only accounts created from this version are enrolled, so subscribers who already exist never see it (a later migration could enrol those with no `firstStepsStartedAt`). It has no expiry: it stays until the three tasks and the simulacro are done or the student dismisses it (dismissing gives up the pending coins).
 - `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.

@@ -122,17 +122,37 @@ class UserDaoTest {
     }
 
     @Test
-    fun userStreakCanBeReset() = runTest {
-        val user = UserEntity(
-            id = "user_123",
-            currentStreak = 10
+    fun updateStreakWritesEveryDailyStreakField() = runTest {
+        userDao.insert(UserEntity(id = "user_123", currentStreak = 10, coins = 50))
+
+        userDao.updateStreak(
+            current = 4,
+            highest = 12,
+            freezes = 1,
+            lastPracticeMillis = 3_000L,
+            lostStreak = 6,
+            lostStreakDayMillis = 2_500L,
+            practiceDaysJson = "[1000,2000,3000]",
+            frozenDaysJson = "[1500]"
         )
 
-        userDao.insert(user)
-        userDao.resetStreak()
-
         val retrieved = userDao.get().first()
-        assertThat(retrieved?.currentStreak).isEqualTo(0)
+        assertThat(retrieved?.currentStreak).isEqualTo(4)
+        assertThat(retrieved?.highestStreak).isEqualTo(12)
+        assertThat(retrieved?.streakFreezes).isEqualTo(1)
+        assertThat(retrieved?.lastPracticeTimestamp).isEqualTo(3_000L)
+        assertThat(retrieved?.lostStreak).isEqualTo(6)
+        assertThat(retrieved?.lostStreakDayMillis).isEqualTo(2_500L)
+        assertThat(retrieved?.practiceDays).containsExactly(1000L, 2000L, 3000L).inOrder()
+        assertThat(retrieved?.frozenDays).containsExactly(1500L)
+        assertThat(retrieved?.coins).isEqualTo(50)
+    }
+
+    @Test
+    fun aNewUserHasNoFrozenDays() = runTest {
+        userDao.insert(UserEntity(id = "user_123"))
+
+        assertThat(userDao.get().first()?.frozenDays).isEmpty()
     }
 
     @Test

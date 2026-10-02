@@ -26,7 +26,7 @@ class FirestoreUserDao @Inject constructor(
     companion object {
         private const val BATCH_LIMIT = 500
 
-        /** Document fields of the first-steps card; mirrored by [UserFirestore]. */
+        /** Document fields of the first-steps bar; mirrored by [UserFirestore]. */
         const val FIRST_STEPS_STARTED_AT = "firstStepsStartedAt"
         const val FIRST_STEPS_DONE = "firstStepsDone"
         const val FIRST_STEPS_DISMISSED = "firstStepsDismissed"
@@ -87,7 +87,7 @@ class FirestoreUserDao @Inject constructor(
      * Records [taskId] in the user's `firstStepsDone` and pays its coins inside one Firestore
      * transaction, so the "already done?" check and the payout are a single indivisible step:
      * two devices (or two rapid calls) finishing the same task can't both be paid. Nothing is
-     * written when the account was never enrolled (`firstStepsStartedAt` is 0), the card was
+     * written when the account was never enrolled (`firstStepsStartedAt` is 0), the bar was
      * dismissed, or the task is already in the list.
      *
      * @param userId the Firestore user to update.

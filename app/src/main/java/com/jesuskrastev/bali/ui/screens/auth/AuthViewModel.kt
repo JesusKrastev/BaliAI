@@ -47,7 +47,7 @@ class AuthViewModel @Inject constructor(
 
     /**
      * Signs in with Google. A brand-new account gets the profile collected so far uploaded as its
-     * document, enrolled in the first-steps card; an existing one just runs its pending migrations.
+     * document, enrolled in the first-steps bar; an existing one just runs its pending migrations.
      *
      * @param context used to launch the Google account picker.
      * @param restrictNewAccounts when true, an email with no Bali account is rejected instead of
@@ -118,12 +118,12 @@ class AuthViewModel @Inject constructor(
     }
 
     /**
-     * Enrolls a brand-new account in the day-0 "Tus primeros pasos" card. Only accounts created
+     * Enrolls a brand-new account in the day-0 "Tus primeros pasos" bar. Only accounts created
      * here get it: existing ones never pass through this path, so they keep no enrollment and
-     * never see the card.
+     * never see the bar.
      *
      * @param user the profile about to be uploaded as the new account's document.
-     * @return [user] with the first-steps card started now.
+     * @return [user] with the first-steps bar started now.
      */
     private fun enrollInFirstSteps(user: User): User =
         user.copy(firstSteps = FirstStepsProgress.startingAt(System.currentTimeMillis()))

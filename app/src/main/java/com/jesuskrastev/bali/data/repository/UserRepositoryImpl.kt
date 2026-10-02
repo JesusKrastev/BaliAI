@@ -8,6 +8,7 @@ import com.jesuskrastev.bali.data.local.room.Converters
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -79,38 +80,30 @@ class UserRepositoryImpl @Inject constructor(
         userDao.insert(user.toEntity())
     }
 
-    override suspend fun resetStreak() = updateField(
-        fields = mapOf("currentStreak" to 0),
-        localAction = { userDao.resetStreak() }
-    )
-
-    override suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) = updateField(
+    /** See [UserRepository.updateStreak]. */
+    override suspend fun updateStreak(streak: DailyStreak) = updateField(
         fields = mapOf(
-            "currentStreak" to streak, 
-            "lastPracticeTimestamp" to timestamp,
-            "practiceDays" to practiceDays
+            "currentStreak" to streak.current,
+            "highestStreak" to streak.highest,
+            "streakFreezes" to streak.freezes,
+            "lastPracticeTimestamp" to streak.lastPracticeMillis,
+            "lostStreak" to streak.lostStreak,
+            "lostStreakDayMillis" to streak.lostStreakDayMillis,
+            "practiceDays" to streak.practiceDays,
+            "frozenDays" to streak.frozenDays
         ),
         localAction = {
-            val practiceDaysStr = Converters().fromLongList(practiceDays)
-            userDao.updateStreak(streak, timestamp, practiceDaysStr)
-        }
-    )
-
-    override suspend fun updateWeeklyProgress(
-        weekSessions: Int,
-        currentWeekStart: Long,
-        lastPracticeTimestamp: Long,
-        practiceDays: List<Long>
-    ) = updateField(
-        fields = mapOf(
-            "weekSessions" to weekSessions,
-            "currentWeekStart" to currentWeekStart,
-            "lastPracticeTimestamp" to lastPracticeTimestamp,
-            "practiceDays" to practiceDays
-        ),
-        localAction = {
-            val practiceDaysStr = Converters().fromLongList(practiceDays)
-            userDao.updateWeeklyProgress(weekSessions, currentWeekStart, lastPracticeTimestamp, practiceDaysStr)
+            val converters = Converters()
+            userDao.updateStreak(
+                current = streak.current,
+                highest = streak.highest,
+                freezes = streak.freezes,
+                lastPracticeMillis = streak.lastPracticeMillis,
+                lostStreak = streak.lostStreak,
+                lostStreakDayMillis = streak.lostStreakDayMillis,
+                practiceDaysJson = converters.fromLongList(streak.practiceDays),
+                frozenDaysJson = converters.fromLongList(streak.frozenDays)
+            )
         }
     )
 
@@ -169,10 +162,6 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateStreakFreezes(count) }
     )
 
-    override suspend fun updateHighestStreak(highestStreak: Int) = updateField(
-        fields = mapOf("highestStreak" to highestStreak),
-        localAction = { userDao.updateHighestStreak(highestStreak) }
-    )
 
     /** See [UserRepository.updateExamDate]. */
     override suspend fun updateExamDate(examDateMillis: Long) = updateField(

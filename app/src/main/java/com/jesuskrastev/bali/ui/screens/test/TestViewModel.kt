@@ -6,10 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.DrivingTopic
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
@@ -21,6 +24,7 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -62,8 +66,14 @@ data class TestSummary(
     val bonusFast: Int?,
     val bonusStreak: Int?,
     val leveledUp: Boolean,
+    /** The level after this result; 0 when unknown. The result screen names it when [leveledUp]. */
+    val newLevel: Int = 0,
     val coinsGained: Int,
-    val newWeekSessions: Int
+    val newStreakDays: Int,
+    /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
+    val isFailedExam: Boolean = false,
+    /** True only for an official exam at or above the DGT pass mark; the result screen stamps it "APROBADO". */
+    val isPassedExam: Boolean = false
 )
 
 @HiltViewModel
@@ -78,6 +88,7 @@ class TestViewModel @Inject constructor(
     private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val pathRepository: PathRepository,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -412,13 +423,20 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }
@@ -452,7 +470,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newWeekSessions = -1
+        var newStreakDays = -1
 
         val userId = userRepository.get().first()?.id ?: ""
         // Read the node's status BEFORE this attempt overwrites it below — repeating an
@@ -471,7 +489,7 @@ class TestViewModel @Inject constructor(
 
         val coinsGained = incrementCoinsUseCase(accuracy)
         // Separate prize on top of coinsGained (which stays what the test itself pays): the very
-        // first finished test is the "Haz tu primer test" step of Home's first-steps card.
+        // first finished test is the "Haz tu primer test" step of Home's first-steps bar.
         completeFirstStepUseCase(FirstStepTask.FIRST_TEST)?.let(analytics::firstStepRewarded)
 
         withContext(Dispatchers.IO) {
@@ -486,7 +504,10 @@ class TestViewModel @Inject constructor(
                 )
             )
 
-            // 2. Save individual answers
+            // 2. Save individual answers, each tagged with its question id, the session's topic
+            // (when the category names one) and where it was given
+            val topic = DrivingTopic.fromCategory(state.category)
+            val mode = AnswerMode.fromNodeType(aiNodeType)
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
@@ -496,14 +517,17 @@ class TestViewModel @Inject constructor(
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = topic,
+                            mode = mode
                         )
                     )
                 }
             }
 
             // 3. Increment streak
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
 
             // 4. Update path if coming from a path node: always record the attempt on the
             // current node, but only unlock the next one once the score clears the bar.
@@ -551,8 +575,9 @@ class TestViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays
         )
     }
 

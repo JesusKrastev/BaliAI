@@ -3,21 +3,29 @@ package com.jesuskrastev.bali.ui.screens.home
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.FirstStepsProgress
+import com.jesuskrastev.bali.ui.navigation.AppBottomBar
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import org.junit.Rule
 import org.junit.Test
@@ -43,7 +51,7 @@ class FirstStepsBarScreenshotTest {
     /**
      * Draws the bar on the app background, with room around it for its shadow.
      *
-     * @param progress the card's progress
+     * @param progress the bar's progress
      * @param reward coins waiting to be celebrated
      * @param darkTheme whether to use the dark colour scheme
      */
@@ -111,7 +119,61 @@ class FirstStepsBarScreenshotTest {
         composeTestRule.onNodeWithTag(PREVIEW_TAG).captureRoboImage()
     }
 
+    /**
+     * The bar as Home lays it out: Home's own Scaffold puts it right on top of the app's bottom
+     * bar, and the content above it is padded by its height, so the last line stays visible.
+     */
+    @Test
+    fun captureAboveTheAppBottomBar() {
+        composeTestRule.setContent {
+            BaliTheme {
+                Scaffold(
+                    bottomBar = {
+                        AppBottomBar(
+                            currentDestination = null,
+                            onHomeClick = {},
+                            onGamesClick = {},
+                            onSettingsClick = {},
+                            onChatClick = {},
+                            onStatsClick = {},
+                        )
+                    },
+                ) { appPadding ->
+                    Scaffold(
+                        modifier = Modifier
+                            .padding(appPadding)
+                            .consumeWindowInsets(appPadding),
+                        bottomBar = {
+                            FirstStepsBar(
+                                progress = oneDone,
+                                reward = null,
+                                onTaskClick = {},
+                                onExamClick = {},
+                                onDismissClick = {},
+                                onRewardShown = {},
+                                onShown = {},
+                            )
+                        },
+                    ) { homePadding ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(homePadding)
+                                .testTag(PATH_TAG),
+                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Bottom,
+                        ) {
+                            Text("Final del camino: siempre visible", modifier = Modifier.padding(16.dp))
+                        }
+                    }
+                }
+            }
+        }
+        composeTestRule.onNodeWithText("Final del camino: siempre visible").assertIsDisplayed()
+        composeTestRule.onRoot().captureRoboImage()
+    }
+
     private companion object {
         const val PREVIEW_TAG = "first_steps_bar_preview"
+        const val PATH_TAG = "first_steps_path_stand_in"
     }
 }

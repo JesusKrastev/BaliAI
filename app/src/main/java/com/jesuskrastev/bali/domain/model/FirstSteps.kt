@@ -4,14 +4,14 @@ package com.jesuskrastev.bali.domain.model
 const val FIRST_STEPS_BONUS_COINS = 30
 
 /**
- * One of the actions the "Tus primeros pasos" card asks a new student to do on day 0–1.
+ * One of the actions the "Tus primeros pasos" bar asks a new student to do on day 0–1.
  *
  * @property id stable identifier persisted in the user's `firstStepsDone` Firestore field. Never
  *   rename one: doing so would make every account that already completed it look unfinished.
  * @property coins reward paid once, the first time the task is completed.
  */
 enum class FirstStepTask(val id: String, val coins: Int) {
-    /** Finish a test. Home's card opens a lesson with written questions, never a Gemini test. */
+    /** Finish a test. Home's bar opens a lesson with written questions, never a Gemini test. */
     FIRST_TEST("first_test", 30),
 
     /** Get an answer from the AI tutor chat. */
@@ -32,20 +32,20 @@ enum class FirstStepTask(val id: String, val coins: Int) {
 }
 
 /**
- * How far a student is through the first-steps card. Lives on the account (not the install), so
- * reinstalling or changing phone neither brings the card back nor lets the coins be collected twice.
+ * How far a student is through the first-steps bar. Lives on the account (not the install), so
+ * reinstalling or changing phone neither brings the bar back nor lets the coins be collected twice.
  *
- * @property startedAtMillis when the account was enrolled in the card, or 0 when it never was.
- *   Accounts that predate the feature stay at 0 and therefore never see the card.
+ * @property startedAtMillis when the account was enrolled in the bar, or 0 when it never was.
+ *   Accounts that predate the feature stay at 0 and therefore never see the bar.
  * @property completed tasks already done — and already paid.
- * @property dismissed true once the student hid the card, which also stops any pending reward.
+ * @property dismissed true once the student hid the bar, which also stops any pending reward.
  */
 data class FirstStepsProgress(
     val startedAtMillis: Long = 0L,
     val completed: Set<FirstStepTask> = emptySet(),
     val dismissed: Boolean = false
 ) {
-    /** True when the account was enrolled in the first-steps card at sign-up. */
+    /** True when the account was enrolled in the first-steps bar at sign-up. */
     val isEnrolled: Boolean get() = startedAtMillis > 0L
 
     /** True while tasks can still be completed and paid: enrolled and not dismissed. */

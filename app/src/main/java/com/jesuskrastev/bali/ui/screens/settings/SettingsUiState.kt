@@ -7,10 +7,12 @@ package com.jesuskrastev.bali.ui.screens.settings
  * @property userEmail authenticated user's email, null when signed out or unavailable
  * @property profilePictureUrl authenticated user's avatar URL, null when signed out or unavailable
  * @property isLoggedIn whether a user session is currently active
+ * @property soundsEnabled whether the answer sound effects are on (they are until the user turns them off)
  */
 data class SettingsUiState(
     val userName: String = "Futuro Conductor",
     val userEmail: String? = null,
     val profilePictureUrl: String? = null,
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+    val soundsEnabled: Boolean = true
 )

@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.domain.repository
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
@@ -21,9 +22,15 @@ interface UserRepository {
     fun hasCompletedOnboarding(): Flow<Boolean>
 
     suspend fun insert(user: User)
-    suspend fun resetStreak()
-    suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>)
-    suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, lastPracticeTimestamp: Long, practiceDays: List<Long>)
+
+    /**
+     * Saves every field of the daily streak in one write, so the count, the freezes and the
+     * day history never disagree.
+     *
+     * @param streak the streak to store
+     */
+    suspend fun updateStreak(streak: DailyStreak)
+
     suspend fun updateXp(xp: Int, level: Int)
 
     /** Atomically adds [amount] coins to the user's balance. */
@@ -40,7 +47,7 @@ interface UserRepository {
 
     /**
      * Marks [task] as done on the account and pays its coins, all as one indivisible write: if
-     * the task is already done, the card was dismissed or the account was never enrolled, nothing
+     * the task is already done, the bar was dismissed or the account was never enrolled, nothing
      * changes and nothing is paid, so the same reward can never be collected twice (even from two
      * devices). Completing the last task also pays [com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS].
      *
@@ -53,11 +60,10 @@ interface UserRepository {
      */
     suspend fun completeFirstStep(task: FirstStepTask): Int
 
-    /** Hides the first-steps card for good; tasks stop paying once it is dismissed. */
+    /** Hides the first-steps bar for good; tasks stop paying once it is dismissed. */
     suspend fun dismissFirstSteps()
 
     suspend fun updateStreakFreezes(count: Int)
-    suspend fun updateHighestStreak(highestStreak: Int)
 
     /**
      * Saves the real exam date the user set, replacing the onboarding estimate.

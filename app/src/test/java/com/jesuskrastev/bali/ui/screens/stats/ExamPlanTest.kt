@@ -1,4 +1,4 @@
-package com.jesuskrastev.bali.ui.screens.home
+package com.jesuskrastev.bali.ui.screens.stats
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.After
@@ -7,7 +7,7 @@ import org.junit.Test
 import java.util.Calendar
 import java.util.TimeZone
 
-class HomePlanTest {
+class ExamPlanTest {
 
     private val originalTimeZone = TimeZone.getDefault()
 
@@ -40,7 +40,7 @@ class HomePlanTest {
     }
 
     @Test
-    fun `without an exam the card counts down to the plan date`() {
+    fun `without an exam the countdown goes to the plan date`() {
         val promise = at(2026, 11, 25, hour = 18)
 
         val plan = planSummaryOf(examDateMillis = null, planTargetMillis = promise, now = now)
@@ -78,7 +78,7 @@ class HomePlanTest {
     }
 
     @Test
-    fun `with no date at all the card asks for one`() {
+    fun `with no date at all the countdown asks for one`() {
         assertThat(planSummaryOf(examDateMillis = null, planTargetMillis = null, now = now).targetMillis)
             .isNull()
     }
@@ -100,5 +100,27 @@ class HomePlanTest {
 
         assertThat(localDay).isEqualTo(at(2026, 11, 14))
         assertThat(pickerMillisFromLocalDay(localDay)).isEqualTo(pickerMillis)
+    }
+
+    @Test
+    fun `the countdown escalates as the date approaches and turns red in the last week`() {
+        val date = at(2026, 10, 20)
+        fun urgency(daysLeft: Int) = PlanSummary(date, daysLeft = daysLeft).urgency()
+
+        assertThat(PlanSummary().urgency()).isEqualTo(PlanUrgency.NO_DATE)
+        assertThat(urgency(31)).isEqualTo(PlanUrgency.ON_TRACK)
+        assertThat(urgency(30)).isEqualTo(PlanUrgency.MONTH)
+        assertThat(urgency(15)).isEqualTo(PlanUrgency.MONTH)
+        assertThat(urgency(14)).isEqualTo(PlanUrgency.TWO_WEEKS)
+        assertThat(urgency(8)).isEqualTo(PlanUrgency.TWO_WEEKS)
+        assertThat(urgency(7)).isEqualTo(PlanUrgency.FINAL_WEEK)
+        assertThat(urgency(2)).isEqualTo(PlanUrgency.FINAL_WEEK)
+        assertThat(urgency(1)).isEqualTo(PlanUrgency.TOMORROW)
+        assertThat(urgency(0)).isEqualTo(PlanUrgency.TODAY)
+
+        assertThat(urgency(8).isClose).isFalse()
+        assertThat(urgency(7).isClose).isTrue()
+        assertThat(urgency(1).isClose).isTrue()
+        assertThat(urgency(0).isClose).isTrue()
     }
 }

@@ -2,78 +2,70 @@ package com.jesuskrastev.bali.ui.screens.streak
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.ui.screens.home.DailyStreakState
-import com.jesuskrastev.bali.ui.screens.home.StreakStatus
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
-import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-data class MainStreakUiState(
+/**
+ * What the streak screens show.
+ *
+ * @property isLoading true until the profile has loaded
+ * @property currentStreak consecutive days with study, as of today
+ * @property highestStreak the longest streak ever reached
+ * @property practicedToday whether today already counts
+ * @property streakFreezes freezes still available
+ * @property recoverableStreak days of the streak lost yesterday that can still be bought back
+ *   today, 0 when there is nothing to recover
+ * @property week the current week, Monday first
+ */
+data class StreakUiState(
     val isLoading: Boolean = true,
-    val weeklyStreak: List<DailyStreakState> = emptyList(),
-    val streakFreezes: Int = 0,
     val currentStreak: Int = 0,
     val highestStreak: Int = 0,
-    val completionPercentage: Int = 0,
-    val encouragingMessage: String = "",
-    val weekSessions: Int = 0,
-    val weeklyGoal: Int = 5
+    val practicedToday: Boolean = false,
+    val streakFreezes: Int = 0,
+    val recoverableStreak: Int = 0,
+    val week: List<DailyStreakState> = emptyList()
 )
 
+/**
+ * Builds the streak screens' state from a profile. The streak is settled to [nowMillis] first,
+ * so a streak lost since the last visit never shows as alive, even before it is saved.
+ *
+ * @param user the profile
+ * @param nowMillis the current time
+ * @return the state to render
+ */
+fun streakUiStateOf(user: User, nowMillis: Long): StreakUiState {
+    val streak = DailyStreak.of(user).settledAt(nowMillis)
+    return StreakUiState(
+        isLoading = false,
+        currentStreak = streak.current,
+        highestStreak = streak.highest,
+        practicedToday = streak.hasPracticedOn(nowMillis),
+        streakFreezes = streak.freezes,
+        recoverableStreak = streak.recoverableStreakAt(nowMillis),
+        week = StreakUiHelper.generateWeeklyStreak(streak.practiceDays, streak.frozenDays, nowMillis)
+    )
+}
+
+/** Feeds both the streak page and the celebration shown after the first session of the day. */
 @HiltViewModel
 class StreakViewModel @Inject constructor(
-    private val userRepository: UserRepository,
-    private val remoteConfigProvider: RemoteConfigProvider
+    userRepository: UserRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(MainStreakUiState())
-    val uiState: StateFlow<MainStreakUiState> = _uiState.asStateFlow()
-
-    init {
-        loadData()
-    }
-
-    private fun loadData() {
-        viewModelScope.launch {
-            userRepository.get().collectLatest { user ->
-                if (user != null) {
-                    val weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays)
-                    // Calculate actual sessions from weeklyStreak instead of relying on weekSessions DB field
-                    val actualSessionsThisWeek = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-                    _uiState.value = MainStreakUiState(
-                        isLoading = false,
-                        weeklyStreak = weeklyStreak,
-                        streakFreezes = user.streakFreezes,
-                        currentStreak = user.currentStreak,
-                        highestStreak = user.highestStreak,
-                        completionPercentage = calculateCompletionPercentage(weeklyStreak),
-                        encouragingMessage = generateEncouragingMessage(user.currentStreak, user.highestStreak),
-                        weekSessions = actualSessionsThisWeek,
-                        weeklyGoal = remoteConfigProvider.getWeeklyGoal()
-                    )
-                }
-            }
-        }
-    }
-
-    private fun calculateCompletionPercentage(weeklyStreak: List<DailyStreakState>): Int {
-        val completedDays = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-        return (completedDays * 100) / 7
-    }
-
-    private fun generateEncouragingMessage(currentStreak: Int, highestStreak: Int): String {
-        return if (currentStreak >= highestStreak) {
-            "¡Increíble! Estás estableciendo un nuevo récord personal."
-        } else {
-            val remaining = highestStreak - currentStreak
-            "Estás a solo $remaining días de batir tu récord personal de $highestStreak días."
-        }
-    }
+    val uiState: StateFlow<StreakUiState> = userRepository.get()
+        .filterNotNull()
+        .map { streakUiStateOf(it, System.currentTimeMillis()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StreakUiState())
 }

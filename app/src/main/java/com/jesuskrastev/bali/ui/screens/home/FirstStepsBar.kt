@@ -130,7 +130,7 @@ private sealed interface FirstStepsBarContent {
  *
  * Renders nothing when there is neither progress to show nor a reward to celebrate.
  *
- * @param progress the card's progress, or null when the account must not see it
+ * @param progress the bar's progress, or null when the account must not see it
  * @param reward coins just earned on another screen that are still to be celebrated
  * @param onTaskClick takes the student to a pending task
  * @param onExamClick opens the first simulacro
@@ -354,7 +354,7 @@ private fun SummaryRow(
  * Circular progress with the "done/total" count in the middle.
  *
  * @param doneCount tasks completed
- * @param total tasks in the card
+ * @param total tasks in the bar
  */
 @Composable
 private fun ProgressRing(doneCount: Int, total: Int) {

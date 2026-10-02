@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CreditCard
@@ -25,6 +26,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -127,6 +129,18 @@ fun SettingsScreen(
                     icon = Icons.Rounded.CreditCard,
                     label = "Gestionar suscripción",
                     onClick = onManageSubscriptionClick
+                )
+            )
+        )
+
+        SettingsSection(
+            title = "Preferencias",
+            items = listOf(
+                SettingsRowSpec(
+                    icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                    label = "Sonidos",
+                    checked = uiState.soundsEnabled,
+                    onClick = { viewModel.setSoundsEnabled(!uiState.soundsEnabled) }
                 )
             )
         )
@@ -354,10 +368,17 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
     }
 }
 
-/** One tappable row inside a [SettingsGroup]: leading icon, label, and the action it triggers. */
+/**
+ * One tappable row inside a [SettingsGroup]: leading icon, label, and the action it triggers.
+ *
+ * @property checked null for a plain row that ends in a chevron; true or false for a switch row,
+ *   which shows a [Switch] in that position. The whole row is tappable either way, so [onClick]
+ *   is also what flips the switch.
+ */
 private data class SettingsRowSpec(
     val icon: ImageVector,
     val label: String,
+    val checked: Boolean? = null,
     val onClick: () -> Unit
 )
 
@@ -414,7 +435,8 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
                         icon = item.icon,
                         label = item.label,
                         accentColor = MaterialTheme.colorScheme.primary,
-                        labelColor = MaterialTheme.colorScheme.onSurface
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        checked = item.checked
                     )
                 }
                 if (index != items.lastIndex) {
@@ -436,9 +458,17 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
  * @param label row name
  * @param accentColor color applied to the icon
  * @param labelColor color applied to the label text
+ * @param checked null to end the row with a chevron; otherwise the state of the [Switch] shown
+ *   instead. The switch only displays the state: the tap is handled by the row around it.
  */
 @Composable
-private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Color, labelColor: Color) {
+private fun SettingsRowContent(
+    icon: ImageVector,
+    label: String,
+    accentColor: Color,
+    labelColor: Color,
+    checked: Boolean? = null
+) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -457,12 +487,16 @@ private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Co
             color = labelColor,
             modifier = Modifier.weight(1f)
         )
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
+        if (checked != null) {
+            Switch(checked = checked, onCheckedChange = null)
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+        }
     }
 }
 

@@ -117,7 +117,7 @@ class GameViewModel @Inject constructor(
         val coinsGained = incrementCoinsUseCase(accuracy)
         incrementStreakUseCase()
         // Separate prize on top of coinsGained: the first finished session is the "Juega un
-        // minijuego" step of Home's first-steps card.
+        // minijuego" step of Home's first-steps bar.
         completeFirstStepUseCase(FirstStepTask.PLAY_GAME)?.let(analyticsTracker::firstStepRewarded)
         analyticsTracker.gameCompleted(game.id, finalScore, ROUNDS_PER_SESSION, durationSeconds)
 

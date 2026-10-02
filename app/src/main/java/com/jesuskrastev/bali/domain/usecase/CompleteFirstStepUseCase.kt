@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.domain.usecase
 
+import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -37,7 +38,10 @@ open class CompleteFirstStepUseCase @Inject constructor(
         val reward = FirstStepReward(
             task = task,
             coins = coins,
-            completedAll = (progress.completed + task).containsAll(FirstStepTask.entries)
+            // Read from what the account actually paid, not from [progress]: that snapshot can be
+            // a stale cache when another device completed a task meanwhile, while the repository
+            // decides the bonus against the live document.
+            completedAll = coins >= task.coins + FIRST_STEPS_BONUS_COINS
         )
         pendingRewards.publish(reward)
         return reward

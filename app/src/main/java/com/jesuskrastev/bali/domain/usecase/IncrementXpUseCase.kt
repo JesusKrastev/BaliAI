@@ -70,6 +70,17 @@ open class IncrementXpUseCase @Inject constructor(
         return if (accuracy == 100 && totalQuestions >= 5) 5 else null
     }
 
+    /**
+     * Adds the experience a finished activity earned to the user, raising the level if it is reached.
+     *
+     * @param mode the kind of activity, which sets the base experience
+     * @param correctAnswers questions answered correctly
+     * @param totalQuestions questions in the activity
+     * @param durationSeconds time the activity took, for the speed bonus
+     * @param isRepeat true for an already completed lesson: 30 % of the base and no speed or
+     *   perfection bonus
+     * @return the experience earned, its breakdown and the resulting level
+     */
     open suspend operator fun invoke(
         mode: TestMode,
         correctAnswers: Int,
@@ -107,6 +118,7 @@ open class IncrementXpUseCase @Inject constructor(
         return XpEarned(
             xpGained = totalXpGained,
             levelUp = hasLeveledUp,
+            newLevel = newLevel,
             baseXp = baseXp,
             bonusPerfection = perfectionBonus,
             bonusFast = speedBonus,

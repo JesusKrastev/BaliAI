@@ -11,6 +11,11 @@ class ScreenNameTest {
     }
 
     @Test
+    fun `the statistics route is reported as Stats`() {
+        assertThat(screenNameOf("com.jesuskrastev.bali.ui.navigation.StatsRoute")).isEqualTo("Stats")
+    }
+
+    @Test
     fun `query arguments are dropped`() {
         val route = "com.jesuskrastev.bali.ui.navigation.TestRoute?topic={topic}&nodeId={nodeId}"
 

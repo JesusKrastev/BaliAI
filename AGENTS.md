@@ -110,6 +110,13 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
 - When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel), never call either SDK directly from a ViewModel.
 
+## Branches and releases
+
+Follow `CLAUDE.md` § "Branches and releases". The three rules that must never break:
+every feature branches from the latest `origin/develop` (never from another feature) and returns
+to it through a squash-merged PR; a feature branch never goes to Play; `main` only receives
+`release/*` and `hotfix/*` through a merge commit.
+
 ## Code Quality
 
 - ALWAYS refactor code opportunistically when touching a file — improve naming, reduce duplication, simplify logic, and clean up dead code. Leave every file cleaner than you found it.

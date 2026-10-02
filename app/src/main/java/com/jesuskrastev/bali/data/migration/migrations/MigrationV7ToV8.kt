@@ -1,37 +1,58 @@
 package com.jesuskrastev.bali.data.migration.migrations
 
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
+import com.jesuskrastev.bali.domain.model.DailyStreak
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 
 /**
- * Migración v7 → v8
+ * Migración v7 → v8: la racha pasa de semanal a diaria.
  *
- * Cambios:
- * - Registra tres campos nuevos en el documento de usuario, que alimentan la tarjeta
- *   "Tus primeros pasos" de Home:
- *   - `firstStepsStartedAt` (Long): cuándo se inscribió la cuenta en la tarjeta. 0 o ausente
- *     significa "nunca inscrita".
- *   - `firstStepsDone` (List<String>): ids de las tareas ya completadas y cobradas.
- *   - `firstStepsDismissed` (Boolean): true cuando el alumno ocultó la tarjeta.
+ * Cambios en `users/{userId}`:
+ * - `currentStreak` pasa a contar días seguidos. Las semanas no se pueden convertir en días, así
+ *   que se reconstruye con [DailyStreak.fromHistory] a partir de `practiceDays` (que la racha
+ *   semanal solo guardaba de la semana en curso, así que como mucho da 7).
+ * - `highestStreak` empieza de nuevo en el valor reconstruido: un récord en semanas no dice
+ *   nada en días.
+ * - Añade `frozenDays` (días que salvó un congelador), vacío.
+ * - Borra `weekSessions` y `currentWeekStart`, que solo usaba la racha semanal.
  *
- * No hay nada que rellenar, y es a propósito: la inscripción se hace al crear la cuenta
- * (`AuthViewModel`), de modo que las cuentas que ya existen quedan sin `firstStepsStartedAt` y
- * no ven nunca la tarjeta. Esta migración NO debe escribir `firstStepsStartedAt`: también se
- * ejecuta sobre cuentas recién creadas por esta versión (su documento aún no trae
- * `schemaVersion`), y pisarlo les quitaría la tarjeta. Si algún día se decide enseñársela a los
- * suscriptores existentes, se hará en una migración posterior que inscriba solo a quien no
- * tenga el campo.
- *
- * Existe para que `schemaVersion` refleje la estructura real del documento y para dejar
- * registrado el cambio, tal y como exige el flujo de migraciones del proyecto.
+ * Los congeladores (`streakFreezes`) se mantienen tal cual.
  */
-class MigrationV7ToV8 @Inject constructor() : FirestoreMigration {
+class MigrationV7ToV8 @Inject constructor(
+    private val firestore: FirebaseFirestore
+) : FirestoreMigration {
 
     override val targetVersion: Int = 8
-    override val description: String =
-        "Registrar los campos firstStepsStartedAt/firstStepsDone/firstStepsDismissed (tarjeta de primeros pasos)"
+    override val description: String = "Pasar la racha de semanal a diaria"
 
+    /**
+     * Rewrites the streak fields of one user.
+     *
+     * @param userId the user whose document is migrated
+     */
     override suspend fun migrate(userId: String) {
-        // Intencionadamente vacía: ver la documentación de la clase.
+        val userRef = firestore.collection("env")
+            .document(BuildConfig.BUILD_TYPE)
+            .collection("users")
+            .document(userId)
+
+        val practiceDays = (userRef.get().await().get("practiceDays") as? List<*>)
+            .orEmpty()
+            .mapNotNull { (it as? Number)?.toLong() }
+        val streak = DailyStreak.fromHistory(practiceDays, System.currentTimeMillis())
+
+        userRef.update(
+            mapOf(
+                "currentStreak" to streak,
+                "highestStreak" to streak,
+                "frozenDays" to emptyList<Long>(),
+                "weekSessions" to FieldValue.delete(),
+                "currentWeekStart" to FieldValue.delete()
+            )
+        ).await()
     }
 }

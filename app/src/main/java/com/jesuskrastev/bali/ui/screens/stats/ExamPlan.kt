@@ -1,4 +1,4 @@
-package com.jesuskrastev.bali.ui.screens.home
+package com.jesuskrastev.bali.ui.screens.stats
 
 import java.util.Calendar
 import java.util.TimeZone
@@ -6,7 +6,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /**
- * What Home's plan card shows: the day the student is working towards and how far away it is.
+ * What the statistics countdown shows: the day the student is working towards and how far away it is.
  *
  * @property targetMillis the day the card counts down to, or null when there is none ahead,
  *   in which case the card asks for the exam date instead
@@ -20,8 +20,59 @@ data class PlanSummary(
     val daysLeft: Int = 0
 )
 
+/** Days left up to which the countdown is in its last-month tone. */
+internal const val PLAN_MONTH_DAYS = 30
+
+/** Days left up to which the countdown is in its last-two-weeks tone. */
+internal const val PLAN_TWO_WEEKS_DAYS = 14
+
+/** Days left up to which the countdown is in its red final-week tone. */
+internal const val PLAN_FINAL_WEEK_DAYS = 7
+
+/** How close the plan's date is; the countdown escalates its tone as the date approaches. */
+enum class PlanUrgency {
+    /** No date ahead: the card asks for one. */
+    NO_DATE,
+
+    /** More than [PLAN_MONTH_DAYS] days left. */
+    ON_TRACK,
+
+    /** Between [PLAN_TWO_WEEKS_DAYS] + 1 and [PLAN_MONTH_DAYS] days left. */
+    MONTH,
+
+    /** Between [PLAN_FINAL_WEEK_DAYS] + 1 and [PLAN_TWO_WEEKS_DAYS] days left. */
+    TWO_WEEKS,
+
+    /** Between 2 and [PLAN_FINAL_WEEK_DAYS] days left. */
+    FINAL_WEEK,
+
+    /** The date is tomorrow. */
+    TOMORROW,
+
+    /** The date is today. */
+    TODAY;
+
+    /** Whether the date is close enough for the card to switch to its red, final-stretch look. */
+    val isClose: Boolean get() = this == FINAL_WEEK || this == TOMORROW || this == TODAY
+}
+
 /**
- * Picks the day Home's plan card counts down to.
+ * Classifies how close this plan's date is.
+ *
+ * @return [PlanUrgency.NO_DATE] without a date, otherwise the band [PlanSummary.daysLeft] falls in
+ */
+internal fun PlanSummary.urgency(): PlanUrgency = when {
+    targetMillis == null -> PlanUrgency.NO_DATE
+    daysLeft == 0 -> PlanUrgency.TODAY
+    daysLeft == 1 -> PlanUrgency.TOMORROW
+    daysLeft <= PLAN_FINAL_WEEK_DAYS -> PlanUrgency.FINAL_WEEK
+    daysLeft <= PLAN_TWO_WEEKS_DAYS -> PlanUrgency.TWO_WEEKS
+    daysLeft <= PLAN_MONTH_DAYS -> PlanUrgency.MONTH
+    else -> PlanUrgency.ON_TRACK
+}
+
+/**
+ * Picks the day the countdown counts down to.
  *
  * For a student who had booked their exam, onboarding saves the same estimate as both the exam
  * date and the plan date, and the card keeps the onboarding promise ("Carnet antes del…").

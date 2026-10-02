@@ -107,4 +107,26 @@ class AnalyticsTrackerTest {
         verify(mixpanel).flush()
         verify(posthog).flush()
     }
+
+    @Test
+    fun `the readiness view carries the verdict and the shown percentage`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.readinessViewed(level = "ALMOST", mocksTaken = 4, passPercent = 76)
+
+        verify(firebase).logEvent(eq("readiness_viewed"), bundle.capture())
+        assertThat(bundle.firstValue.getString("level")).isEqualTo("ALMOST")
+        assertThat(bundle.firstValue.getInt("mocks_taken")).isEqualTo(4)
+        assertThat(bundle.firstValue.getInt("pass_percent")).isEqualTo(76)
+    }
+
+    @Test
+    fun `the readiness view omits the percentage when none was shown`() {
+        val bundle = argumentCaptor<Bundle>()
+
+        tracker.readinessViewed(level = "NOT_ENOUGH_DATA", mocksTaken = 1, passPercent = null)
+
+        verify(firebase).logEvent(eq("readiness_viewed"), bundle.capture())
+        assertThat(bundle.firstValue.containsKey("pass_percent")).isFalse()
+    }
 }
