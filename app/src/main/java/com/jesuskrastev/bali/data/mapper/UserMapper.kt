@@ -10,6 +10,7 @@ fun UserEntity.toDomain(): User = User(
     licenseType = licenseType,
     experience = experience,
     examDateMillis = examDateMillis,
+    planTargetMillis = planTargetMillis,
     difficultTopics = difficultTopics,
     lastPracticeTimestamp = lastPracticeTimestamp,
     currentStreak = currentStreak,
@@ -18,9 +19,10 @@ fun UserEntity.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )
 
 fun User.toEntity(): UserEntity = UserEntity(
@@ -29,6 +31,7 @@ fun User.toEntity(): UserEntity = UserEntity(
     licenseType = licenseType,
     experience = experience,
     examDateMillis = examDateMillis,
+    planTargetMillis = planTargetMillis,
     difficultTopics = difficultTopics,
     lastPracticeTimestamp = lastPracticeTimestamp,
     currentStreak = currentStreak,
@@ -37,9 +40,10 @@ fun User.toEntity(): UserEntity = UserEntity(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )
 
 fun User.toFirestore(): UserFirestore = UserFirestore(
@@ -48,6 +52,7 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     licenseType = licenseType.orEmpty(),
     experience = experience.orEmpty(),
     examDateMillis = examDateMillis ?: 0L,
+    planTargetMillis = planTargetMillis ?: 0L,
     difficultTopics = difficultTopics,
     lastPracticeTimestamp = lastPracticeTimestamp,
     currentStreak = currentStreak,
@@ -56,9 +61,10 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )
 
 fun UserFirestore.toDomain(): User = User(
@@ -67,6 +73,7 @@ fun UserFirestore.toDomain(): User = User(
     licenseType = licenseType.ifEmpty { null },
     experience = experience.ifEmpty { null },
     examDateMillis = examDateMillis.takeIf { it != 0L },
+    planTargetMillis = planTargetMillis.takeIf { it != 0L },
     difficultTopics = difficultTopics,
     lastPracticeTimestamp = lastPracticeTimestamp,
     currentStreak = currentStreak,
@@ -75,7 +82,8 @@ fun UserFirestore.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    weekSessions = weekSessions,
-    currentWeekStart = currentWeekStart
+    frozenDays = frozenDays
 )

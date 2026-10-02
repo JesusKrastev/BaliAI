@@ -2,7 +2,10 @@ package com.jesuskrastev.bali.ui.screens.onboarding
 
 import androidx.annotation.RawRes
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.StudyRhythm
+import com.jesuskrastev.bali.domain.model.StudySlot
 import java.text.Normalizer
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 /**
@@ -183,6 +186,87 @@ object OnboardingConfig {
         WEEKLY_STUDY_OFTEN -> "Varias veces por semana"
         WEEKLY_STUDY_WHENEVER -> "Cuando puedas"
         else -> null
+    }
+
+    /**
+     * The rhythm a weekly study answer commits to, as the reminders understand it.
+     *
+     * @param option one of [weeklyStudyOptions], or null if unanswered
+     * @return the matching rhythm, or null when there is none
+     */
+    fun studyRhythmFor(option: String?): StudyRhythm? = when (option) {
+        WEEKLY_STUDY_DAILY -> StudyRhythm.DAILY
+        WEEKLY_STUDY_OFTEN -> StudyRhythm.OFTEN
+        WEEKLY_STUDY_WHENEVER -> StudyRhythm.WHENEVER
+        else -> null
+    }
+
+    /**
+     * Formats the hour a study reminder goes out at.
+     *
+     * @param slot the part of the day the user picked
+     * @return the hour as the app writes times, e.g. "21:00"
+     */
+    fun reminderTimeLabel(slot: StudySlot): String = "%d:00".format(slot.hour)
+
+    /**
+     * When the user likes to study, keyed by the option label. The hour is part of the label
+     * so the reminder offered on the next screen is no surprise, and it is built from
+     * [StudySlot.hour] so the two can never disagree.
+     */
+    val studyTimes: Map<String, StudySlot> = linkedMapOf(
+        "🌅 Por la mañana (${reminderTimeLabel(StudySlot.MORNING)})" to StudySlot.MORNING,
+        "☀️ A mediodía (${reminderTimeLabel(StudySlot.NOON)})" to StudySlot.NOON,
+        "🌆 Por la tarde (${reminderTimeLabel(StudySlot.AFTERNOON)})" to StudySlot.AFTERNOON,
+        "🌙 Por la noche (${reminderTimeLabel(StudySlot.NIGHT)})" to StudySlot.NIGHT
+    )
+
+    /**
+     * Why a reminder is worth saying yes to, built on the rhythm the user committed to two
+     * screens earlier. Text wrapped in pipes is rendered highlighted.
+     *
+     * @param weeklyStudy one of [weeklyStudyOptions], or null if unanswered
+     * @return the body line of the notifications screen
+     */
+    fun notificationsPitch(weeklyStudy: String?): String = when (weeklyStudy) {
+        WEEKLY_STUDY_DAILY -> "Un aviso al día, a tu hora. |10 preguntas| y sigues con tu plan."
+        WEEKLY_STUDY_OFTEN -> "Has dicho que estudiarás |varias veces por semana|. Un aviso a tu hora y no pierdes la racha."
+        else -> "Un aviso a tu hora para que |no se te pase|. Nunca de madrugada."
+    }
+
+    /** Weeks the plan needs when there is no booked exam to aim at, by study rhythm. */
+    private const val PLAN_WEEKS_DAILY = 3
+    private const val PLAN_WEEKS_OFTEN = 5
+    private const val PLAN_WEEKS_WHENEVER = 8
+
+    /**
+     * Works out the day the plan promises the license by: the one shown in the plan reveal
+     * ("Puedes tener tu carnet antes del…") and the one saved for Home's plan card, so both
+     * always say the same thing.
+     *
+     * A booked exam still ahead is the honest answer. Without one the date is derived from the
+     * rhythm the user committed to, which keeps the promise personal instead of inventing a
+     * deadline.
+     *
+     * @param examDate the estimated exam date, or null when no exam is booked
+     * @param weeklyStudy one of [weeklyStudyOptions], or null if unanswered
+     * @param now current time in millis, the day the plan starts
+     * @return the target day in millis
+     */
+    fun planTargetMillis(examDate: Long?, weeklyStudy: String?, now: Long = System.currentTimeMillis()): Long {
+        examDate?.takeIf { it > now }?.let { return it }
+
+        val weeks = when (weeklyStudy) {
+            WEEKLY_STUDY_DAILY -> PLAN_WEEKS_DAILY
+            WEEKLY_STUDY_OFTEN -> PLAN_WEEKS_OFTEN
+            else -> PLAN_WEEKS_WHENEVER
+        }
+        return Calendar.getInstance()
+            .apply {
+                timeInMillis = now
+                add(Calendar.WEEK_OF_YEAR, weeks)
+            }
+            .timeInMillis
     }
 
     val learningPreferences = listOf(

@@ -16,12 +16,24 @@ data class DailyStreakState(
     val status: StreakStatus,
     val isToday: Boolean
 )
+
+/**
+ * UI state for Home.
+ *
+ * @property plan the date the plan card counts down to, see [planSummaryOf]
+ * @property streak consecutive days with study, as of today
+ * @property practicedToday whether today already counts for the streak; the flame is grey until it does
+ * @property weekSessions days practised so far this week, counted from [practiceDays] like the
+ *   streak screens do, since the stored counter can still hold last week's number
+ * @property weeklyGoal sessions per week the student aims for (Remote Config, same for everyone)
+ */
 data class HomeUiState(
     val userName: String = "Futuro Conductor",
     val userEmail: String? = null,
     val profilePictureUrl: String? = null,
-    val examDateDays: Int? = null,
+    val plan: PlanSummary = PlanSummary(),
     val streak: Int = 0,
+    val practicedToday: Boolean = false,
     val weekSessions: Int = 0,
     val weeklyGoal: Int = 3,
     val weekProgressPercent: Int = 0,
@@ -36,7 +48,6 @@ data class HomeUiState(
     val highestStreak: Int = 0,
     val difficultTopics: List<String> = emptyList(),
     val dailyTip: String = "",
-    val showNoCoinsDialog: Boolean = false,
     val weeklyStreak: List<DailyStreakState> = emptyList(),
     val lastPracticeTimestamp: Long = 0L,
     val pathNodes: List<LessonNode> = emptyList(),

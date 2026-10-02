@@ -258,6 +258,17 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(weeklyStudy))
                 }
             }
+            OnboardingStep.StudyTime -> {
+                StepSelectorList(OnboardingConfig.studyTimes.keys.toList(), viewModel) { studyTime, _ ->
+                    viewModel.onEvent(OnboardingEvent.SelectStudyTime(studyTime))
+                }
+            }
+            OnboardingStep.Notifications -> StepNotifications(
+                pitch = OnboardingConfig.notificationsPitch(state.data.weeklyStudy),
+                isRequesting = state.isRequestingNotifications,
+                onAccept = { viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true)) },
+                onDecline = { viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false)) }
+            )
             OnboardingStep.LearningPreference -> {
                 StepSelectorList(OnboardingConfig.learningPreferences, viewModel) { preference, _ ->
                     viewModel.onEvent(OnboardingEvent.SelectLearningPreference(preference))

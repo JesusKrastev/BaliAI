@@ -1,7 +1,11 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
+import com.jesuskrastev.bali.domain.model.StudyRhythm
+import com.jesuskrastev.bali.domain.model.StudySchedule
+import com.jesuskrastev.bali.domain.model.StudySlot
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
+import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -17,14 +21,29 @@ class OnboardingViewModelTest {
 
     private val fakeUserRepository = FakeUserRepository()
     private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock())
+    private var fakeNotificationsRepository = FakeNotificationsRepository()
 
     private lateinit var viewModel: OnboardingViewModel
 
     @Before
     fun setup() {
-        viewModel = OnboardingViewModel(
+        viewModel = newViewModel()
+    }
+
+    /**
+     * Builds the ViewModel under test on the shared fakes.
+     *
+     * @param notificationsRepository the notifications fake to use, which also replaces the
+     *   shared one so assertions read the same instance
+     */
+    private fun newViewModel(
+        notificationsRepository: FakeNotificationsRepository = fakeNotificationsRepository
+    ): OnboardingViewModel {
+        fakeNotificationsRepository = notificationsRepository
+        return OnboardingViewModel(
             userRepository = fakeUserRepository,
-            analyticsTracker = fakeAnalyticsTracker
+            analyticsTracker = fakeAnalyticsTracker,
+            notificationsRepository = notificationsRepository
         )
     }
 
@@ -168,6 +187,124 @@ class OnboardingViewModelTest {
         fakeAnalyticsTracker.onboardingSteps.forEach { eventName ->
             assertThat(eventName.first().isLetter()).isTrue()
         }
+    }
+
+    @Test
+    fun `the reminder is offered right after the study rhythm`() = runTest {
+        advanceToWeeklyStudy()
+
+        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.StudyTime)
+
+        viewModel.onEvent(OnboardingEvent.SelectStudyTime(OnboardingConfig.studyTimes.keys.last()))
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Notifications)
+
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+    }
+
+    @Test
+    fun `the new screens are numbered in the funnel after the study rhythm`() = runTest {
+        advanceToNotifications()
+
+        assertThat(fakeAnalyticsTracker.onboardingSteps.takeLast(3))
+            .containsExactly("o20_weekly_study", "o21_study_time", "o22_notifications")
+            .inOrder()
+    }
+
+    @Test
+    fun `the study time is saved on the device with the rhythm it goes with`() = runTest {
+        advanceToWeeklyStudy()
+        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_DAILY))
+
+        val night = OnboardingConfig.studyTimes.entries.first { it.value == StudySlot.NIGHT }.key
+        viewModel.onEvent(OnboardingEvent.SelectStudyTime(night))
+
+        assertThat(fakeNotificationsRepository.savedSchedule)
+            .isEqualTo(StudySchedule(StudySlot.NIGHT, StudyRhythm.DAILY))
+    }
+
+    @Test
+    fun `the reminder offer names the hour just picked`() = runTest {
+        advanceToWeeklyStudy()
+        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
+
+        val morning = OnboardingConfig.studyTimes.entries.first { it.value == StudySlot.MORNING }.key
+        viewModel.onEvent(OnboardingEvent.SelectStudyTime(morning))
+
+        assertThat(viewModel.uiState.value.mascotMessage).contains("9:00")
+    }
+
+    @Test
+    fun `saying yes asks Android and reports the permission as granted`() = runTest {
+        advanceToNotifications()
+
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
+
+        assertThat(fakeNotificationsRepository.permissionRequests).isEqualTo(1)
+        assertThat(fakeAnalyticsTracker.notificationsAnswers).containsExactly("granted" to "night")
+        assertThat(viewModel.uiState.value.data.notifications).isEqualTo(NotificationsAnswer.GRANTED)
+    }
+
+    @Test
+    fun `refusing the system dialog is reported apart from saying no in the app`() = runTest {
+        viewModel = newViewModel(FakeNotificationsRepository(grantsPermission = false))
+        advanceToNotifications()
+
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
+
+        assertThat(fakeAnalyticsTracker.notificationsAnswers).containsExactly("denied" to "night")
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+    }
+
+    @Test
+    fun `saying no never shows the system dialog and keeps pushes off`() = runTest {
+        advanceToNotifications()
+
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
+
+        assertThat(fakeNotificationsRepository.permissionRequests).isEqualTo(0)
+        assertThat(fakeNotificationsRepository.optedOut).isTrue()
+        assertThat(fakeAnalyticsTracker.notificationsAnswers).containsExactly("declined" to "night")
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+    }
+
+    @Test
+    fun `a second tap on the reminder offer cannot skip the next question`() = runTest {
+        advanceToNotifications()
+
+        // The old screen is still on screen while it slides away.
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
+        viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
+
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.LearningPreference)
+        assertThat(fakeAnalyticsTracker.notificationsAnswers).hasSize(1)
+    }
+
+    /**
+     * Answers everything up to the study rhythm question, leaving the flow on
+     * [OnboardingStep.WeeklyStudy].
+     */
+    private fun advanceToWeeklyStudy() {
+        advanceThroughArc()
+        viewModel.onEvent(OnboardingEvent.SetName("Jesus"))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        viewModel.onEvent(OnboardingEvent.SelectExamTiming(OnboardingConfig.EXAM_TIMING_SOON))
+        viewModel.onEvent(OnboardingEvent.SelectProvince("Almería"))
+        // The province and its confirmation both wait for the bottom button.
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+    }
+
+    /**
+     * Answers everything up to the reminders offer with a night study time, leaving the flow
+     * on [OnboardingStep.Notifications].
+     */
+    private fun advanceToNotifications() {
+        advanceToWeeklyStudy()
+        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
+        val night = OnboardingConfig.studyTimes.entries.first { it.value == StudySlot.NIGHT }.key
+        viewModel.onEvent(OnboardingEvent.SelectStudyTime(night))
     }
 
     /** Answers the whole diagnosis block, leaving the flow on [OnboardingStep.FutureImpact]. */

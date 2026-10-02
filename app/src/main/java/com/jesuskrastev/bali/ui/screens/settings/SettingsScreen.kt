@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
@@ -86,20 +87,23 @@ private fun Context.openLink(url: String) {
 
 /**
  * Settings destination exposed by the persistent bottom navigation. Hosts the account section
- * (profile, sign out) plus the preference rows — legal links, feedback — that used to live in
- * Home's side drawer, laid out as labeled, grouped sections like a native settings page.
+ * (profile, subscription management, sign out) plus the preference rows — legal links,
+ * feedback — that used to live in Home's side drawer, laid out as labeled, grouped sections
+ * like a native settings page.
  *
  * @param modifier layout modifier applied to the root column
  * @param viewModel supplies the signed-in profile and the sign-out action
  * @param onAuthClick navigates to sign-in when the viewer is signed out
  * @param onFeedbackClick navigates to the "send feedback" destination
+ * @param onManageSubscriptionClick opens RevenueCat's Customer Center to manage or cancel
  */
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     onAuthClick: () -> Unit = {},
-    onFeedbackClick: () -> Unit = {}
+    onFeedbackClick: () -> Unit = {},
+    onManageSubscriptionClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -115,6 +119,17 @@ fun SettingsScreen(
         SettingsHeader()
 
         ProfileCard(uiState = uiState, onAuthClick = onAuthClick)
+
+        SettingsSection(
+            title = "Suscripción",
+            items = listOf(
+                SettingsRowSpec(
+                    icon = Icons.Rounded.CreditCard,
+                    label = "Gestionar suscripción",
+                    onClick = onManageSubscriptionClick
+                )
+            )
+        )
 
         SettingsSection(
             title = "Soporte",

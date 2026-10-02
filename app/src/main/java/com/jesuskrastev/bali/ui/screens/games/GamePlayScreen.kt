@@ -61,6 +61,7 @@ fun GamePlayScreen(
                     bonusFast = rewards.xpEarned.bonusFast,
                     bonusStreak = rewards.xpEarned.bonusStreak,
                     leveledUp = rewards.xpEarned.levelUp,
+                    newLevel = rewards.xpEarned.newLevel,
                     durationSeconds = rewards.durationSeconds,
                     accuracy = rewards.accuracy,
                     onContinueClick = onBackClick,

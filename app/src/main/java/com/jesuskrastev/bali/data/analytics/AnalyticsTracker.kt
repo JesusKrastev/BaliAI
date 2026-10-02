@@ -175,6 +175,19 @@ open class AnalyticsTracker @Inject constructor(
         putInt("step_index", stepIndex)
     }
 
+    /**
+     * Tracks the answer to the onboarding screen that offers study reminders.
+     *
+     * @param result `granted` (said yes and Android allowed it), `denied` (said yes but
+     *   refused the system dialog) or `declined` (tapped "Ahora no", no system dialog shown)
+     * @param studySlot the part of the day picked on the previous screen, e.g. `night`
+     */
+    open fun notificationsPermissionAnswered(result: String, studySlot: String?) =
+        log("notifications_permission_result") {
+            putString("result", result)
+            studySlot?.let { putString("study_slot", it) }
+        }
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**
@@ -367,9 +380,12 @@ open class AnalyticsTracker @Inject constructor(
     /**
      * Tracks that the user left the paywall having bought the win-back offer. Flushes
      * immediately, like [paywallPurchased].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this purchase, so
+     *   an impulse buy can be told apart from one the user thought over
      */
-    open fun paywallWinbackPurchased() {
-        log("paywall_winback_purchased")
+    open fun paywallWinbackPurchased(secondsOnOffer: Int) {
+        log("paywall_winback_purchased") { putInt("seconds_on_offer", secondsOnOffer) }
         mixpanel.flush()
         posthog.flush()
     }
@@ -377,12 +393,33 @@ open class AnalyticsTracker @Inject constructor(
     /**
      * Tracks that the user also closed the win-back offer without buying. Flushes immediately,
      * like [paywallClosed].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this decline, so a
+     *   near-instant close can be told apart from one where the user considered it first
      */
-    open fun paywallWinbackClosed() {
-        log("paywall_winback_closed")
+    open fun paywallWinbackClosed(secondsOnOffer: Int) {
+        log("paywall_winback_closed") { putInt("seconds_on_offer", secondsOnOffer) }
         mixpanel.flush()
         posthog.flush()
     }
+
+    /**
+     * Tracks that the win-back offer left the foreground with no decision taken — pressing
+     * home, switching apps or killing the app while looking at the discount.
+     *
+     * Kept as its own event rather than reusing [paywallBackgrounded] so a visitor who closes
+     * the app directly from the win-back screen isn't folded into the main paywall's count;
+     * pair with [paywallWinbackResumed] the same way [paywallBackgrounded] pairs with
+     * [paywallResumed]. Flushes immediately, because the process may not survive.
+     */
+    open fun paywallWinbackBackgrounded() {
+        log("paywall_winback_backgrounded")
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /** Tracks that the user came back to the win-back offer after backgrounding it. */
+    open fun paywallWinbackResumed() = log("paywall_winback_resumed")
 
     /**
      * Adds the properties every paywall purchase event shares.
@@ -402,6 +439,41 @@ open class AnalyticsTracker @Inject constructor(
         }
         putInt("seconds_on_paywall", secondsOnPaywall)
         putString("source", source)
+    }
+
+    // ── SUBSCRIPTION MANAGEMENT (Customer Center) ───────────────────────────
+    // Opening the Customer Center is already reported as the "CustomerCenter" screen view.
+
+    /**
+     * Tracks an option picked in the Customer Center, before any survey or store hand-off.
+     * "cancel" here is the intent to leave, whether or not the user goes through with it.
+     *
+     * @param option `cancel`, `missing_purchase`, `custom_url` or `custom_action`
+     */
+    open fun customerCenterOptionSelected(option: String) = log("customer_center_option_selected") {
+        putString("option", option)
+    }
+
+    /**
+     * Tracks the answer to "¿Por qué lo dejas?", the cancellation survey configured in the
+     * RevenueCat dashboard. Flushes immediately: the user is about to leave for Google Play.
+     *
+     * @param reasonId the id of the chosen survey option, as set in the RevenueCat dashboard
+     */
+    open fun subscriptionCancelReason(reasonId: String) {
+        log("subscription_cancel_reason") { putString("reason", reasonId) }
+        mixpanel.flush()
+        posthog.flush()
+    }
+
+    /**
+     * Tracks the Customer Center handing the user over to Google Play's subscription screen,
+     * where the cancellation actually happens. Flushes immediately, because the app is left.
+     */
+    open fun subscriptionManagementOpened() {
+        log("subscription_management_opened")
+        mixpanel.flush()
+        posthog.flush()
     }
 
     // ── AI CHAT ─────────────────────────────────────────────────────────────
@@ -477,6 +549,35 @@ open class AnalyticsTracker @Inject constructor(
             putString("reason", reason)
             putInt("input_tokens", inputTokens)
             putInt("output_tokens", outputTokens)
+        }
+
+    // ── PLAN (Home) ─────────────────────────────────────────────────────────
+
+    /**
+     * Tracks that the user set their exam date from Home's plan card.
+     *
+     * @param daysUntil calendar days from today to the chosen exam day
+     * @param hadPlanDate true when the card was already counting down to a date (so this is a
+     *   correction), false when it was asking for one
+     */
+    open fun examDateSet(daysUntil: Int, hadPlanDate: Boolean) = log("exam_date_set") {
+        putInt("days_until", daysUntil)
+        putBoolean("had_plan_date", hadPlanDate)
+    }
+
+    /**
+     * Tracks a tap on the study button of Home's plan card, which opens the next unlocked lesson.
+     *
+     * @param daysLeft calendar days from today to the date the card counts down to
+     * @param practicedToday true when today already had a session, so the button read "Seguir
+     *   practicando" instead of "Empezar la sesión de hoy"
+     * @param weekSessions sessions done so far this week
+     */
+    open fun planStudyClicked(daysLeft: Int, practicedToday: Boolean, weekSessions: Int) =
+        log("plan_study_clicked") {
+            putInt("days_left", daysLeft)
+            putBoolean("practiced_today", practicedToday)
+            putInt("week_sessions", weekSessions)
         }
 
     // ── MINI-GAMES ──────────────────────────────────────────────────────────

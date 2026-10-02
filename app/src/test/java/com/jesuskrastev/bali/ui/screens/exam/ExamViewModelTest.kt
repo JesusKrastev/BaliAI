@@ -26,7 +26,7 @@ class ExamViewModelTest {
     private val fakeTestResultRepository = FakeTestResultRepository()
     private val fakeAnswerRepository = FakeAnswerRepository()
 
-    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
+    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
 

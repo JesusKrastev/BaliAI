@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
+import com.jesuskrastev.bali.domain.model.StudySchedule
+import com.jesuskrastev.bali.domain.model.StudySlot
+import com.jesuskrastev.bali.domain.repository.NotificationsRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.User
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,13 +17,33 @@ import javax.inject.Inject
 import kotlin.random.Random
 
 /**
+ * How the user answered the offer of study reminders.
+ *
+ * @property analyticsValue the value reported as the `result` of the analytics event
+ */
+enum class NotificationsAnswer(val analyticsValue: String) {
+    /** Said yes and Android allowed notifications. */
+    GRANTED("granted"),
+
+    /** Said yes, then refused the system dialog. */
+    DENIED("denied"),
+
+    /** Tapped "Ahora no"; the system dialog was never shown. */
+    DECLINED("declined")
+}
+
+/**
  * Everything the user tells us during onboarding.
  *
- * Only [name] and [experience] outlive the flow; the rest exists to personalise the copy
- * of the later screens and to make the generated plan read as the user's own.
+ * Only [name] and [experience] outlive the flow in the profile, and [studyTime] on the
+ * device for the reminders; the rest exists to personalise the copy of the later screens and
+ * to make the generated plan read as the user's own.
  *
  * @property examTiming the bucket the user picked, kept for display
  * @property examDate the date [examTiming] estimates, used by the countdown and the plan
+ * @property studyTime the option picked on the study time screen, a key of
+ *   [OnboardingConfig.studyTimes]
+ * @property notifications the answer to the reminders offer, null until given
  */
 data class OnboardingData(
     val name: String? = null,
@@ -34,8 +57,17 @@ data class OnboardingData(
     val examDate: Long? = null,
     val province: String? = null,
     val weeklyStudy: String? = null,
+    val studyTime: String? = null,
+    val notifications: NotificationsAnswer? = null,
     val learningPreference: String? = null,
-)
+) {
+    /**
+     * The part of the day [studyTime] books the reminder in.
+     *
+     * @return the slot, or null while the study time is unanswered
+     */
+    fun studySlot(): StudySlot? = studyTime?.let { OnboardingConfig.studyTimes[it] }
+}
 
 /**
  * A single screen of the onboarding flow.
@@ -88,6 +120,11 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object Province : OnboardingStep("province")
     data object ProvinceConfirmed : Informational("province_confirmed")
     data object WeeklyStudy : OnboardingStep("weekly_study")
+    // Right after the rhythm, so the reminder is the natural follow-up to what the user just
+    // committed to, and five screens before the paywall so the system dialog never sits
+    // next to the purchase.
+    data object StudyTime : OnboardingStep("study_time")
+    data object Notifications : OnboardingStep("notifications")
     data object LearningPreference : OnboardingStep("learning_preference")
 
     // ── Cierre ─────────────────────────────────────────────────────────────
@@ -109,13 +146,15 @@ data class OnboardingUiState(
     val mascotMessage: String = "",
     val canGoBack: Boolean = false,
     val canGoNext: Boolean = false,
-    val isProcessingFinished: Boolean = false
+    val isProcessingFinished: Boolean = false,
+    val isRequestingNotifications: Boolean = false
 )
 
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val analyticsTracker: AnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker,
+    private val notificationsRepository: NotificationsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -137,7 +176,8 @@ class OnboardingViewModel @Inject constructor(
         // El plan
         OnboardingStep.Name, OnboardingStep.ExamDate,
         OnboardingStep.Province, OnboardingStep.ProvinceConfirmed,
-        OnboardingStep.WeeklyStudy, OnboardingStep.LearningPreference,
+        OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime, OnboardingStep.Notifications,
+        OnboardingStep.LearningPreference,
         // Cierre
         OnboardingStep.SocialProof, OnboardingStep.Processing, OnboardingStep.PlanReveal,
         OnboardingStep.Pact
@@ -197,6 +237,8 @@ class OnboardingViewModel @Inject constructor(
             // The province needs a confirmation tap, so it does not advance on its own.
             is OnboardingEvent.SelectProvince -> updateData { it.copy(province = event.province) }
             is OnboardingEvent.SelectWeeklyStudy -> selectStepItem { it.copy(weeklyStudy = event.weeklyStudy) }
+            is OnboardingEvent.SelectStudyTime -> selectStudyTime(event.studyTime)
+            is OnboardingEvent.AnswerNotifications -> answerNotifications(event.accepted)
             is OnboardingEvent.SelectLearningPreference -> selectStepItem { it.copy(learningPreference = event.preference) }
             OnboardingEvent.GoToNextStep -> goToNextStep()
             OnboardingEvent.GoToPreviousStep -> goToPreviousStep()
@@ -213,6 +255,60 @@ class OnboardingViewModel @Inject constructor(
     private fun selectStepItem(update: (OnboardingData) -> OnboardingData) {
         updateData(update)
         goToNextStep()
+    }
+
+    /**
+     * Keeps the study time and saves it on the device straight away, so the reminder is set
+     * up however the user answers the next screen and even if they quit before paying.
+     *
+     * @param option the tapped option, a key of [OnboardingConfig.studyTimes]
+     */
+    private fun selectStudyTime(option: String) {
+        val rhythm = OnboardingConfig.studyRhythmFor(_uiState.value.data.weeklyStudy)
+        OnboardingConfig.studyTimes[option]?.let { slot ->
+            viewModelScope.launch {
+                notificationsRepository.saveStudySchedule(StudySchedule(slot, rhythm))
+            }
+        }
+        selectStepItem { it.copy(studyTime = option) }
+    }
+
+    /**
+     * Records the answer to the reminders offer and moves on. Saying yes shows Android's
+     * permission dialog first. Taps that arrive while the dialog is open, or from the screen
+     * as it slides away, are ignored so they cannot skip the next step.
+     *
+     * @param accepted true for "Sí, avísame", false for "Ahora no"
+     */
+    private fun answerNotifications(accepted: Boolean) {
+        val state = _uiState.value
+        if (state.currentStep != OnboardingStep.Notifications || state.isRequestingNotifications) return
+
+        if (!accepted) {
+            notificationsRepository.optOut()
+            recordNotificationsAnswer(NotificationsAnswer.DECLINED)
+            return
+        }
+
+        _uiState.update { it.copy(isRequestingNotifications = true) }
+        viewModelScope.launch {
+            val granted = notificationsRepository.requestPermission()
+            _uiState.update { it.copy(isRequestingNotifications = false) }
+            recordNotificationsAnswer(if (granted) NotificationsAnswer.GRANTED else NotificationsAnswer.DENIED)
+        }
+    }
+
+    /**
+     * Reports the reminders answer and advances past the screen.
+     *
+     * @param answer how the user answered
+     */
+    private fun recordNotificationsAnswer(answer: NotificationsAnswer) {
+        analyticsTracker.notificationsPermissionAnswered(
+            result = answer.analyticsValue,
+            studySlot = _uiState.value.data.studySlot()?.tag
+        )
+        selectStepItem { it.copy(notifications = answer) }
     }
 
     /**
@@ -277,11 +373,15 @@ class OnboardingViewModel @Inject constructor(
         _uiState.update { it.copy(currentStep = OnboardingStep.Completed) }
     }
 
-    /** Converts collected onboarding answers into the local profile persisted before payment. */
+    /**
+     * Converts collected onboarding answers into the local profile persisted before payment,
+     * including the date the plan reveal just promised, so Home can keep showing it.
+     */
     private fun OnboardingData.toUser(): User = User(
         name = name,
         experience = experience,
         examDateMillis = examDate,
+        planTargetMillis = OnboardingConfig.planTargetMillis(examDate, weeklyStudy),
         lastPracticeTimestamp = 0,
         currentStreak = 0
     )
@@ -304,6 +404,8 @@ class OnboardingViewModel @Inject constructor(
         examTiming?.let { put("exam_timing", it) }
         province?.let { put("province", it) }
         weeklyStudy?.let { put("weekly_study", it) }
+        studySlot()?.let { put("study_slot", it.tag) }
+        notifications?.let { put("notifications", it.analyticsValue) }
         learningPreference?.let { put("learning_preference", it) }
     }
 

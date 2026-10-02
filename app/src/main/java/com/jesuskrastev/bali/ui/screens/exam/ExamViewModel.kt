@@ -355,7 +355,7 @@ class ExamViewModel @Inject constructor(
 
         // Un examen de la DGT de 30 preguntas se aprueba con 3 fallos o menos (27 correctas)
         val isPassed = correct >= 27
-        var newWeekSessions = -1
+        var newStreakDays = -1
 
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
@@ -398,7 +398,7 @@ class ExamViewModel @Inject constructor(
                 }
             }
 
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
         }
 
         return TestSummary(
@@ -412,8 +412,11 @@ class ExamViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays,
+            isFailedExam = !isPassed,
+            isPassedExam = isPassed
         )
     }
 

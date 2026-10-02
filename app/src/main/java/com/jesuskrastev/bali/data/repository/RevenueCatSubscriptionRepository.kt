@@ -74,9 +74,23 @@ class RevenueCatSubscriptionRepository @Inject constructor() : SubscriptionRepos
         }
     }
 
-    override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean {
-        return customerInfo.entitlements.active["premium"] != null
-    }
+    /**
+     * Checks for an active premium entitlement.
+     *
+     * @param customerInfo the customer info to read
+     * @return true when premium is active
+     */
+    override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean =
+        customerInfo.entitlements.active[PREMIUM_ENTITLEMENT] != null
+
+    /**
+     * Reads when the active premium entitlement was first bought.
+     *
+     * @param customerInfo the customer info to read
+     * @return the original purchase time in millis, or null when premium is not active
+     */
+    override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? =
+        customerInfo.entitlements.active[PREMIUM_ENTITLEMENT]?.originalPurchaseDate?.time
 
     override suspend fun getOffering(identifier: String): Result<Offering?> {
         return try {
@@ -89,5 +103,10 @@ class RevenueCatSubscriptionRepository @Inject constructor() : SubscriptionRepos
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private companion object {
+        /** Identifier of the entitlement every paid plan grants, as set in RevenueCat. */
+        const val PREMIUM_ENTITLEMENT = "premium"
     }
 }

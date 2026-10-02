@@ -37,7 +37,7 @@ class TestViewModelTest {
     private val fakePathRepository = FakePathRepository()
     private val mockGemini: GenerativeModel = mock()
 
-    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository, mock())
+    private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)
 

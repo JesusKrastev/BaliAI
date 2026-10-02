@@ -36,6 +36,27 @@ jobs:
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
 
     steps:
+      # Una build solo llega a Play desde la linea principal. Las dos que rompieron la migracion
+      # de Firestore salieron de aqui lanzadas a mano sobre ramas sin fusionar (E-017).
+      - name: Comprobar rama de origen
+        env:
+          REF: ${{ github.ref }}
+          TRACK: ${{ inputs.track || 'internal' }}
+        run: |
+          case "$REF" in
+            refs/heads/develop|refs/heads/main|refs/heads/release/*|refs/heads/hotfix/*|refs/tags/v*) ;;
+            *) echo "::error::$REF no puede subir a Play: fusiona la rama en develop o abre una release/*."
+               exit 1 ;;
+          esac
+          if [ "$TRACK" = "production" ]; then
+            case "$REF" in
+              refs/heads/main|refs/tags/v*) ;;
+              *) echo "::error::Produccion solo sale de main o de un tag v*, no de $REF."
+                 exit 1 ;;
+            esac
+          fi
+          echo "OK: $REF -> $TRACK"
+
       - uses: actions/checkout@v4
 
       - name: Set up JDK 21
@@ -80,11 +101,14 @@ jobs:
           fi
           echo "Publicando la versión $GRADLE_VERSION"
 
-      # NN en la banda 50-99 para las releases; pr-play.yml usa la 00-49, de forma que
-      # los dos workflows nunca puedan generar el mismo versionCode el mismo dia.
+      # El versionCode crece con la hora para los dos workflows (ver pr-play.yml). Dos subidas
+      # en el mismo cuarto de hora darian el mismo codigo y Play rechazaria la segunda: se
+      # relanza pasado ese cuarto de hora.
       - name: Calcular versionCode (YYYYMMDDNN)
         run: |
-          NN=$(printf '%02d' $(( 50 + GITHUB_RUN_NUMBER % 50 )))
+          # NN = cuarto de hora UTC del dia (00-95): crece con el reloj, asi que una build mas
+          # tardia siempre tiene un versionCode mayor, la lance quien la lance.
+          NN=$(printf '%02d' $(( (10#$(date -u +%H) * 60 + 10#$(date -u +%M)) / 15 )))
           echo "CI_VERSION_CODE=$(date -u +%Y%m%d)$NN" >> "$GITHUB_ENV"
 
       - name: Tests unitarios

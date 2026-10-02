@@ -27,11 +27,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
@@ -60,60 +63,35 @@ import com.jesuskrastev.bali.domain.model.NodeType
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 
 /**
- * Renders the home dashboard: streak/coins status, the AI-tutor entry point, and the
- * scrollable learning-path graph. The account menu that used to open from here as a side
- * drawer (profile, legal links, sign out) now lives in the Settings tab.
+ * Renders the home dashboard: streak/coins status, the plan card and the scrollable
+ * learning-path graph. The AI-tutor chat opens from the app's bottom bar. The account menu that used to open from here as a
+ * side drawer (profile, legal links, sign out) now lives in the Settings tab.
  *
- * @param viewModel supplies [HomeUiState] and drives path generation / exam coin gating
- * @param onNodeTestClick invoked with a tapped path node's title, description, id, and node-type name
+ * @param viewModel supplies [HomeUiState], drives path generation and saves the exam date
+ * @param onNodeTestClick invoked with a path node's title, description, id, and node-type name,
+ *   when it is tapped or opened from the plan card's study button; exam nodes open the mock
+ *   exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
- * @param onChatClick opens the AI tutor chat
  */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
-    onStreakClick: () -> Unit = {},
-    onChatClick: () -> Unit = {}
+    onStreakClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
 
-    if (uiState.showNoCoinsDialog) {
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissNoCoinsDialog() },
-            title = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.coin),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("¡Sin monedas!", fontWeight = FontWeight.Black)
-                }
+    if (showExamDatePicker) {
+        ExamDatePickerDialog(
+            initialDateMillis = uiState.plan.targetMillis,
+            onConfirm = { pickerMillis ->
+                viewModel.setExamDate(pickerMillis)
+                showExamDatePicker = false
             },
-            text = {
-                Text(
-                    "Necesitas $EXAM_COST_COINS monedas para realizar un examen oficial. ¡Sigue practicando para ganar más!",
-                    textAlign = TextAlign.Center
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = { viewModel.dismissNoCoinsDialog() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("ENTENDIDO", fontWeight = FontWeight.Bold)
-                }
-            },
-            shape = RoundedCornerShape(32.dp),
-            containerColor = MaterialTheme.colorScheme.surface
+            onDismiss = { showExamDatePicker = false }
         )
     }
 
@@ -126,13 +104,11 @@ fun HomeScreen(
                     .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 streak = uiState.streak,
+                practicedToday = uiState.practicedToday,
                 coinsCount = uiState.coinsCount,
                 onCoinsClick = onShopClick,
                 onStreakClick = onStreakClick
             )
-        },
-        floatingActionButton = {
-            AskBaliFab(onClick = onChatClick)
         }
     ) { paddingValues ->
         LearningPathGraph(
@@ -146,33 +122,26 @@ fun HomeScreen(
             },
             onGenerateClick = {
                 viewModel.generateNextPathNodesCount()
+            },
+            header = {
+                val nextNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
+                PlanCard(
+                    plan = uiState.plan,
+                    week = uiState.weeklyStreak,
+                    weekSessions = uiState.weekSessions,
+                    weeklyGoal = uiState.weeklyGoal,
+                    canStudy = nextNode != null,
+                    onStudyClick = {
+                        nextNode?.let { node ->
+                            viewModel.trackPlanStudyClick()
+                            onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                        }
+                    },
+                    onDateClick = { showExamDatePicker = true }
+                )
             }
         )
     }
-}
-
-/**
- * Entry point to the AI tutor chat. Carries the mascot rather than a generic chat glyph
- * so it reads as "ask Bali", the same character the student already talks to elsewhere.
- *
- * @param onClick invoked when the student wants to open the chat
- */
-@Composable
-fun AskBaliFab(onClick: () -> Unit) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = Color.White,
-        shape = RoundedCornerShape(20.dp),
-        icon = {
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp)
-            )
-        },
-        text = { Text("Pregunta a Bali", fontWeight = FontWeight.Black) }
-    )
 }
 
 /**
@@ -180,6 +149,7 @@ fun AskBaliFab(onClick: () -> Unit) {
  *
  * @param modifier layout modifier applied to the row
  * @param streak current daily streak count
+ * @param practicedToday whether today already counts; the flame stays grey until it does
  * @param coinsCount current coin balance
  * @param onCoinsClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
@@ -188,6 +158,7 @@ fun AskBaliFab(onClick: () -> Unit) {
 fun UserStatusRow(
     modifier: Modifier = Modifier,
     streak: Int,
+    practicedToday: Boolean = true,
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
     onStreakClick: () -> Unit = {}
@@ -203,6 +174,8 @@ fun UserStatusRow(
             Image(
                 painter = painterResource(id = R.drawable.streak_icon),
                 contentDescription = null,
+                colorFilter = if (practicedToday) null else ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                alpha = if (practicedToday) 1f else 0.5f,
                 modifier = Modifier.size(16.dp)
             )
             Text(
@@ -280,6 +253,7 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
+ * @param header content placed above the first section, scrolling away with the path
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -288,7 +262,8 @@ fun LearningPathGraph(
     pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
     onNodeClick: (LessonNode) -> Unit,
-    onGenerateClick: () -> Unit
+    onGenerateClick: () -> Unit,
+    header: @Composable () -> Unit = {}
 ) {
     if (pathNodes.isEmpty()) {
         if (isPathLoading) PathLoadingState(modifier)
@@ -320,9 +295,12 @@ fun LearningPathGraph(
         LazyColumn(
             state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
-            // Extra bottom room so the "Pregunta a Bali" FAB never covers the last node.
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp)
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
         ) {
+            item(key = "header") {
+                Box(modifier = Modifier.padding(top = 8.dp)) { header() }
+            }
+
             sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
                 val sectionNodes = nodesBySection[sectionKey].orEmpty()
                 if (sectionNodes.isEmpty()) return@forEachIndexed

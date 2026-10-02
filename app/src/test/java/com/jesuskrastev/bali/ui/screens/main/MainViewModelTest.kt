@@ -5,7 +5,9 @@ import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
 import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
+import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase
 import com.jesuskrastev.bali.ui.screens.auth.FakeAuthRepository
+import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.revenuecat.purchases.CustomerInfo
@@ -32,6 +34,7 @@ private class FakeSubscriptionRepository(private val hasPremium: Boolean) : Subs
     override suspend fun getCustomerInfo(): Result<CustomerInfo> = Result.success(customerInfo)
     override suspend fun restorePurchases(): Result<CustomerInfo> = Result.success(customerInfo)
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = hasPremium
+    override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? = null
     override suspend fun getOffering(identifier: String): Result<Offering?> = Result.success(null)
 }
 
@@ -79,15 +82,24 @@ class MainViewModelTest {
         isLoggedIn: Boolean,
         hasPremium: Boolean
     ): AppEntryPoint {
+        val userRepository = FakeUserRepository(hasCompletedOnboarding = hasCompletedOnboarding)
+        // Kept signed out at the currentUser() level regardless of isLoggedIn: entryPoint
+        // never reads it, and a non-null id would drive MainViewModel's init block into
+        // FirebaseMessaging calls that don't work in a plain JVM unit test.
+        val authRepository = FakeAuthRepository(isLoggedIn = isLoggedIn, currentUserId = null)
+        val subscriptionRepository = FakeSubscriptionRepository(hasPremium = hasPremium)
         val viewModel = MainViewModel(
-            userRepository = FakeUserRepository(hasCompletedOnboarding = hasCompletedOnboarding),
-            // Kept signed out at the currentUser() level regardless of isLoggedIn: entryPoint
-            // never reads it, and a non-null id would drive MainViewModel's init block into
-            // OneSignal/FirebaseMessaging calls that don't work in a plain JVM unit test.
-            authRepository = FakeAuthRepository(isLoggedIn = isLoggedIn, currentUserId = null),
-            subscriptionRepository = FakeSubscriptionRepository(hasPremium = hasPremium),
+            userRepository = userRepository,
+            authRepository = authRepository,
+            subscriptionRepository = subscriptionRepository,
             migrationManager = fakeMigrationManager,
-            inAppUpdateManager = fakeUpdateManager
+            inAppUpdateManager = fakeUpdateManager,
+            syncNotificationTags = SyncNotificationTagsUseCase(
+                authRepository = authRepository,
+                userRepository = userRepository,
+                subscriptionRepository = subscriptionRepository,
+                notificationsRepository = FakeNotificationsRepository()
+            )
         )
         val result = viewModel.entryPoint.filterNotNull().first()
         viewModel.viewModelScope.cancel()

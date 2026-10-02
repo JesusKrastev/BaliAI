@@ -15,9 +15,10 @@ import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
-import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
@@ -28,15 +29,11 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
-/** Coins charged to start an official exam; also quoted in Home's "not enough coins" dialog. */
-internal const val EXAM_COST_COINS = 100
-
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
-    private val decrementCoinsUseCase: DecrementCoinsUseCase,
     private val authRepository: AuthRepository,
     private val pathRepository: PathRepository,
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
@@ -44,13 +41,13 @@ class HomeViewModel @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
+    private val settleStreak: SettleStreakUseCase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _isPathLoading = MutableStateFlow(false)
     private val _pathError = MutableStateFlow<String?>(null)
 
-    private val _showNoCoinsDialog = MutableStateFlow(false)
     private val _dailyTip = MutableStateFlow("")
 
     private val _pathNodes: StateFlow<List<LessonNode>?> = authRepository.currentUserFlow
@@ -62,6 +59,8 @@ class HomeViewModel @Inject constructor(
     init {
         loadDailyTip()
         observeAndAutoGeneratePath()
+        // Days missed since the last visit spend freezes or end the streak before it is shown.
+        viewModelScope.launch { settleStreak() }
         viewModelScope.launch {
             remoteConfigProvider.fetchAndActivate()
         }
@@ -111,7 +110,6 @@ class HomeViewModel @Inject constructor(
         testResultRepository.count(),
         answerRepository.getRecentMistakes(),
         testResultRepository.getAverageScore(),
-        _showNoCoinsDialog,
         _dailyTip,
         _pathNodes,
         _isPathLoading,
@@ -123,13 +121,12 @@ class HomeViewModel @Inject constructor(
         val totalTests = flows[1] as Int
         val mistakes = flows[2] as List<*>
         val avgScore = flows[3] as Double? ?: 0.0
-        val showNoCoinsDialog = flows[4] as Boolean
-        val dailyTip = flows[5] as String
-        val pathNodes = flows[6] as List<*>?
-        val isPathLoading = flows[7] as Boolean
-        val pathError = flows[8] as String?
-        val profilePictureUrl = flows[9] as String?
-        val userEmail = flows[10] as String?
+        val dailyTip = flows[4] as String
+        val pathNodes = flows[5] as List<*>?
+        val isPathLoading = flows[6] as Boolean
+        val pathError = flows[7] as String?
+        val profilePictureUrl = flows[8] as String?
+        val userEmail = flows[9] as String?
 
         @Suppress("UNCHECKED_CAST")
         val typedMistakes = mistakes as List<Answer>
@@ -144,25 +141,34 @@ class HomeViewModel @Inject constructor(
                 userEmail = userEmail
             )
         } else {
+            val now = System.currentTimeMillis()
+            // Settled here too, so a lost streak never flashes as alive while the save lands.
+            val streak = DailyStreak.of(user).settledAt(now)
+            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(streak.practiceDays, streak.frozenDays, now)
+            // Counted from practiceDays like the streak screens: user.weekSessions is only
+            // refreshed on the next practice, so it can still hold last week's number.
+            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
+            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
-                streak = user.currentStreak,
-                weekSessions = user.weekSessions,
-                weeklyGoal = remoteConfigProvider.getWeeklyGoal(),
-                weekProgressPercent = ((user.weekSessions.toFloat() / remoteConfigProvider.getWeeklyGoal().coerceAtLeast(1)) * 100).toInt().coerceIn(0, 100),
+                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now),
+                streak = streak.current,
+                practicedToday = streak.hasPracticedOn(now),
+                weekSessions = weekSessions,
+                weeklyGoal = weeklyGoal,
+                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
                 xpLevel = user.level,
                 mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
-                streakFreezes = user.streakFreezes,
-                highestStreak = user.highestStreak,
-                showNoCoinsDialog = showNoCoinsDialog,
+                streakFreezes = streak.freezes,
+                highestStreak = streak.highest,
                 dailyTip = dailyTip,
-                weeklyStreak = StreakUiHelper.generateWeeklyStreak(user.practiceDays),
+                weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
@@ -183,19 +189,35 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun startExam(onSuccess: () -> Unit) {
+    /**
+     * Saves the exam date picked on the plan card; from then on the card counts down to it.
+     *
+     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
+     */
+    fun setExamDate(pickerMillis: Long) {
+        val examDay = localDayFromPickerMillis(pickerMillis)
+        val hadPlanDate = uiState.value.plan.targetMillis != null
         viewModelScope.launch {
-            val success = decrementCoinsUseCase(EXAM_COST_COINS)
-            if (success) {
-                onSuccess()
-            } else {
-                _showNoCoinsDialog.value = true
-            }
+            userRepository.updateExamDate(examDay)
+            analyticsTracker.examDateSet(
+                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
+                hadPlanDate = hadPlanDate
+            )
         }
     }
 
-    fun dismissNoCoinsDialog() {
-        _showNoCoinsDialog.value = false
+    /**
+     * Records a tap on the plan card's study button, right before the lesson it opens, to tell
+     * how many sessions start from the card rather than from the path.
+     */
+    fun trackPlanStudyClick() {
+        val state = uiState.value
+        val pace = weekPaceOf(state.weeklyStreak, state.weekSessions, state.weeklyGoal)
+        analyticsTracker.planStudyClicked(
+            daysLeft = state.plan.daysLeft,
+            practicedToday = pace.practicedToday,
+            weekSessions = pace.sessions
+        )
     }
 
     fun generateNextPathNodesCount(count: Int = 5) {

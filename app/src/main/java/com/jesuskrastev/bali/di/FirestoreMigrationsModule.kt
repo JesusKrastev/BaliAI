@@ -5,6 +5,10 @@ import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV4ToV5
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV5ToV6
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV6ToV7
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV7ToV8
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV8ToV9
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV9ToV10
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
 import dagger.Module
 import dagger.Provides
@@ -46,6 +50,26 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV5ToV6(migration: MigrationV5ToV6): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV6ToV7(migration: MigrationV6ToV7): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV7ToV8(migration: MigrationV7ToV8): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV8ToV9(migration: MigrationV8ToV9): FirestoreMigration = migration
+
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV9ToV10(migration: MigrationV9ToV10): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

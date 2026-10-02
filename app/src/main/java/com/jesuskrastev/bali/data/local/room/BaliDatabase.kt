@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 13,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,48 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /** Adds the streak that was just lost and the day it ended, so it can be bought back. */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            /** Both columns start at zero: nobody has a recoverable streak yet. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN lostStreak INTEGER NOT NULL DEFAULT 0")
+                database.execSQL(
+                    "ALTER TABLE users ADD COLUMN lostStreakDayMillis INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
+         * Reserved slot: the 1.2.2 internal build added `lastStreakSettledDayMillis` for the
+         * discarded streak speedometer (D-019), so some devices are already at version 16 with
+         * that column. It stays in the table, unused, so their schema keeps matching; the
+         * speedometer's cap of the streak at 7 is deliberately not applied here.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            /** Adds the unused marker column so a device upgrading from 15 matches one already at 16. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE users ADD COLUMN lastStreakSettledDayMillis INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Days a streak freeze covered, for the daily streak. The default matches the
+                // entity's @ColumnInfo so Room's schema check passes.
+                database.execSQL("ALTER TABLE users ADD COLUMN frozenDays TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Day the onboarding plan promised the license by, kept for Home's plan card.
+                // Nullable with no default: users who onboarded earlier simply have no plan date.
+                database.execSQL("ALTER TABLE users ADD COLUMN planTargetMillis INTEGER")
+            }
+        }
+
         val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 // Local transcript of the AI tutor chat, used while signed out.

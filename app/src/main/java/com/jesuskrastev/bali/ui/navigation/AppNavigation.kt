@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SportsEsports
@@ -72,16 +73,20 @@ import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
+import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
+import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import com.jesuskrastev.bali.ui.screens.test.TestViewModel
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
-import com.jesuskrastev.bali.ui.screens.streak.LessonStreakViewModel
+import com.jesuskrastev.bali.ui.screens.streak.StreakScreen
+import com.jesuskrastev.bali.ui.screens.streak.StreakViewModel
 import com.jesuskrastev.bali.ui.screens.settings.SettingsScreen
 import com.jesuskrastev.bali.ui.theme.BaliGrayMedium
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
@@ -130,6 +135,10 @@ object SuggestionsRoute
 @Serializable
 object ChatRoute
 
+/** RevenueCat's Customer Center, opened from settings to manage or cancel the subscription. */
+@Serializable
+object CustomerCenterRoute
+
 /**
  * Sign-in destination.
  *
@@ -145,10 +154,11 @@ data class AuthRoute(
 )
 
 @Serializable
-data class CoinsGainedRoute(val coins: Int, val newWeekSessions: Int)
+data class CoinsGainedRoute(val coins: Int, val newStreakDays: Int)
 
+/** Celebration after the first session of the day, the one that extends the streak. */
 @Serializable
-data class StreakRoute(val newWeekSessions: Int)
+object StreakRoute
 
 @Serializable
 object MainStreakRoute
@@ -165,8 +175,34 @@ data class TestResultRoute(
     val bonusFast: Int? = null,
     val bonusStreak: Int? = null,
     val leveledUp: Boolean = false,
+    val newLevel: Int = 0,
     val coinsGained: Int = 0,
-    val newWeekSessions: Int = -1
+    val newStreakDays: Int = -1,
+    val isFailedExam: Boolean = false,
+    val isPassedExam: Boolean = false
+)
+
+/**
+ * Builds the result screen's route from a finished test or exam.
+ *
+ * @return the route carrying everything the result screen and the screens after it show
+ */
+private fun TestSummary.toResultRoute() = TestResultRoute(
+    score = score,
+    total = total,
+    xpGained = xpGained,
+    durationSeconds = durationSeconds,
+    accuracy = accuracy,
+    baseXp = baseXp,
+    bonusPerfection = bonusPerfection,
+    bonusFast = bonusFast,
+    bonusStreak = bonusStreak,
+    leveledUp = leveledUp,
+    newLevel = newLevel,
+    coinsGained = coinsGained,
+    newStreakDays = newStreakDays,
+    isFailedExam = isFailedExam,
+    isPassedExam = isPassedExam
 )
 
 /**
@@ -197,6 +233,7 @@ fun AppNavigation(
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentDestination?.let { destination ->
         destination.hasRoute<HomeRoute>() ||
+            destination.hasRoute<ChatRoute>() ||
             destination.hasRoute<GamesRoute>() ||
             destination.hasRoute<SettingsRoute>()
     } == true
@@ -210,6 +247,7 @@ fun AppNavigation(
                         onHomeClick = { navController.navigateTopLevel(HomeRoute) },
                         onGamesClick = { navController.navigateTopLevel(GamesRoute) },
                         onSettingsClick = { navController.navigateTopLevel(SettingsRoute) },
+                        onChatClick = { navController.navigateTopLevel(ChatRoute) },
                     )
                 }
             },
@@ -247,9 +285,8 @@ fun AppNavigation(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            viewModel.startExam {
-                                navController.navigate(ExamRoute)
-                            }
+                            // Mock exams are free for subscribers (idea 015): no coin check.
+                            navController.navigate(ExamRoute)
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }
@@ -259,9 +296,6 @@ fun AppNavigation(
                     },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
-                    },
-                    onChatClick = {
-                        navController.navigate(ChatRoute)
                     }
                 )
             }
@@ -287,7 +321,18 @@ fun AppNavigation(
                     },
                     onFeedbackClick = {
                         navController.navigate(SuggestionsRoute)
+                    },
+                    onManageSubscriptionClick = {
+                        navController.navigate(CustomerCenterRoute)
                     }
+                )
+            }
+
+            composable<CustomerCenterRoute> {
+                val viewModel: CustomerCenterViewModel = hiltViewModel()
+                CustomerCenterLauncher(
+                    listener = viewModel.listener,
+                    onDismiss = { navController.popBackStack() }
                 )
             }
 
@@ -352,22 +397,7 @@ fun AppNavigation(
                         navController.popBackStack()
                     },
                     onFinishTest = { result ->
-                        navController.navigate(
-                            TestResultRoute(
-                                score = result.score,
-                                total = result.total,
-                                xpGained = result.xpGained,
-                                durationSeconds = result.durationSeconds,
-                                accuracy = result.accuracy,
-                                baseXp = result.baseXp,
-                                bonusPerfection = result.bonusPerfection,
-                                bonusFast = result.bonusFast,
-                                bonusStreak = result.bonusStreak,
-                                leveledUp = result.leveledUp,
-                                coinsGained = result.coinsGained,
-                                newWeekSessions = result.newWeekSessions
-                            )
-                        ) {
+                        navController.navigate(result.toResultRoute()) {
                             popUpTo(TestRoute(null)) { inclusive = true }
                         }
                     },
@@ -382,22 +412,7 @@ fun AppNavigation(
                         navController.popBackStack()
                     },
                     onFinishExam = { result ->
-                        navController.navigate(
-                            TestResultRoute(
-                                score = result.score,
-                                total = result.total,
-                                xpGained = result.xpGained,
-                                durationSeconds = result.durationSeconds,
-                                accuracy = result.accuracy,
-                                baseXp = result.baseXp,
-                                bonusPerfection = result.bonusPerfection,
-                                bonusFast = result.bonusFast,
-                                bonusStreak = result.bonusStreak,
-                                leveledUp = result.leveledUp,
-                                coinsGained = result.coinsGained,
-                                newWeekSessions = result.newWeekSessions
-                            )
-                        ) {
+                        navController.navigate(result.toResultRoute()) {
                             popUpTo(ExamRoute) { inclusive = true }
                         }
                     },
@@ -416,8 +431,13 @@ fun AppNavigation(
                     leveledUp = route.leveledUp,
                     durationSeconds = route.durationSeconds,
                     accuracy = route.accuracy,
+                    newLevel = route.newLevel,
+                    score = route.score,
+                    total = route.total,
+                    isFailedExam = route.isFailedExam,
+                    isPassedExam = route.isPassedExam,
                     onContinueClick = {
-                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newWeekSessions)) {
+                        navController.navigate(CoinsGainedRoute(route.coinsGained, route.newStreakDays)) {
                             popUpTo(HomeRoute) { inclusive = false }
                         }
                     }
@@ -429,8 +449,8 @@ fun AppNavigation(
                 CoinsGainedScreen(
                     coinsGained = route.coins,
                     onContinueClick = {
-                        if (route.newWeekSessions > 0) {
-                            navController.navigate(StreakRoute(route.newWeekSessions)) {
+                        if (route.newStreakDays > 0) {
+                            navController.navigate(StreakRoute) {
                                 popUpTo(HomeRoute) { inclusive = false }
                             }
                         } else {
@@ -442,13 +462,9 @@ fun AppNavigation(
                 )
             }
 
-            composable<StreakRoute> { backStackEntry ->
-                val route: StreakRoute = backStackEntry.toRoute()
-                val viewModel: LessonStreakViewModel = hiltViewModel()
-                
+            composable<StreakRoute> {
                 LessonStreakScreen(
-                    viewModel = viewModel,
-                    newWeekSessions = route.newWeekSessions,
+                    viewModel = hiltViewModel<StreakViewModel>(),
                     onContinueClick = {
                         navController.navigate(HomeRoute) {
                             popUpTo(HomeRoute) { inclusive = true }
@@ -458,13 +474,10 @@ fun AppNavigation(
             }
 
             composable<MainStreakRoute> {
-                val viewModel: com.jesuskrastev.bali.ui.screens.streak.StreakViewModel = hiltViewModel()
-                
-                com.jesuskrastev.bali.ui.screens.streak.StreakScreen(
-                    viewModel = viewModel,
-                    onBackClick = {
-                        navController.popBackStack()
-                    }
+                StreakScreen(
+                    viewModel = hiltViewModel<StreakViewModel>(),
+                    onBackClick = { navController.popBackStack() },
+                    onShopClick = { navController.navigate(ShopRoute) }
                 )
             }
 
@@ -528,19 +541,22 @@ fun AppNavigation(
 }
 
 /**
- * Renders the three persistent destinations that make up the primary app navigation.
+ * Renders the primary app navigation: Home, the AI tutor chat, Games and Settings. The chat is a
+ * tab like the others, so the bar stays visible while it is open.
  *
  * @param currentDestination back stack entry's destination, used to highlight the active tab
  * @param onHomeClick navigates to [HomeRoute]
  * @param onGamesClick navigates to [GamesRoute]
  * @param onSettingsClick navigates to [SettingsRoute]
+ * @param onChatClick navigates to [ChatRoute]
  */
 @Composable
-private fun AppBottomBar(
+internal fun AppBottomBar(
     currentDestination: androidx.navigation.NavDestination?,
     onHomeClick: () -> Unit,
     onGamesClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onChatClick: () -> Unit,
 ) {
     // The bar's background is drawn flush to the true bottom edge (behind the system nav bar,
     // matching edge-to-edge), but the tappable row is lifted above it by the real nav bar inset
@@ -579,6 +595,13 @@ private fun AppBottomBar(
                 icon = Icons.Rounded.Home,
                 selected = currentDestination?.hasRoute<HomeRoute>() == true,
                 onClick = onHomeClick,
+                modifier = Modifier.weight(1f),
+            )
+            BaliBottomBarItem(
+                label = "Chat",
+                icon = Icons.Rounded.ChatBubble,
+                selected = currentDestination?.hasRoute<ChatRoute>() == true,
+                onClick = onChatClick,
                 modifier = Modifier.weight(1f),
             )
             BaliBottomBarItem(

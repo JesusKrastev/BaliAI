@@ -10,9 +10,9 @@ import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
-import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
+import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -27,6 +27,7 @@ import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -45,7 +46,6 @@ class HomeViewModelTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val dateTimeHelper: DateTimeHelper = mock()
     
-    private val fakeDecrementCoinsUseCase = DecrementCoinsUseCase(fakeUserRepository)
     private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeAuthRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
     private val remoteConfigProvider: RemoteConfigProvider = mock()
@@ -59,7 +59,6 @@ class HomeViewModelTest {
             userRepository = fakeUserRepository,
             testResultRepository = fakeTestResultRepository,
             answerRepository = fakeAnswerRepository,
-            decrementCoinsUseCase = fakeDecrementCoinsUseCase,
             authRepository = fakeAuthRepository,
             pathRepository = fakePathRepository,
             generateNextPathNodesUseCase = fakeGenerateNextPathNodesUseCase,
@@ -67,19 +66,44 @@ class HomeViewModelTest {
             analyticsTracker = fakeAnalyticsTracker,
             dateTimeHelper = dateTimeHelper,
             remoteConfigProvider = remoteConfigProvider,
+            settleStreak = SettleStreakUseCase(fakeUserRepository),
             context = context
         )
     }
 
     @Test
-    fun `showNoCoinsDialog can be triggered by startExam`() = runTest {
+    fun `the coin balance on Home follows the user profile`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        // User starts with 500 coins in FakeUserRepository, so 100 coin exam should work.
-        // Let's set coins to 0 to trigger the dialog.
-        fakeUserRepository.setCoinsForTest(0)
-        assertThat(viewModel.uiState.value.showNoCoinsDialog).isFalse()
-        viewModel.startExam {}
-        assertThat(viewModel.uiState.value.showNoCoinsDialog).isTrue()
+
+        fakeUserRepository.setCoinsForTest(250)
+
+        assertThat(viewModel.uiState.value.coinsCount).isEqualTo(250)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `setting the exam date makes the plan card count down to it`() = runTest {
+        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        val inTenDays = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(10)
+
+        viewModel.setExamDate(pickerMillisFromLocalDay(inTenDays))
+
+        val plan = viewModel.uiState.value.plan
+        assertThat(plan.isExamDate).isTrue()
+        assertThat(plan.daysLeft).isEqualTo(10)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `the plan date saved at onboarding shows as the promise`() = runTest {
+        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        val promise = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(21)
+
+        fakeUserRepository.setPlanDatesForTest(examDateMillis = null, planTargetMillis = promise)
+
+        val plan = viewModel.uiState.value.plan
+        assertThat(plan.targetMillis).isEqualTo(promise)
+        assertThat(plan.isExamDate).isFalse()
         collectJob.cancel()
     }
 }
