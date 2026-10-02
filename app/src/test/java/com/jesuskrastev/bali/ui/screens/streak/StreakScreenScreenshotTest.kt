@@ -100,4 +100,22 @@ class StreakScreenScreenshotTest {
         composeTestRule.mainClock.advanceTimeBy(2_000)
         composeTestRule.onRoot().captureRoboImage()
     }
+
+    @Test
+    fun captureLessonStreakScreen_milestone() {
+        val user = atRisk.copy(
+            currentStreak = 7,
+            highestStreak = 7,
+            lastPracticeTimestamp = now,
+            practiceDays = atRisk.practiceDays + day(0)
+        )
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent {
+            BaliTheme(darkTheme = false) {
+                LessonStreakContent(uiState = streakUiStateOf(user, now), onContinueClick = {})
+            }
+        }
+        composeTestRule.mainClock.advanceTimeBy(3_000)
+        composeTestRule.onRoot().captureRoboImage()
+    }
 }
