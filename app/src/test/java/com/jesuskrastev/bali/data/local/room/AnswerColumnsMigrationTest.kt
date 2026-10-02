@@ -3,6 +3,8 @@ package com.jesuskrastev.bali.data.local.room
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.data.local.room.entities.AnswerEntity
@@ -18,8 +20,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Checks `MIGRATION_17_18` the way production runs it: a database file that is at version 17 is
- * opened by Room, which applies the migration and then validates the whole schema against the
- * entities. A wrong column name, type or nullability would make that validation throw here.
+ * opened by Room, which applies the migrations up to the current version and then validates the
+ * whole schema against the entities. A wrong column name, type or nullability would make that validation throw here.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -38,22 +40,30 @@ class AnswerColumnsMigrationTest {
         context.deleteDatabase(databaseName)
     }
 
+    /** Stands in for `MIGRATION_18_19`: the simulated version 17 file already has its columns. */
+    private val shopColumnsAlreadyThere = object : Migration(18, 19) {
+        override fun migrate(database: SupportSQLiteDatabase) = Unit
+    }
+
     /**
      * Opens the test database file.
      *
-     * @param withMigration whether Room is told about `MIGRATION_17_18`
+     * @param withMigration whether Room is told about the migrations from 17 on
      */
     private fun open(withMigration: Boolean): BaliDatabase {
         val builder = Room.databaseBuilder(context, BaliDatabase::class.java, databaseName)
             .allowMainThreadQueries()
-        if (withMigration) builder.addMigrations(BaliDatabase.MIGRATION_17_18)
+        if (withMigration) {
+            builder.addMigrations(BaliDatabase.MIGRATION_17_18, shopColumnsAlreadyThere)
+        }
         return builder.build()
     }
 
     /**
      * Leaves a database file as version 17 had it: the current schema, except that `answers` is
      * the table without the three new columns (the shape the 8→9 migration last built), holding
-     * one answer saved by that version, and `user_version` is 17.
+     * one answer saved by that version, and `user_version` is 17. `users` keeps the coin-shop
+     * columns, which SQLite cannot drop, so the step to version 19 is replaced by an empty one.
      */
     private fun createVersion17Database() {
         val fresh = open(withMigration = false)
@@ -94,7 +104,7 @@ class AnswerColumnsMigrationTest {
         val database = open(withMigration = true)
         database.openHelper.writableDatabase // opening is what runs the migration and the validation
 
-        assertThat(database.openHelper.readableDatabase.version).isEqualTo(18)
+        assertThat(database.openHelper.readableDatabase.version).isEqualTo(19)
         database.close()
     }
 

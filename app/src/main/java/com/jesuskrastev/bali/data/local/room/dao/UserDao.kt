@@ -56,6 +56,71 @@ interface UserDao {
     suspend fun updateStreakFreezes(count: Int)
 
     /**
+     * Charges [cost] and adds [item] in one SQLite statement, preventing an interrupted
+     * purchase from taking coins without granting its inventory item.
+     *
+     * @return 1 for a completed purchase, or 0 for insufficient coins.
+     */
+    @Query(
+        "UPDATE users SET coins = coins - :cost, " +
+            "hints = hints + CASE WHEN :item = 'HINT' THEN 1 ELSE 0 END, " +
+            "fiftyFifties = fiftyFifties + CASE WHEN :item = 'FIFTY_FIFTY' THEN 1 ELSE 0 END, " +
+            "doubleXpBoosts = doubleXpBoosts + CASE WHEN :item = 'DOUBLE_XP' THEN 1 ELSE 0 END, " +
+            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END " +
+            "WHERE coins >= :cost"
+    )
+    suspend fun purchaseInventoryItem(item: String, cost: Int): Int
+
+    /**
+     * Opens a surprise chest by applying both its cost and [reward] in one statement.
+     *
+     * @return 1 if the chest opened, otherwise 0 when the balance was insufficient.
+     */
+    @Query("UPDATE users SET coins = coins - :cost + :reward WHERE coins >= :cost")
+    suspend fun openSurpriseChest(cost: Int, reward: Int): Int
+
+    /**
+     * Removes exactly one consumable [item] only when it is available.
+     *
+     * @return 1 if an item was consumed, otherwise 0.
+     */
+    @Query(
+        "UPDATE users SET " +
+            "hints = hints - CASE WHEN :item = 'HINT' THEN 1 ELSE 0 END, " +
+            "fiftyFifties = fiftyFifties - CASE WHEN :item = 'FIFTY_FIFTY' THEN 1 ELSE 0 END, " +
+            "doubleXpBoosts = doubleXpBoosts - CASE WHEN :item = 'DOUBLE_XP' THEN 1 ELSE 0 END, " +
+            "doubleCoinBoosts = doubleCoinBoosts - CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END " +
+            "WHERE (:item = 'HINT' AND hints > 0) OR " +
+            "(:item = 'FIFTY_FIFTY' AND fiftyFifties > 0) OR " +
+            "(:item = 'DOUBLE_XP' AND doubleXpBoosts > 0) OR " +
+            "(:item = 'DOUBLE_COINS' AND doubleCoinBoosts > 0)"
+    )
+    suspend fun consumeInventoryItem(item: String): Int
+
+    /**
+     * Charges [cost] and records the streak bet's [target] in one statement.
+     *
+     * @return 1 if the bet was placed, 0 for insufficient coins or a bet that is already active.
+     */
+    @Query(
+        "UPDATE users SET coins = coins - :cost, streakBetTarget = :target " +
+            "WHERE coins >= :cost AND streakBetTarget = 0"
+    )
+    suspend fun placeStreakBet(cost: Int, target: Int): Int
+
+    /**
+     * Pays the won streak bet one time and clears it.
+     *
+     * @return 1 if a bet was paid, otherwise 0.
+     */
+    @Query("UPDATE users SET coins = coins + :payout, streakBetTarget = 0 WHERE streakBetTarget > 0")
+    suspend fun claimStreakBet(payout: Int): Int
+
+    /** Forgets the streak bet without paying it: the stake of a lost bet is not returned. */
+    @Query("UPDATE users SET streakBetTarget = 0")
+    suspend fun clearStreakBet()
+
+    /**
      * Replaces the exam date with the one the user picked on Home's plan card.
      *
      * @param examDateMillis local midnight of the exam day

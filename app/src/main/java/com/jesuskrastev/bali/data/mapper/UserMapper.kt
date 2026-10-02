@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.User
 
+/** Converts the local Room [UserEntity] into the framework-free [User] domain model. */
 fun UserEntity.toDomain(): User = User(
     id = id,
     name = name,
@@ -24,9 +25,15 @@ fun UserEntity.toDomain(): User = User(
     lostStreak = lostStreak,
     lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    frozenDays = frozenDays
+    frozenDays = frozenDays,
+    hints = hints,
+    fiftyFifties = fiftyFifties,
+    doubleXpBoosts = doubleXpBoosts,
+    doubleCoinBoosts = doubleCoinBoosts,
+    streakBetTarget = streakBetTarget
 )
 
+/** Converts this [User] into the Room entity stored for offline access. */
 fun User.toEntity(): UserEntity = UserEntity(
     id = id,
     name = name,
@@ -45,9 +52,15 @@ fun User.toEntity(): UserEntity = UserEntity(
     lostStreak = lostStreak,
     lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
-    frozenDays = frozenDays
+    frozenDays = frozenDays,
+    hints = hints,
+    fiftyFifties = fiftyFifties,
+    doubleXpBoosts = doubleXpBoosts,
+    doubleCoinBoosts = doubleCoinBoosts,
+    streakBetTarget = streakBetTarget
 )
 
+/** Converts this [User] into its Firestore document representation. */
 fun User.toFirestore(): UserFirestore = UserFirestore(
     id = id,
     name = name.orEmpty(),
@@ -67,11 +80,17 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays,
+    hints = hints,
+    fiftyFifties = fiftyFifties,
+    doubleXpBoosts = doubleXpBoosts,
+    doubleCoinBoosts = doubleCoinBoosts,
+    streakBetTarget = streakBetTarget,
     firstStepsStartedAt = firstSteps.startedAtMillis,
     firstStepsDone = firstSteps.completed.map { it.id },
     firstStepsDismissed = firstSteps.dismissed
 )
 
+/** Converts a Firestore profile document into the framework-free [User] domain model. */
 fun UserFirestore.toDomain(): User = User(
     id = id,
     name = name.ifEmpty { null },
@@ -91,6 +110,11 @@ fun UserFirestore.toDomain(): User = User(
     lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays,
+    hints = hints,
+    fiftyFifties = fiftyFifties,
+    doubleXpBoosts = doubleXpBoosts,
+    doubleCoinBoosts = doubleCoinBoosts,
+    streakBetTarget = streakBetTarget,
     firstSteps = FirstStepsProgress(
         startedAtMillis = firstStepsStartedAt,
         // Ids this build does not know (written by a newer version) are ignored, not crashed on.

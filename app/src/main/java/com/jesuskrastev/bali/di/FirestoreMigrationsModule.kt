@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.di
 
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV11ToV12
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV12ToV13
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
@@ -82,6 +83,12 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV11ToV12(migration: MigrationV11ToV12): FirestoreMigration = migration
+
+    /** Registers the coin-shop inventory migration for authenticated profiles (v12 is reserved). */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV12ToV13(migration: MigrationV12ToV13): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

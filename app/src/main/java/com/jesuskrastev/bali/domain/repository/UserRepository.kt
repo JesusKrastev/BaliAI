@@ -5,6 +5,8 @@ import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.StreakBet
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -64,6 +66,44 @@ interface UserRepository {
     suspend fun dismissFirstSteps()
 
     suspend fun updateStreakFreezes(count: Int)
+
+    /**
+     * Atomically charges [cost] and adds [item] to the user's inventory.
+     *
+     * @return true when the balance allows the purchase.
+     */
+    suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean
+
+    /**
+     * Atomically spends [cost] and grants the random coin [reward] from a surprise chest.
+     *
+     * @return true when the chest was opened; false when the balance is insufficient.
+     */
+    suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean
+
+    /**
+     * Consumes one owned [item].
+     *
+     * @return true when an item was available and consumed.
+     */
+    suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean
+
+    /**
+     * Atomically charges [cost] and records the streak bet's [target] ([StreakBet]).
+     *
+     * @return true when the bet was placed; false for an insufficient balance or a bet already active.
+     */
+    suspend fun placeStreakBet(cost: Int, target: Int): Boolean
+
+    /**
+     * Pays [payout] for a won streak bet and clears it, once.
+     *
+     * @return true if a bet existed and was paid.
+     */
+    suspend fun claimStreakBet(payout: Int): Boolean
+
+    /** Forgets the streak bet without paying it: a lost bet does not return its stake. */
+    suspend fun clearStreakBet()
 
     /**
      * Saves the real exam date the user set, replacing the onboarding estimate.

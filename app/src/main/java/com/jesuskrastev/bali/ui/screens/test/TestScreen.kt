@@ -213,6 +213,8 @@ fun TestScreen(
                         uiState = uiState,
                         onOptionSelect = { viewModel.onEvent(TestEvent.SelectOption(it)) },
                         onCheckClick = { viewModel.onEvent(TestEvent.CheckAnswer) },
+                        onUseHint = { viewModel.onEvent(TestEvent.UseHint) },
+                        onUseFiftyFifty = { viewModel.onEvent(TestEvent.UseFiftyFifty) },
                         onNextClick = {
                             if (uiState.currentQuestionIndex == uiState.questions.size - 1) {
                                 viewModel.onEvent(TestEvent.FinishTest { result ->
@@ -367,6 +369,8 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
  * @param uiState quiz state; must contain at least one question
  * @param onOptionSelect invoked with the index of the tapped option while the answer is unchecked
  * @param onCheckClick invoked when the "Comprobar" button is tapped
+ * @param onUseHint consumes a hint to reveal the explanation before answering
+ * @param onUseFiftyFifty consumes a 50/50 aid to hide incorrect options
  * @param onNextClick invoked when the "Siguiente" / "Finalizar práctica" button is tapped
  */
 @Composable
@@ -374,6 +378,8 @@ fun TestContentView(
     uiState: TestUiState,
     onOptionSelect: (Int) -> Unit,
     onCheckClick: () -> Unit,
+    onUseHint: () -> Unit,
+    onUseFiftyFifty: () -> Unit,
     onNextClick: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -426,7 +432,35 @@ fun TestContentView(
                 }
             }
 
-            itemsIndexed(currentQuestion.options) { optionIndex, option ->
+            if (!uiState.isAnswerChecked) {
+                item {
+                    PracticeAids(
+                        hints = uiState.hints,
+                        fiftyFifties = uiState.fiftyFifties,
+                        isHintVisible = uiState.isHintVisible,
+                        onUseHint = onUseHint,
+                        onUseFiftyFifty = onUseFiftyFifty
+                    )
+                }
+            }
+
+            if (uiState.isHintVisible) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+                    ) {
+                        Text(
+                            text = "Pista: ${currentQuestion.explanation}",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            itemsIndexed(currentQuestion.options, key = { index, _ -> index }) { optionIndex, option ->
+                if (optionIndex in uiState.eliminatedOptionIndices) return@itemsIndexed
                 val isSelected = uiState.selectedAnswers[uiState.currentQuestionIndex] == optionIndex
                 val isCorrect = currentQuestion.correctAnswerIndex == optionIndex
 
@@ -483,6 +517,33 @@ private const val CORRECT_HOP_SCALE = 1.04f
 
 /** Extra green the card flashes with when a correct answer is checked, fading back in 600 ms. */
 private const val CORRECT_FLASH_ALPHA = 0.22f
+
+/** Shows the consumable practice aids that are valid before the current answer is checked. */
+@Composable
+private fun PracticeAids(
+    hints: Int,
+    fiftyFifties: Int,
+    isHintVisible: Boolean,
+    onUseHint: () -> Unit,
+    onUseFiftyFifty: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = onUseHint,
+            enabled = hints > 0 && !isHintVisible,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("Pista ($hints)")
+        }
+        OutlinedButton(
+            onClick = onUseFiftyFifty,
+            enabled = fiftyFifties > 0,
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("50/50 ($fiftyFifties)")
+        }
+    }
+}
 
 /**
  * Selectable answer option that reflects the check result once the answer has been verified.

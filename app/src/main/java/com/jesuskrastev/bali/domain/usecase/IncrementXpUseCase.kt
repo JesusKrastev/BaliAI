@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.XpEarned
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import com.jesuskrastev.bali.domain.util.LevelCalculator
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 
 /**
  * Use case responsible for calculating and applying XP rewards after a user completes a test.
@@ -79,7 +80,8 @@ open class IncrementXpUseCase @Inject constructor(
      * @param durationSeconds time the activity took, for the speed bonus
      * @param isRepeat true for an already completed lesson: 30 % of the base and no speed or
      *   perfection bonus
-     * @return the experience earned, its breakdown and the resulting level
+     * @return the experience earned, its breakdown and the resulting level; an owned double-XP
+     *   boost doubles every part of it and is spent by it
      */
     open suspend operator fun invoke(
         mode: TestMode,
@@ -102,7 +104,9 @@ open class IncrementXpUseCase @Inject constructor(
         val perfectionBonus = if (isRepeat) null else calculatePerfectionBonus(accuracy, totalQuestions)
         val streakBonus = calculateStreakBonus(user.currentStreak)
 
-        val totalXpGained = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)
+        // A double-XP boost doubles every part, so the breakdown on the result screen still adds up.
+        val factor = if (userRepository.spendBoostIfOwned(ShopInventoryItem.DOUBLE_XP, user.doubleXpBoosts)) 2 else 1
+        val totalXpGained = factor * (baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0))
 
         val newTotalXp = user.xp + totalXpGained
         val newLevel = LevelCalculator.calculateLevel(newTotalXp)
@@ -120,10 +124,10 @@ open class IncrementXpUseCase @Inject constructor(
             levelUp = hasLeveledUp,
             newLevel = newLevel,
             newTotalXp = newTotalXp,
-            baseXp = baseXp,
-            bonusPerfection = perfectionBonus,
-            bonusFast = speedBonus,
-            bonusStreak = streakBonus
+            baseXp = factor * baseXp,
+            bonusPerfection = perfectionBonus?.times(factor),
+            bonusFast = speedBonus?.times(factor),
+            bonusStreak = streakBonus?.times(factor)
         )
     }
 }

@@ -1,15 +1,20 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
+import android.util.Log
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Transaction
 import com.google.firebase.firestore.WriteBatch
 import com.google.firebase.firestore.snapshots
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
@@ -81,6 +86,156 @@ class FirestoreUserDao @Inject constructor(
                 true
             }
         }.await()
+    }
+
+    /**
+     * Runs [block] as one Firestore transaction, reporting a failure to Crashlytics before
+     * rethrowing it. Shop writes are transactions because they read the balance or the stock
+     * they change; unlike [incrementCoins] they need a connection.
+     *
+     * @param block the reads and writes of the transaction
+     * @return what [block] returned
+     */
+    private suspend fun <T> shopTransaction(block: (Transaction) -> T): T =
+        try {
+            firestore.runTransaction { transaction -> block(transaction) }.await()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            FirebaseCrashlytics.getInstance().recordException(error)
+            throw error
+        }
+
+    /**
+     * Purchases an inventory [item] for [cost] within one Firestore transaction.
+     *
+     * @param userId document owner
+     * @param item consumable to add
+     * @param cost coins to charge
+     * @return true only when the balance permits the purchase
+     */
+    suspend fun purchaseInventoryItem(userId: String, item: ShopInventoryItem, cost: Int): Boolean {
+        val docRef = collection.document(userId)
+        val field = item.firestoreField
+        return shopTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
+            if (coins < cost) {
+                false
+            } else {
+                val owned = snapshot.getLong(field) ?: 0L
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins - cost, field to owned + 1),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges a surprise chest and credits its coin [reward] atomically.
+     *
+     * @param userId document owner
+     * @param cost coins paid to open the chest
+     * @param reward random coin reward, picked by the caller
+     * @return true if the chest opened, false when the user cannot afford it
+     */
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: Int): Boolean {
+        val docRef = collection.document(userId)
+        return shopTransaction { transaction ->
+            val coins = transaction.get(docRef).getLong("coins") ?: 0L
+            if (coins < cost) {
+                false
+            } else {
+                transaction.set(docRef, mapOf("coins" to coins - cost + reward), SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Removes one owned [item] atomically.
+     *
+     * @param userId document owner
+     * @param item consumable to use
+     * @return true only when an item was available
+     */
+    suspend fun consumeInventoryItem(userId: String, item: ShopInventoryItem): Boolean {
+        val field = item.firestoreField
+        val docRef = collection.document(userId)
+        return shopTransaction { transaction ->
+            val count = transaction.get(docRef).getLong(field) ?: 0L
+            if (count <= 0) {
+                false
+            } else {
+                transaction.set(docRef, mapOf(field to count - 1), SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges the streak bet's [cost] and records its [target] in one transaction.
+     *
+     * @param userId document owner
+     * @param cost coins to charge
+     * @param target streak length that wins the bet
+     * @return true if the bet was placed, false for insufficient coins or a bet already active
+     */
+    suspend fun placeStreakBet(userId: String, cost: Int, target: Int): Boolean {
+        val docRef = collection.document(userId)
+        return shopTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
+            val hasBet = (snapshot.getLong("streakBetTarget") ?: 0L) > 0
+            if (coins < cost || hasBet) {
+                false
+            } else {
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins - cost, "streakBetTarget" to target),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Credits the won streak bet and clears it in one transaction, so it pays only once.
+     *
+     * @param userId document owner
+     * @param payout coins paid
+     * @return true if a bet was claimed, false if none was active
+     */
+    suspend fun claimStreakBet(userId: String, payout: Int): Boolean {
+        val docRef = collection.document(userId)
+        return shopTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if ((snapshot.getLong("streakBetTarget") ?: 0L) <= 0) {
+                false
+            } else {
+                val coins = snapshot.getLong("coins") ?: 0L
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins + payout, "streakBetTarget" to 0),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Forgets the streak bet without paying it.
+     *
+     * @param userId document owner
+     */
+    suspend fun clearStreakBet(userId: String) {
+        collection.document(userId)
+            .set(mapOf("streakBetTarget" to 0), SetOptions.merge())
+            .await()
     }
 
     /**
@@ -210,3 +365,12 @@ class FirestoreUserDao @Inject constructor(
         }
     }
 }
+
+/** Returns the Firestore counter field associated with this consumable item. */
+private val ShopInventoryItem.firestoreField: String
+    get() = when (this) {
+        ShopInventoryItem.HINT -> "hints"
+        ShopInventoryItem.FIFTY_FIFTY -> "fiftyFifties"
+        ShopInventoryItem.DOUBLE_XP -> "doubleXpBoosts"
+        ShopInventoryItem.DOUBLE_COINS -> "doubleCoinBoosts"
+    }

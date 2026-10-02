@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -48,6 +48,18 @@ abstract class BaliDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE answers ADD COLUMN questionId TEXT")
                 database.execSQL("ALTER TABLE answers ADD COLUMN topic TEXT")
                 database.execSQL("ALTER TABLE answers ADD COLUMN mode TEXT")
+            }
+        }
+
+        /** Adds the persisted inventory and pending reward boosts sold by the coin shop. */
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            /** Adds empty inventory counters so every existing profile starts unchanged. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN hints INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN fiftyFifties INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN doubleXpBoosts INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN doubleCoinBoosts INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN streakBetTarget INTEGER NOT NULL DEFAULT 0")
             }
         }
 

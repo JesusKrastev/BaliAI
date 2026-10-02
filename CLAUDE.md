@@ -61,7 +61,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 18, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 19, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships

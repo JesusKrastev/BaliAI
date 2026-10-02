@@ -9,6 +9,7 @@ import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.repository.*
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import kotlinx.coroutines.flow.Flow
@@ -76,6 +77,68 @@ class FakeUserRepository(
 
     override suspend fun updateStreakFreezes(count: Int) {
         _user.update { it?.copy(streakFreezes = count) }
+    }
+
+    /** Buys [item] from the fake inventory when the test profile can afford [cost]. */
+    override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost) return false
+        _user.value = user.copy(
+            coins = user.coins - cost,
+            hints = user.hints + if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties + if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts + if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
+        )
+        return true
+    }
+
+    /** Opens a fake surprise chest by charging [cost] and crediting its [reward]. */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost) return false
+        _user.value = user.copy(coins = user.coins - cost + reward)
+        return true
+    }
+
+    /** Consumes one fake inventory [item] when it is owned. */
+    override suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean {
+        val user = _user.value ?: return false
+        val canConsume = when (item) {
+            ShopInventoryItem.HINT -> user.hints > 0
+            ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties > 0
+            ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts > 0
+            ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts > 0
+        }
+        if (!canConsume) return false
+        _user.value = user.copy(
+            hints = user.hints - if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties - if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts - if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts - if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
+        )
+        return true
+    }
+
+    /** Places a fake streak bet when the profile can pay and has none running. */
+    override suspend fun placeStreakBet(cost: Int, target: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost || user.streakBetTarget > 0) return false
+        _user.value = user.copy(coins = user.coins - cost, streakBetTarget = target)
+        return true
+    }
+
+    /** Pays [payout] if the fake profile has a streak bet, and clears it. */
+    override suspend fun claimStreakBet(payout: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.streakBetTarget <= 0) return false
+        _user.value = user.copy(coins = user.coins + payout, streakBetTarget = 0)
+        return true
+    }
+
+    /** Forgets the fake profile's streak bet without paying it. */
+    override suspend fun clearStreakBet() {
+        _user.update { it?.copy(streakBetTarget = 0) }
     }
 
 
