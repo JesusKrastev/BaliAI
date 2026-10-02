@@ -56,16 +56,12 @@ open class IncrementXpUseCase @Inject constructor(
         }
     }
 
-    /**
-     * Calculates the XP bonus earned from the current speedometer [streakLevel].
-     *
-     * @param streakLevel current streak momentum, capped at seven
-     * @return the bonus XP, or null before the first reward threshold
-     */
-    fun calculateStreakBonus(streakLevel: Int): Int? {
+    fun calculateStreakBonus(streakDays: Int): Int? {
         return when {
-            streakLevel >= 7 -> 3
-            streakLevel >= 5 -> 1
+            streakDays >= 30 -> 10
+            streakDays >= 14 -> 5
+            streakDays >= 7 -> 3
+            streakDays >= 5 -> 1
             else -> null
         }
     }

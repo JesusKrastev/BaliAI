@@ -19,7 +19,8 @@ fun UserEntity.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
-    lastStreakSettledDayMillis = lastStreakSettledDayMillis,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays
 )
@@ -39,7 +40,8 @@ fun User.toEntity(): UserEntity = UserEntity(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
-    lastStreakSettledDayMillis = lastStreakSettledDayMillis,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays
 )
@@ -59,7 +61,8 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
-    lastStreakSettledDayMillis = lastStreakSettledDayMillis,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays
 )
@@ -79,7 +82,8 @@ fun UserFirestore.toDomain(): User = User(
     coins = coins,
     streakFreezes = streakFreezes,
     highestStreak = highestStreak,
-    lastStreakSettledDayMillis = lastStreakSettledDayMillis,
+    lostStreak = lostStreak,
+    lostStreakDayMillis = lostStreakDayMillis,
     practiceDays = practiceDays,
     frozenDays = frozenDays
 )
