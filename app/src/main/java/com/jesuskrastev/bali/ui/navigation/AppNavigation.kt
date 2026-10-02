@@ -312,6 +312,9 @@ fun AppNavigation(
                     },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
+                    },
+                    onSeePlanClick = {
+                        navController.navigateTopLevel(StatsRoute)
                     }
                 )
             }
