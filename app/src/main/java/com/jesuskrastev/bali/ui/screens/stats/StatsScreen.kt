@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Lightbulb
@@ -36,6 +35,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,9 +61,10 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
 
 /**
- * "Mis estadísticas": answers "will I pass?" and shows how the user's study is going — the exam
- * verdict, the latest mock exams, accuracy by topic, the week's activity and how consistent they
- * have been. It is a tab of the bottom bar, so it has no back arrow.
+ * "Mis estadísticas": answers "will I pass?" and shows how the user's study is going — the time
+ * left to the exam, the exam verdict, the latest mock exams, accuracy by topic, the week's activity
+ * and how consistent they have been. It is also where the exam date is set and changed. It is a
+ * tab of the bottom bar, so it has no back arrow.
  *
  * @param viewModel owner of the figures
  */
@@ -71,6 +74,18 @@ fun StatsScreen(
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showExamDatePicker) {
+        ExamDatePickerDialog(
+            initialDateMillis = uiState.plan.targetMillis,
+            onConfirm = { pickerMillis ->
+                viewModel.setExamDate(pickerMillis)
+                showExamDatePicker = false
+            },
+            onDismiss = { showExamDatePicker = false }
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -86,20 +101,32 @@ fun StatsScreen(
                 CircularProgressIndicator()
             }
         } else {
-            StatsContent(stats = stats, modifier = Modifier.padding(paddingValues))
+            StatsContent(
+                stats = stats,
+                plan = uiState.plan,
+                onDateClick = { showExamDatePicker = true },
+                modifier = Modifier.padding(paddingValues)
+            )
         }
     }
 }
 
 /**
- * Lays the statistics blocks out in reading order: verdict first, then the evidence for it, then
- * the habits behind it.
+ * Lays the statistics blocks out in reading order: the time left to the exam, then the verdict,
+ * then the evidence for it, then the habits behind it.
  *
  * @param stats the figures to render
+ * @param plan the date the countdown counts down to
+ * @param onDateClick opens the exam date picker
  * @param modifier layout modifier
  */
 @Composable
-internal fun StatsContent(stats: ProgressStats, modifier: Modifier = Modifier) {
+internal fun StatsContent(
+    stats: ProgressStats,
+    plan: PlanSummary,
+    onDateClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -108,7 +135,12 @@ internal fun StatsContent(stats: ProgressStats, modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        stats.daysToExam?.let { ExamCountdown(it) }
+        ExamCountdownCard(
+            plan = plan,
+            readiness = stats.readiness,
+            studiedToday = stats.studyDays.lastOrNull() == true,
+            onDateClick = onDateClick
+        )
         ReadinessHero(stats.readiness)
         RecentMocksCard(stats.readiness)
         if (stats.readiness.history.isNotEmpty()) MockHistoryCard(stats.readiness)
@@ -138,35 +170,6 @@ private fun levelColor(level: ReadinessLevel): Color = when (level) {
     ReadinessLevel.ALMOST -> StatsAmber
     ReadinessLevel.NOT_YET -> BaliAccentRed
     ReadinessLevel.NOT_ENOUGH_DATA -> MaterialTheme.colorScheme.primary
-}
-
-/**
- * Pill showing how far away the exam is.
- *
- * @param daysToExam days until the exam, negative once it has passed
- */
-@Composable
-private fun ExamCountdown(daysToExam: Int) {
-    val color = if (daysToExam in 0..7) BaliAccentRed else MaterialTheme.colorScheme.primary
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = color.copy(alpha = 0.12f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Rounded.CalendarMonth, contentDescription = null, tint = color)
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = examCountdownText(daysToExam),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = color
-            )
-        }
-    }
 }
 
 /**

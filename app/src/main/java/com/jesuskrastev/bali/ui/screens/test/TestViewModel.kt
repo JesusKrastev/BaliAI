@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -84,6 +85,7 @@ class TestViewModel @Inject constructor(
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val pathRepository: PathRepository,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -418,13 +420,20 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }

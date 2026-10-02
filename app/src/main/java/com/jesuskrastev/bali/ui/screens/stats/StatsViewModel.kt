@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -21,21 +22,24 @@ import javax.inject.Inject
  *
  * @property isLoading true until the first figures are ready
  * @property stats the figures, null while [isLoading]
+ * @property plan the date the countdown counts down to, see [planSummaryOf]
  */
 data class StatsUiState(
     val isLoading: Boolean = true,
-    val stats: ProgressStats? = null
+    val stats: ProgressStats? = null,
+    val plan: PlanSummary = PlanSummary()
 )
 
 /**
  * Feeds the statistics screen: recomputes the figures every time the user's results, answers or
- * profile change, so finishing a mock exam is reflected the next time the screen is open.
+ * profile change, so finishing a mock exam is reflected the next time the screen is open. It also
+ * saves the exam date the user picks from the countdown.
  */
 @HiltViewModel
 class StatsViewModel @Inject constructor(
     testResultRepository: TestResultRepository,
     answerRepository: AnswerRepository,
-    userRepository: UserRepository,
+    private val userRepository: UserRepository,
     private val calculateProgressStats: CalculateProgressStatsUseCase,
     private val analytics: AnalyticsTracker
 ) : ViewModel() {
@@ -47,13 +51,32 @@ class StatsViewModel @Inject constructor(
         answerRepository.getAll(),
         userRepository.get()
     ) { results, answers, user ->
+        val now = System.currentTimeMillis()
         StatsUiState(
             isLoading = false,
-            stats = calculateProgressStats(results, answers, user, System.currentTimeMillis())
+            stats = calculateProgressStats(results, answers, user, now),
+            plan = planSummaryOf(user?.examDateMillis, user?.planTargetMillis, now)
         )
     }
         .onEach { reportViewOnce(it.stats) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StatsUiState())
+
+    /**
+     * Saves the exam date picked on the countdown card; from then on the card counts down to it.
+     *
+     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
+     */
+    fun setExamDate(pickerMillis: Long) {
+        val examDay = localDayFromPickerMillis(pickerMillis)
+        val hadPlanDate = uiState.value.plan.targetMillis != null
+        viewModelScope.launch {
+            userRepository.updateExamDate(examDay)
+            analytics.examDateSet(
+                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
+                hadPlanDate = hadPlanDate
+            )
+        }
+    }
 
     /**
      * Tells analytics what the screen showed, once per visit, so a figure refreshing while the

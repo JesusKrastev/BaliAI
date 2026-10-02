@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.test
 
 import androidx.lifecycle.SavedStateHandle
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnswerRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
@@ -36,6 +37,7 @@ class TestViewModelTest {
     private val fakeAnswerRepository = FakeAnswerRepository()
     private val fakePathRepository = FakePathRepository()
     private val mockGemini: GenerativeModel = mock()
+    private val fakeSoundEffects = FakeSoundEffects()
 
     private val fakeIncrementStreakUseCase = IncrementStreakUseCase(fakeUserRepository)
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
@@ -55,8 +57,16 @@ class TestViewModelTest {
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
             pathRepository = fakePathRepository,
             analytics = mock<AnalyticsTracker>(),
+            soundEffects = fakeSoundEffects,
             savedStateHandle = SavedStateHandle()
         )
+    }
+
+    /** Loads a lesson from the static question bank and returns its first question. */
+    private fun loadLessonFirstQuestion(): QuestionUiState {
+        // node_0_0_lesson exists in LessonQuestionBank
+        viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
+        return viewModel.uiState.value.questions.first()
     }
 
     @Test
@@ -86,5 +96,52 @@ class TestViewModelTest {
         viewModel.setAiNodeParams("Conductor", "Factores", "node_0_0_lesson", "LESSON")
         assertThat(viewModel.uiState.value.category).isEqualTo("Conductor")
         collectJob.cancel()
+    }
+
+    @Test
+    fun `checking a right answer plays the correct sound only`() {
+        val question = loadLessonFirstQuestion()
+
+        viewModel.onEvent(TestEvent.SelectOption(question.correctAnswerIndex))
+        viewModel.onEvent(TestEvent.CheckAnswer)
+
+        assertThat(fakeSoundEffects.correctPlays).isEqualTo(1)
+        assertThat(fakeSoundEffects.wrongPlays).isEqualTo(0)
+        assertThat(viewModel.uiState.value.isAnswerChecked).isTrue()
+    }
+
+    @Test
+    fun `checking a wrong answer plays the wrong sound only`() {
+        val question = loadLessonFirstQuestion()
+        val wrongOption = (question.correctAnswerIndex + 1) % question.options.size
+
+        viewModel.onEvent(TestEvent.SelectOption(wrongOption))
+        viewModel.onEvent(TestEvent.CheckAnswer)
+
+        assertThat(fakeSoundEffects.wrongPlays).isEqualTo(1)
+        assertThat(fakeSoundEffects.correctPlays).isEqualTo(0)
+    }
+
+    @Test
+    fun `checking with no option selected plays nothing`() {
+        loadLessonFirstQuestion()
+
+        viewModel.onEvent(TestEvent.CheckAnswer)
+
+        assertThat(fakeSoundEffects.correctPlays).isEqualTo(0)
+        assertThat(fakeSoundEffects.wrongPlays).isEqualTo(0)
+        assertThat(viewModel.uiState.value.isAnswerChecked).isFalse()
+    }
+
+    @Test
+    fun `a double tap on check plays once and counts the streak once`() {
+        val question = loadLessonFirstQuestion()
+
+        viewModel.onEvent(TestEvent.SelectOption(question.correctAnswerIndex))
+        viewModel.onEvent(TestEvent.CheckAnswer)
+        viewModel.onEvent(TestEvent.CheckAnswer)
+
+        assertThat(fakeSoundEffects.correctPlays).isEqualTo(1)
+        assertThat(viewModel.uiState.value.sessionStreak).isEqualTo(1)
     }
 }
