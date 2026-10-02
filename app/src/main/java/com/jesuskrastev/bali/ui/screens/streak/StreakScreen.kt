@@ -43,7 +43,7 @@ import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.domain.model.DailyStreak
 
 /**
- * Page with the whole picture of daily streak momentum: its speedometer, the week, freezes and
+ * Page with the whole picture of the daily streak: today's state, the week, the freezes and
  * the record.
  *
  * @param viewModel supplies the streak
@@ -112,7 +112,11 @@ fun StreakContent(
         ) {
             StreakHero(uiState)
 
-            Section(title = "Actividad de esta semana") {
+            if (uiState.recoverableStreak > 0) {
+                RecoveryCard(days = uiState.recoverableStreak, onShopClick = onShopClick)
+            }
+
+            Section(title = "Esta semana") {
                 StreakCard { StreakWeek(uiState.week) }
             }
             Section(title = "Congeladores") {
@@ -142,7 +146,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 /**
- * The speedometer, its current level and what the user can do today.
+ * The flame, the day count and what the user has to do today.
  *
  * @param uiState the streak to show
  */
@@ -154,23 +158,19 @@ private fun StreakHero(uiState: StreakUiState) {
             .padding(top = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        StreakSpeedometer(level = uiState.currentStreak)
-        Spacer(modifier = Modifier.height(4.dp))
+        StreakFlame(lit = uiState.practicedToday, size = 104.dp)
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Ritmo de racha",
-            fontSize = 22.sp,
-            lineHeight = 28.sp,
+            text = uiState.currentStreak.toString(),
+            fontSize = 64.sp,
+            lineHeight = 64.sp,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(
-            text = if (uiState.currentStreak == DailyStreak.MAX_LEVEL) {
-                "¡Velocidad máxima alcanzada!"
-            } else {
-                "Un test al día suma velocidad."
-            },
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
+            text = "${daysWord(uiState.currentStreak)} seguidos",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -203,9 +203,36 @@ private fun StreakHero(uiState: StreakUiState) {
  * @return one line for the hero
  */
 private fun todayMessage(uiState: StreakUiState): String = when {
-    uiState.practicedToday -> "Hoy ya has acelerado. ¡Vuelve mañana!"
-    uiState.currentStreak > 0 -> "Haz un test hoy para mantener el ritmo."
-    else -> "Haz un test hoy y enciende el motor."
+    uiState.practicedToday -> "Hoy ya cuenta. ¡Vuelve mañana!"
+    uiState.currentStreak > 0 -> "Haz un test hoy para no perderla."
+    else -> "Haz un test hoy y empieza tu racha."
+}
+
+/**
+ * Offers to buy back the streak lost yesterday, with the deadline and the price.
+ *
+ * @param days days of the lost streak
+ * @param onShopClick opens the shop, where the recovery is bought
+ */
+@Composable
+private fun RecoveryCard(days: Int, onShopClick: () -> Unit) {
+    StreakCard {
+        Text(
+            text = "Perdiste tu racha de $days ${daysWord(days)}",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Puedes recuperarla entera hoy por ${DailyStreak.RECOVERY_COST_COINS} monedas. " +
+                "Mañana ya no.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onShopClick, contentPadding = PaddingValues(0.dp)) {
+            Text("Recuperarla en la tienda →", fontWeight = FontWeight.Bold)
+        }
+    }
 }
 
 /**
@@ -232,7 +259,7 @@ private fun FreezesCard(freezes: Int, onShopClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Si un día no estudias, se gasta uno y mantienes tu velocidad.",
+                    text = "Si un día no estudias, se gasta uno y tu racha sigue.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -247,10 +274,10 @@ private fun FreezesCard(freezes: Int, onShopClick: () -> Unit) {
 }
 
 /**
- * The highest speed reached and how far the current momentum is from it.
+ * The longest streak and how far the current one is from it.
  *
- * @param current current streak momentum
- * @param highest highest momentum ever reached
+ * @param current consecutive days now
+ * @param highest the longest streak ever
  */
 @Composable
 private fun RecordCard(current: Int, highest: Int) {
@@ -260,12 +287,12 @@ private fun RecordCard(current: Int, highest: Int) {
             Spacer(modifier = Modifier.width(16.dp))
             Column {
                 Text(
-                    text = "Velocidad máxima",
+                    text = "Mejor racha",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "$highest / ${DailyStreak.MAX_LEVEL}",
+                    text = "$highest ${daysWord(highest)}",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.onSurface
@@ -282,18 +309,17 @@ private fun RecordCard(current: Int, highest: Int) {
 }
 
 /**
- * How the current streak momentum compares with the record.
+ * How the current streak compares with the record.
  *
- * @param current current streak momentum
- * @param highest highest momentum ever reached
+ * @param current consecutive days now
+ * @param highest the longest streak ever
  * @return one line under the record
  */
 private fun recordMessage(current: Int, highest: Int): String = when {
-    highest == 0 -> "Tu primer test pondrá el velocímetro en marcha."
-    current >= highest && highest < DailyStreak.MAX_LEVEL -> "Estás en tu mejor ritmo: mañana subes otro nivel."
-    current >= highest -> "Estás a velocidad máxima. ¡Mantén el ritmo!"
+    highest == 0 -> "Tu primera racha empieza con el próximo test."
+    current >= highest -> "Estás en tu mejor racha: cada día que sumes es un récord nuevo."
     else -> {
-        val toMatch = highest - current
-        "Te faltan $toMatch ${daysWord(toMatch)} para recuperar tu mejor velocidad."
+        val toBeat = highest - current + 1
+        "Te faltan $toBeat ${daysWord(toBeat)} para superarlo."
     }
 }

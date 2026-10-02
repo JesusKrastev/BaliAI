@@ -2,8 +2,10 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
+import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -11,17 +13,30 @@ import javax.inject.Inject
 
 sealed class ShopItem {
     data object StreakFreezer : ShopItem()
+    data object StreakRecovery : ShopItem()
 }
 
 sealed class ShopEvent {
     data class SelectItem(val item: ShopItem) : ShopEvent()
     data object DismissSelection : ShopEvent()
     data object PurchaseStreakFreezer : ShopEvent()
+    data object PurchaseStreakRecovery : ShopEvent()
 }
 
+/**
+ * What the shop shows.
+ *
+ * @property coinsCount the user's coin balance
+ * @property streakFreezes freezers owned
+ * @property recoverableStreak days the streak recovery would bring back, 0 when there is no
+ *   lost streak to recover
+ * @property selectedItem the item whose purchase sheet is open
+ * @property isProcessing true while a purchase is in flight
+ */
 data class ShopUiState(
     val coinsCount: Int = 0,
     val streakFreezes: Int = 0,
+    val recoverableStreak: Int = 0,
     val selectedItem: ShopItem? = null,
     val isProcessing: Boolean = false
 )
@@ -29,7 +44,8 @@ data class ShopUiState(
 @HiltViewModel
 class ShopViewModel @Inject constructor(
     private val userRepository: UserRepository,
-    private val decrementCoinsUseCase: DecrementCoinsUseCase
+    private val decrementCoinsUseCase: DecrementCoinsUseCase,
+    private val recoverStreakUseCase: RecoverStreakUseCase
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
@@ -41,9 +57,11 @@ class ShopViewModel @Inject constructor(
         _isProcessing
     ) { user, selected, isProcessing ->
         user?.let {
+            val now = System.currentTimeMillis()
             ShopUiState(
                 coinsCount = it.coins,
                 streakFreezes = it.streakFreezes,
+                recoverableStreak = DailyStreak.of(it).settledAt(now).recoverableStreakAt(now),
                 selectedItem = selected,
                 isProcessing = isProcessing
             )
@@ -61,6 +79,23 @@ class ShopViewModel @Inject constructor(
             }
             ShopEvent.DismissSelection -> _selectedItem.value = null
             ShopEvent.PurchaseStreakFreezer -> purchaseStreakFreezer()
+            ShopEvent.PurchaseStreakRecovery -> purchaseStreakRecovery()
+        }
+    }
+
+    /**
+     * Buys back the lost streak, closing the purchase sheet when it worked. Guarded by
+     * [_isProcessing] like [purchaseStreakFreezer], so a second tap cannot charge twice.
+     */
+    private fun purchaseStreakRecovery() {
+        if (_isProcessing.value) return
+        viewModelScope.launch {
+            _isProcessing.value = true
+            try {
+                if (recoverStreakUseCase() != null) _selectedItem.value = null
+            } finally {
+                _isProcessing.value = false
+            }
         }
     }
 

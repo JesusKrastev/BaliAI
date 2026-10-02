@@ -19,15 +19,16 @@ interface UserDao {
     @Query(
         "UPDATE users SET currentStreak = :current, highestStreak = :highest, " +
             "streakFreezes = :freezes, lastPracticeTimestamp = :lastPracticeMillis, " +
-            "lastStreakSettledDayMillis = :lastSettledDayMillis, practiceDays = :practiceDaysJson, " +
-            "frozenDays = :frozenDaysJson"
+            "lostStreak = :lostStreak, lostStreakDayMillis = :lostStreakDayMillis, " +
+            "practiceDays = :practiceDaysJson, frozenDays = :frozenDaysJson"
     )
     suspend fun updateStreak(
         current: Int,
         highest: Int,
         freezes: Int,
         lastPracticeMillis: Long,
-        lastSettledDayMillis: Long,
+        lostStreak: Int,
+        lostStreakDayMillis: Long,
         practiceDaysJson: String,
         frozenDaysJson: String
     )

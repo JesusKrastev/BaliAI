@@ -29,13 +29,37 @@ class StreakViewModelTest {
         DailyStreak.startOfDayMillis(DailyStreak.epochDay(now) + offset)
 
     @Test
-    fun `a missed streak day lowers the speedometer before it is saved`() {
+    fun `a streak lost since the last visit shows as zero before it is saved`() {
         val user = User(currentStreak = 5, highestStreak = 5, lastPracticeTimestamp = day(-3), practiceDays = listOf(day(-3)))
 
         val state = streakUiStateOf(user, now)
 
-        assertThat(state.currentStreak).isEqualTo(3)
+        assertThat(state.currentStreak).isEqualTo(0)
         assertThat(state.highestStreak).isEqualTo(5)
+    }
+
+    @Test
+    fun `the day after a missed one the screen offers the lost streak`() {
+        val user = User(currentStreak = 5, highestStreak = 5, lastPracticeTimestamp = day(-2), practiceDays = listOf(day(-2)))
+
+        val state = streakUiStateOf(user, now)
+
+        assertThat(state.currentStreak).isEqualTo(0)
+        assertThat(state.recoverableStreak).isEqualTo(5)
+    }
+
+    @Test
+    fun `two days after, the lost streak is no longer offered`() {
+        val user = User(currentStreak = 5, highestStreak = 5, lastPracticeTimestamp = day(-3), practiceDays = listOf(day(-3)))
+
+        assertThat(streakUiStateOf(user, now).recoverableStreak).isEqualTo(0)
+    }
+
+    @Test
+    fun `a streak that is alive offers nothing to recover`() {
+        val user = User(currentStreak = 5, highestStreak = 5, lastPracticeTimestamp = day(-1), practiceDays = listOf(day(-1)))
+
+        assertThat(streakUiStateOf(user, now).recoverableStreak).isEqualTo(0)
     }
 
     @Test
@@ -96,13 +120,13 @@ class StreakViewModelTest {
     }
 
     @Test
-    fun `opening the app after the freezes run out lowers the speedometer`() = runTest {
+    fun `opening the app after the freezes run out ends the streak`() = runTest {
         val users = FakeUserRepository().apply {
             insert(User(currentStreak = 6, lastPracticeTimestamp = day(-2), practiceDays = listOf(day(-2))))
         }
 
         SettleStreakUseCase(users)()
 
-        assertThat(users.get().first()?.currentStreak).isEqualTo(5)
+        assertThat(users.get().first()?.currentStreak).isEqualTo(0)
     }
 }

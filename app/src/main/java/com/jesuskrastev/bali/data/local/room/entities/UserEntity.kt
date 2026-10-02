@@ -20,7 +20,11 @@ data class UserEntity(
     val coins: Int = 0,
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
+    // Left over from the discarded streak speedometer (D-019), which already shipped to internal
+    // testing. Kept so their database matches this schema; nothing reads or writes it.
     @ColumnInfo(defaultValue = "0") val lastStreakSettledDayMillis: Long = 0,
+    @ColumnInfo(defaultValue = "0") val lostStreak: Int = 0,
+    @ColumnInfo(defaultValue = "0") val lostStreakDayMillis: Long = 0,
     val practiceDays: List<Long> = emptyList(),
     // Only the old weekly streak used these two. Kept so the table does not have to be rebuilt.
     val weekSessions: Int = 0,

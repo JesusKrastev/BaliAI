@@ -47,6 +47,14 @@ class StreakScreenScreenshotTest {
         practiceDays = listOf(day(-2), day(-1))
     )
 
+    /** Studied Monday, nothing yesterday: the 12-day streak is lost and can be bought back today. */
+    private val lostYesterday = User(
+        currentStreak = 12,
+        highestStreak = 15,
+        lastPracticeTimestamp = day(-2),
+        practiceDays = listOf(day(-2))
+    )
+
     private fun captureStreak(user: User, darkTheme: Boolean = false) {
         composeTestRule.setContent {
             BaliTheme(darkTheme = darkTheme) {
@@ -64,6 +72,12 @@ class StreakScreenScreenshotTest {
 
     @Test
     fun captureStreakScreen_noStreak() = captureStreak(User())
+
+    @Test
+    fun captureStreakScreen_lostYesterday() = captureStreak(lostYesterday)
+
+    @Test
+    fun captureStreakScreen_lostYesterday_darkTheme() = captureStreak(lostYesterday, darkTheme = true)
 
     @Test
     fun captureStreakScreen_darkTheme() = captureStreak(studiedToday, darkTheme = true)

@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,17 +36,28 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
-        /** Adds the settlement marker used by the gradual streak-speedometer decay. */
+        /** Adds the streak that was just lost and the day it ended, so it can be bought back. */
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            /** Both columns start at zero: nobody has a recoverable streak yet. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN lostStreak INTEGER NOT NULL DEFAULT 0")
+                database.execSQL(
+                    "ALTER TABLE users ADD COLUMN lostStreakDayMillis INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        /**
+         * Reserved slot: the 1.2.2 internal build added `lastStreakSettledDayMillis` for the
+         * discarded streak speedometer (D-019), so some devices are already at version 16 with
+         * that column. It stays in the table, unused, so their schema keeps matching; the
+         * speedometer's cap of the streak at 7 is deliberately not applied here.
+         */
         val MIGRATION_15_16 = object : Migration(15, 16) {
-            /** Adds a zero-valued marker so existing profiles settle their first missed day once. */
+            /** Adds the unused marker column so a device upgrading from 15 matches one already at 16. */
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE users ADD COLUMN lastStreakSettledDayMillis INTEGER NOT NULL DEFAULT 0"
-                )
-                database.execSQL(
-                    "UPDATE users SET currentStreak = MIN(MAX(currentStreak, 0), 7), " +
-                        "highestStreak = MAX(MIN(MAX(highestStreak, 0), 7), MIN(MAX(currentStreak, 0), 7)), " +
-                        "lastStreakSettledDayMillis = lastPracticeTimestamp"
                 )
             }
         }

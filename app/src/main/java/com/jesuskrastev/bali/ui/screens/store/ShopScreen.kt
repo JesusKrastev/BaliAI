@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.DailyStreak
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +94,11 @@ fun ShopScreen(
                 )
             }
 
+            StreakRecoverySection(
+                recoverableStreak = uiState.recoverableStreak,
+                coinsCount = uiState.coinsCount,
+                onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakRecovery)) }
+            )
         }
 
         if (uiState.selectedItem != null) {
@@ -104,10 +110,12 @@ fun ShopScreen(
             ) {
                 PurchaseConfirmationContent(
                     item = uiState.selectedItem!!,
+                    recoverableStreak = uiState.recoverableStreak,
                     isProcessing = uiState.isProcessing,
                     onConfirm = {
                         val event = when (uiState.selectedItem!!) {
                             ShopItem.StreakFreezer -> ShopEvent.PurchaseStreakFreezer
+                            ShopItem.StreakRecovery -> ShopEvent.PurchaseStreakRecovery
                         }
                         viewModel.onEvent(event)
                     }
@@ -117,9 +125,51 @@ fun ShopScreen(
     }
 }
 
+/**
+ * The streak recovery on sale: it is only available the day after a streak was lost.
+ *
+ * @param recoverableStreak days the recovery would bring back, 0 when there is nothing to recover
+ * @param coinsCount the user's coin balance
+ * @param onClick opens the purchase sheet
+ */
+@Composable
+private fun StreakRecoverySection(recoverableStreak: Int, coinsCount: Int, onClick: () -> Unit) {
+    val recoverable = recoverableStreak > 0
+    ShopSection(title = "Recuperador de racha", countLabel = "") {
+        ShopItemCard(
+            imageRes = R.drawable.streak,
+            label = if (recoverable) {
+                "Recupera $recoverableStreak ${if (recoverableStreak == 1) "día" else "días"}"
+            } else {
+                "Sin racha perdida"
+            },
+            price = DailyStreak.RECOVERY_COST_COINS,
+            isEnabled = recoverable,
+            hasEnoughCoins = coinsCount >= DailyStreak.RECOVERY_COST_COINS,
+            priceLabel = if (recoverable) null else "—",
+            onClick = onClick
+        )
+        Text(
+            text = "Si fallas un día sin congelador, aquí recuperas la racha entera hasta el " +
+                "final del día siguiente.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Bottom sheet that confirms buying [item].
+ *
+ * @param item what is being bought
+ * @param recoverableStreak days a streak recovery would bring back, only used for that item
+ * @param isProcessing true while the purchase is in flight
+ * @param onConfirm invoked by the confirm button
+ */
 @Composable
 fun PurchaseConfirmationContent(
     item: ShopItem,
+    recoverableStreak: Int = 0,
     isProcessing: Boolean,
     onConfirm: () -> Unit
 ) {
@@ -145,6 +195,13 @@ fun PurchaseConfirmationContent(
                             modifier = Modifier.size(60.dp)
                         )
                     }
+                    ShopItem.StreakRecovery -> {
+                        Image(
+                            painter = painterResource(id = R.drawable.streak),
+                            contentDescription = null,
+                            modifier = Modifier.size(60.dp)
+                        )
+                    }
                 }
             }
         }
@@ -153,12 +210,17 @@ fun PurchaseConfirmationContent(
 
         val title = when (item) {
             ShopItem.StreakFreezer -> "Congelador de racha"
+            ShopItem.StreakRecovery -> "Recuperador de racha"
         }
         val description = when (item) {
             ShopItem.StreakFreezer -> "Evita perder tu racha de días si un día no puedes practicar."
+            ShopItem.StreakRecovery ->
+                "Recupera los $recoverableStreak ${if (recoverableStreak == 1) "día" else "días"} " +
+                    "de racha que perdiste ayer. Solo sirve hasta el final de hoy."
         }
         val price = when (item) {
             ShopItem.StreakFreezer -> 120
+            ShopItem.StreakRecovery -> DailyStreak.RECOVERY_COST_COINS
         }
 
         Text(
