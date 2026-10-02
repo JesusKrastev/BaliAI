@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.XpEarned
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import com.jesuskrastev.bali.domain.util.LevelCalculator
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 
 /**
  * Use case responsible for calculating and applying XP rewards after a user completes a test.
@@ -102,7 +103,9 @@ open class IncrementXpUseCase @Inject constructor(
         val perfectionBonus = if (isRepeat) null else calculatePerfectionBonus(accuracy, totalQuestions)
         val streakBonus = calculateStreakBonus(user.currentStreak)
 
-        val totalXpGained = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)
+        val unboostedXp = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)
+        val doublesXp = userRepository.consumeInventoryItem(ShopInventoryItem.DOUBLE_XP)
+        val totalXpGained = if (doublesXp) unboostedXp * 2 else unboostedXp
 
         val newTotalXp = user.xp + totalXpGained
         val newLevel = LevelCalculator.calculateLevel(newTotalXp)
@@ -119,7 +122,7 @@ open class IncrementXpUseCase @Inject constructor(
             xpGained = totalXpGained,
             levelUp = hasLeveledUp,
             newLevel = newLevel,
-            baseXp = baseXp,
+            baseXp = if (doublesXp) baseXp * 2 else baseXp,
             bonusPerfection = perfectionBonus,
             bonusFast = speedBonus,
             bonusStreak = streakBonus

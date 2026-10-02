@@ -13,6 +13,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -46,7 +48,11 @@ data class TestUiState(
     val isAnswerChecked: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
-    val sessionStreak: Int = 0
+    val sessionStreak: Int = 0,
+    val hints: Int = 0,
+    val fiftyFifties: Int = 0,
+    val isHintVisible: Boolean = false,
+    val eliminatedOptionIndices: Set<Int> = emptySet()
 )
 
 data class TestSummary(
@@ -103,6 +109,7 @@ class TestViewModel @Inject constructor(
 
     init {
         restoreSession()
+        observePracticeInventory()
     }
 
     /**
@@ -134,6 +141,8 @@ class TestViewModel @Inject constructor(
                 selectedAnswers = session.selectedAnswers,
                 isAnswerChecked = session.isAnswerChecked,
                 sessionStreak = session.sessionStreak,
+                isHintVisible = session.isHintVisible,
+                eliminatedOptionIndices = session.eliminatedOptionIndices,
                 isLoading = false,
                 error = null
             )
@@ -151,6 +160,8 @@ class TestViewModel @Inject constructor(
             selectedAnswers = state.selectedAnswers,
             isAnswerChecked = state.isAnswerChecked,
             sessionStreak = state.sessionStreak,
+            isHintVisible = state.isHintVisible,
+            eliminatedOptionIndices = state.eliminatedOptionIndices,
             currentTopic = currentTopic,
             aiNodeTitle = aiNodeTitle,
             aiNodeDescription = aiNodeDescription,
@@ -167,6 +178,17 @@ class TestViewModel @Inject constructor(
      */
     private fun determineReason(): String =
         if (savedStateHandle.get<Boolean>(KEY_GENERATION_STARTED) == true) "process_restart" else "initial"
+
+    /** Keeps the practice-aid counts in [uiState] aligned with the synchronized profile. */
+    private fun observePracticeInventory() {
+        viewModelScope.launch {
+            userRepository.get().collect { user ->
+                _uiState.update {
+                    it.copy(hints = user?.hints ?: 0, fiftyFifties = user?.fiftyFifties ?: 0)
+                }
+            }
+        }
+    }
 
     fun setTopic(topic: String?) {
         if (currentTopic == topic && _uiState.value.questions.isNotEmpty()) return
@@ -231,12 +253,15 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /** Handles a quiz [event], including consuming an owned aid only for the active question. */
     fun onEvent(event: TestEvent) {
         when (event) {
             TestEvent.Retry -> retry()
             is TestEvent.SelectOption -> selectOption(event.optionIndex)
             TestEvent.CheckAnswer -> checkAnswer()
             TestEvent.NextQuestion -> nextQuestion()
+            TestEvent.UseHint -> useHint()
+            TestEvent.UseFiftyFifty -> useFiftyFifty()
             is TestEvent.FinishTest -> {
                 viewModelScope.launch {
                     val result = calculateResult()
@@ -247,6 +272,7 @@ class TestViewModel @Inject constructor(
         }
     }
 
+    /** Resets this practice session and loads a fresh question set for the active route. */
     private fun retry() {
         sessionStreak = 0
         testFinished = false
@@ -258,7 +284,9 @@ class TestViewModel @Inject constructor(
                 currentQuestionIndex = 0,
                 selectedAnswers = emptyMap(),
                 isAnswerChecked = false,
-                sessionStreak = 0
+                sessionStreak = 0,
+                isHintVisible = false,
+                eliminatedOptionIndices = emptySet()
             )
         }
         // Respect node type on retry
@@ -427,13 +455,49 @@ class TestViewModel @Inject constructor(
         }
     }
 
+    /** Consumes one hint and exposes the current question's explanation before the answer. */
+    private fun useHint() {
+        val state = _uiState.value
+        if (state.isAnswerChecked || state.isHintVisible || state.hints == 0) return
+        viewModelScope.launch {
+            if (userRepository.consumeInventoryItem(ShopInventoryItem.HINT)) {
+                _uiState.update { it.copy(isHintVisible = true) }
+                persistSession()
+            }
+        }
+    }
+
+    /** Consumes one 50/50 aid and leaves the correct option plus one incorrect option visible. */
+    private fun useFiftyFifty() {
+        val state = _uiState.value
+        if (state.isAnswerChecked || state.eliminatedOptionIndices.isNotEmpty() || state.fiftyFifties == 0) {
+            return
+        }
+        val question = state.questions.getOrNull(state.currentQuestionIndex) ?: return
+        val eliminated = question.options.indices
+            .filter { it != question.correctAnswerIndex }
+            .shuffled()
+            .drop(1)
+            .toSet()
+        if (eliminated.isEmpty()) return
+        viewModelScope.launch {
+            if (userRepository.consumeInventoryItem(ShopInventoryItem.FIFTY_FIFTY)) {
+                _uiState.update { it.copy(eliminatedOptionIndices = eliminated) }
+                persistSession()
+            }
+        }
+    }
+
+    /** Advances to the next question and clears aids that only apply to the previous question. */
     private fun nextQuestion() {
         val currentState = _uiState.value
         if (currentState.currentQuestionIndex < currentState.questions.size - 1) {
             _uiState.update {
                 it.copy(
                     currentQuestionIndex = it.currentQuestionIndex + 1,
-                    isAnswerChecked = false
+                    isAnswerChecked = false,
+                    isHintVisible = false,
+                    eliminatedOptionIndices = emptySet()
                 )
             }
             persistSession()
@@ -570,6 +634,8 @@ class TestViewModel @Inject constructor(
         val selectedAnswers: Map<Int, Int>,
         val isAnswerChecked: Boolean,
         val sessionStreak: Int,
+        val isHintVisible: Boolean,
+        val eliminatedOptionIndices: Set<Int>,
         val currentTopic: String?,
         val aiNodeTitle: String?,
         val aiNodeDescription: String?,

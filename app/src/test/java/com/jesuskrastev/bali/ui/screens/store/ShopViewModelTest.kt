@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
+import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -96,5 +97,38 @@ class ShopViewModelTest {
     @Test
     fun `user coins are displayed`() = runTest {
         assertThat(viewModel.uiState.value.coinsCount).isAtLeast(0)
+    }
+
+    @Test
+    fun `buying a hint charges coins and adds it to the practice inventory`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.Hint))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val user = fakeUserRepository.get().first { it?.hints == 1 }!!
+        assertThat(user.coins).isEqualTo(100 - ShopCatalog.HINT_COST)
+        assertThat(viewModel.uiState.value.selectedItem).isNull()
+    }
+
+    @Test
+    fun `a streak bet pays once after the next new study day`() = runTest {
+        val today = DailyStreak.startOfDayMillis(DailyStreak.epochDay(System.currentTimeMillis()))
+        fakeUserRepository.insert(
+            User(
+                coins = 100,
+                currentStreak = 2,
+                highestStreak = 2,
+                lastPracticeTimestamp = today - 24 * 60 * 60 * 1000L,
+                practiceDays = listOf(today - 24 * 60 * 60 * 1000L)
+            )
+        )
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakBet))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+        IncrementStreakUseCase(fakeUserRepository)()
+
+        val user = fakeUserRepository.get().first { it?.activeStreakBet == false && it.coins == 150 }!!
+        assertThat(user.currentStreak).isEqualTo(3)
     }
 }

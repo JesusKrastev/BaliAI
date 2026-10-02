@@ -4,6 +4,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -45,6 +46,34 @@ interface UserRepository {
     suspend fun decrementCoinsIfEnough(amount: Int): Boolean
 
     suspend fun updateStreakFreezes(count: Int)
+
+    /**
+     * Atomically charges [cost] and adds [item] to the user's inventory.
+     *
+     * @return true when the balance and the item's ownership limit allow the purchase.
+     */
+    suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean
+
+    /**
+     * Atomically spends [cost] and grants the random coin [reward] from a surprise chest.
+     *
+     * @return true when the chest was opened; false when the balance is insufficient.
+     */
+    suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean
+
+    /**
+     * Consumes one owned [item].
+     *
+     * @return true when an item was available and consumed.
+     */
+    suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean
+
+    /**
+     * Pays the active streak wager once and clears it.
+     *
+     * @return true if a wager existed and was paid.
+     */
+    suspend fun claimStreakBet(): Boolean
 
     /**
      * Saves the real exam date the user set, replacing the onboarding estimate.

@@ -2,6 +2,8 @@ package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.domain.model.DailyStreak
 
+/** Renders the coin shop and sends user actions to [viewModel]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShopScreen(
@@ -31,9 +34,18 @@ fun ShopScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sheetState = rememberModalBottomSheetState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.purchaseFeedback) {
+        uiState.purchaseFeedback?.let { feedback ->
+            snackbarHostState.showSnackbar(feedback)
+            viewModel.onEvent(ShopEvent.DismissFeedback)
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Tienda", fontWeight = FontWeight.Black) },
@@ -71,15 +83,16 @@ fun ShopScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(32.dp)
+                .padding(horizontal = 24.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Congelación de racha Section
             ShopSection(
                 title = "Congelación de racha",
                 countLabel = "${uiState.streakFreezes}/2"
             ) {
-                val price = 120
+                val price = ShopCatalog.STREAK_FREEZER_COST
                 val hasEnoughCoins = uiState.coinsCount >= price
                 val isLimitReached = uiState.streakFreezes >= 2
                 
@@ -99,6 +112,77 @@ fun ShopScreen(
                 coinsCount = uiState.coinsCount,
                 onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakRecovery)) }
             )
+
+            ShopSection(
+                title = "Apuesta de racha",
+                countLabel = if (uiState.hasActiveStreakBet) "Activa" else ""
+            ) {
+                ShopItemCard(
+                    imageRes = R.drawable.shop_streak_bet,
+                    label = "50 → 100 monedas",
+                    price = ShopCatalog.STREAK_BET_COST,
+                    isEnabled = !uiState.hasActiveStreakBet,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.STREAK_BET_COST,
+                    priceLabel = if (uiState.hasActiveStreakBet) "En curso" else null,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakBet)) }
+                )
+                Text(
+                    text = "Apuesta 50 monedas y gana 100 al completar tu próxima jornada de estudio.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            ShopSection(
+                title = "Ayudas para practicar",
+                countLabel = "${uiState.hints} pistas · ${uiState.fiftyFifties} 50/50"
+            ) {
+                ShopItemCard(
+                    imageRes = R.drawable.shop_hint,
+                    label = "Pista",
+                    price = ShopCatalog.HINT_COST,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.HINT_COST,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.Hint)) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ShopItemCard(
+                    imageRes = R.drawable.shop_fifty_fifty,
+                    label = "50/50",
+                    price = ShopCatalog.FIFTY_FIFTY_COST,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.FIFTY_FIFTY_COST,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.FiftyFifty)) }
+                )
+            }
+
+            ShopSection(
+                title = "Recompensas",
+                countLabel = "x2 XP: ${uiState.doubleXpBoosts} · x2 monedas: ${uiState.doubleCoinBoosts}"
+            ) {
+                ShopItemCard(
+                    imageRes = R.drawable.shop_surprise_chest,
+                    label = "Cofre sorpresa",
+                    price = ShopCatalog.SURPRISE_CHEST_COST,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.SURPRISE_CHEST_COST,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest)) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ShopItemCard(
+                    imageRes = R.drawable.shop_double_xp,
+                    label = "Doble XP",
+                    price = ShopCatalog.DOUBLE_XP_COST,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.DOUBLE_XP_COST,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.DoubleXp)) }
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                ShopItemCard(
+                    imageRes = R.drawable.shop_double_coins,
+                    label = "Doble monedas",
+                    price = ShopCatalog.DOUBLE_COINS_COST,
+                    hasEnoughCoins = uiState.coinsCount >= ShopCatalog.DOUBLE_COINS_COST,
+                    onClick = { viewModel.onEvent(ShopEvent.SelectItem(ShopItem.DoubleCoins)) }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
         }
 
         if (uiState.selectedItem != null) {
@@ -113,11 +197,7 @@ fun ShopScreen(
                     recoverableStreak = uiState.recoverableStreak,
                     isProcessing = uiState.isProcessing,
                     onConfirm = {
-                        val event = when (uiState.selectedItem!!) {
-                            ShopItem.StreakFreezer -> ShopEvent.PurchaseStreakFreezer
-                            ShopItem.StreakRecovery -> ShopEvent.PurchaseStreakRecovery
-                        }
-                        viewModel.onEvent(event)
+                        viewModel.onEvent(ShopEvent.ConfirmPurchase)
                     }
                 )
             }
@@ -137,7 +217,7 @@ private fun StreakRecoverySection(recoverableStreak: Int, coinsCount: Int, onCli
     val recoverable = recoverableStreak > 0
     ShopSection(title = "Recuperador de racha", countLabel = "") {
         ShopItemCard(
-            imageRes = R.drawable.streak,
+            imageRes = R.drawable.streak_recovery,
             label = if (recoverable) {
                 "Recupera $recoverableStreak ${if (recoverableStreak == 1) "día" else "días"}"
             } else {
@@ -187,22 +267,11 @@ fun PurchaseConfirmationContent(
             color = Color(0xFF28313D)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                when (item) {
-                    ShopItem.StreakFreezer -> {
-                        Image(
-                            painter = painterResource(id = R.drawable.streak_freezer),
-                            contentDescription = null,
-                            modifier = Modifier.size(60.dp)
-                        )
-                    }
-                    ShopItem.StreakRecovery -> {
-                        Image(
-                            painter = painterResource(id = R.drawable.streak),
-                            contentDescription = null,
-                            modifier = Modifier.size(60.dp)
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(id = item.imageRes),
+                    contentDescription = null,
+                    modifier = Modifier.size(60.dp)
+                )
             }
         }
 
@@ -211,16 +280,34 @@ fun PurchaseConfirmationContent(
         val title = when (item) {
             ShopItem.StreakFreezer -> "Congelador de racha"
             ShopItem.StreakRecovery -> "Recuperador de racha"
+            ShopItem.StreakBet -> "Apuesta de racha"
+            ShopItem.Hint -> "Pista"
+            ShopItem.FiftyFifty -> "50/50"
+            ShopItem.SurpriseChest -> "Cofre sorpresa"
+            ShopItem.DoubleXp -> "Doble XP"
+            ShopItem.DoubleCoins -> "Doble monedas"
         }
         val description = when (item) {
             ShopItem.StreakFreezer -> "Evita perder tu racha de días si un día no puedes practicar."
             ShopItem.StreakRecovery ->
                 "Recupera los $recoverableStreak ${if (recoverableStreak == 1) "día" else "días"} " +
                     "de racha que perdiste ayer. Solo sirve hasta el final de hoy."
+            ShopItem.StreakBet -> "Apuesta 50 monedas. Al completar tu próxima jornada de estudio recibirás 100 monedas."
+            ShopItem.Hint -> "Revela la explicación de una pregunta antes de responderla en una práctica."
+            ShopItem.FiftyFifty -> "Elimina las opciones incorrectas hasta dejar una respuesta correcta y otra posible."
+            ShopItem.SurpriseChest -> "Ábrelo ahora por 60 monedas y descubre entre 30 y 120 monedas dentro."
+            ShopItem.DoubleXp -> "Duplica todo el XP de tu próxima actividad completada."
+            ShopItem.DoubleCoins -> "Duplica las monedas de tu próxima actividad completada."
         }
         val price = when (item) {
-            ShopItem.StreakFreezer -> 120
+            ShopItem.StreakFreezer -> ShopCatalog.STREAK_FREEZER_COST
             ShopItem.StreakRecovery -> DailyStreak.RECOVERY_COST_COINS
+            ShopItem.StreakBet -> ShopCatalog.STREAK_BET_COST
+            ShopItem.Hint -> ShopCatalog.HINT_COST
+            ShopItem.FiftyFifty -> ShopCatalog.FIFTY_FIFTY_COST
+            ShopItem.SurpriseChest -> ShopCatalog.SURPRISE_CHEST_COST
+            ShopItem.DoubleXp -> ShopCatalog.DOUBLE_XP_COST
+            ShopItem.DoubleCoins -> ShopCatalog.DOUBLE_COINS_COST
         }
 
         Text(
@@ -278,6 +365,19 @@ fun PurchaseConfirmationContent(
         }
     }
 }
+
+/** Returns the drawable used consistently in an item card and its confirmation sheet. */
+private val ShopItem.imageRes: Int
+    get() = when (this) {
+        ShopItem.StreakFreezer -> R.drawable.streak_freezer
+        ShopItem.StreakRecovery -> R.drawable.streak_recovery
+        ShopItem.StreakBet -> R.drawable.shop_streak_bet
+        ShopItem.Hint -> R.drawable.shop_hint
+        ShopItem.FiftyFifty -> R.drawable.shop_fifty_fifty
+        ShopItem.SurpriseChest -> R.drawable.shop_surprise_chest
+        ShopItem.DoubleXp -> R.drawable.shop_double_xp
+        ShopItem.DoubleCoins -> R.drawable.shop_double_coins
+    }
 
 @Composable
 fun ShopSection(

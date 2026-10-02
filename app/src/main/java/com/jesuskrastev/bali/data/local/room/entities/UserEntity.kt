@@ -29,5 +29,10 @@ data class UserEntity(
     // Only the old weekly streak used these two. Kept so the table does not have to be rebuilt.
     val weekSessions: Int = 0,
     val currentWeekStart: Long = 0L,
-    @ColumnInfo(defaultValue = "[]") val frozenDays: List<Long> = emptyList()
+    @ColumnInfo(defaultValue = "[]") val frozenDays: List<Long> = emptyList(),
+    @ColumnInfo(defaultValue = "0") val hints: Int = 0,
+    @ColumnInfo(defaultValue = "0") val fiftyFifties: Int = 0,
+    @ColumnInfo(defaultValue = "0") val doubleXpBoosts: Int = 0,
+    @ColumnInfo(defaultValue = "0") val doubleCoinBoosts: Int = 0,
+    @ColumnInfo(defaultValue = "0") val activeStreakBet: Boolean = false
 )
