@@ -90,4 +90,19 @@ class IncrementXpUseCaseTest {
         assertThat(result.bonusPerfection).isNull()
         assertThat(result.xpGained).isEqualTo(6)
     }
+
+    @Test
+    fun `invoke reports the accumulated experience after the result for the level bar`() = runTest {
+        fakeUserRepository.insert(User(id = "user1", currentStreak = 0, xp = 30))
+
+        val result = useCase(
+            mode = TestMode.PRACTICE,
+            correctAnswers = 10,
+            totalQuestions = 10,
+            durationSeconds = 1_000
+        )
+
+        assertThat(result.newTotalXp).isEqualTo(30 + result.xpGained)
+        assertThat(result.newTotalXp).isGreaterThan(result.xpGained)
+    }
 }

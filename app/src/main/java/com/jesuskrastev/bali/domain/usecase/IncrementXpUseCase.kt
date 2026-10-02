@@ -119,6 +119,7 @@ open class IncrementXpUseCase @Inject constructor(
             xpGained = totalXpGained,
             levelUp = hasLeveledUp,
             newLevel = newLevel,
+            newTotalXp = newTotalXp,
             baseXp = baseXp,
             bonusPerfection = perfectionBonus,
             bonusFast = speedBonus,
