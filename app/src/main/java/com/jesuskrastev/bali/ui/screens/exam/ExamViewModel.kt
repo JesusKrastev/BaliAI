@@ -13,6 +13,7 @@ import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
@@ -372,7 +373,12 @@ class ExamViewModel @Inject constructor(
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
         // content again" — otherwise a 100-coin exam would silently pay full XP every time.
-        val isRepeat = testResultRepository.get().first().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
+        val previousResults = runCatching { testResultRepository.get().first() }.getOrNull()
+        val isRepeat = previousResults.orEmpty().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
+        // Only judged when the earlier results could be read, so a failed read never invents a record.
+        val previousBest = previousResults?.let { ResultMilestones.bestExamScore(it) }
+        val isNewRecord = ResultMilestones.isNewExamRecord(correct, previousBest)
+        val isFirstWin = previousResults != null && ResultMilestones.isFirstWin(previousResults, isPassed)
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -430,10 +436,14 @@ class ExamViewModel @Inject constructor(
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
             newLevel = xpEarned.newLevel,
+            newTotalXp = xpEarned.newTotalXp,
             coinsGained = coinsGained,
             newStreakDays = newStreakDays,
             isFailedExam = !isPassed,
-            isPassedExam = isPassed
+            isPassedExam = isPassed,
+            isFirstWin = isFirstWin,
+            isNewRecord = isNewRecord,
+            previousBestScore = previousBest ?: -1
         )
     }
 

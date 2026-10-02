@@ -39,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,7 +78,9 @@ fun LessonStreakScreen(
 
 /**
  * Stateless body of [LessonStreakScreen]: the flame with the new count, the week, and the
- * mascot telling the user when to come back.
+ * mascot telling the user when to come back. On a milestone day (see [isStreakMilestone]) the
+ * flame and the confetti give way to the bigger [MilestoneFlame] celebration, and the confetti
+ * plays once instead of looping.
  *
  * @param uiState the streak to celebrate
  * @param onContinueClick invoked by the continue button
@@ -87,6 +90,10 @@ fun LessonStreakContent(
     uiState: StreakUiState,
     onContinueClick: () -> Unit
 ) {
+    val isMilestone = !uiState.isLoading && isStreakMilestone(uiState.currentStreak)
+    // Saved, so a rotation shows the finished milestone instead of replaying it.
+    var milestonePlayed by rememberSaveable { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -129,7 +136,15 @@ fun LessonStreakContent(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(24.dp))
-                CelebrationFlame(days = uiState.currentStreak)
+                if (isMilestone) {
+                    MilestoneFlame(
+                        days = uiState.currentStreak,
+                        played = milestonePlayed,
+                        onPlayed = { milestonePlayed = true }
+                    )
+                } else {
+                    CelebrationFlame(days = uiState.currentStreak)
+                }
                 Spacer(modifier = Modifier.height(20.dp))
                 CelebrationHeadline(current = uiState.currentStreak, highest = uiState.highestStreak)
                 Spacer(modifier = Modifier.height(24.dp))
@@ -151,7 +166,8 @@ fun LessonStreakContent(
             }
         }
 
-        ConfettiOverlay()
+        // A milestone has its own, bigger celebration, so the confetti plays once and stops.
+        ConfettiOverlay(loop = !isMilestone)
     }
 }
 
@@ -212,7 +228,7 @@ private fun CelebrationFlame(days: Int) {
 }
 
 /**
- * Title and subtitle for the new count.
+ * Title and subtitle for the new count; a milestone gets its own wording.
  *
  * @param current the streak including today
  * @param highest the longest streak ever, which already includes today
@@ -220,6 +236,7 @@ private fun CelebrationFlame(days: Int) {
 @Composable
 private fun CelebrationHeadline(current: Int, highest: Int) {
     val (title, subtitle) = when {
+        isStreakMilestone(current) -> streakMilestoneTitle(current) to streakMilestoneSubtitle(current, highest)
         current <= 1 -> "¡Racha iniciada!" to "Vuelve mañana y suma el segundo día."
         current >= highest -> "¡Tu mejor racha!" to "Nunca habías estudiado $current días seguidos."
         else -> "¡Sigues en racha!" to "Mañana, a por el día ${current + 1}."
@@ -299,13 +316,15 @@ private fun MascotTip(text: String) {
 
 /**
  * Full-screen confetti, drawn above everything and never intercepting touches.
+ *
+ * @param loop true for the daily celebration, which keeps raining; false to play it once
  */
 @Composable
-private fun ConfettiOverlay() {
+private fun ConfettiOverlay(loop: Boolean) {
     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.confetti))
     val progress by animateLottieCompositionAsState(
         composition = composition,
-        iterations = LottieConstants.IterateForever
+        iterations = if (loop) LottieConstants.IterateForever else 1
     )
     LottieAnimation(
         composition = composition,

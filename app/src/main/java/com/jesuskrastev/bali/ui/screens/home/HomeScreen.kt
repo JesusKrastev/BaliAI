@@ -1,7 +1,10 @@
 package com.jesuskrastev.bali.ui.screens.home
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -35,9 +38,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -55,12 +61,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
+import com.jesuskrastev.bali.ui.theme.BaliFlameColors
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Renders the home dashboard: streak/coins status and the scrollable learning-path graph. The
@@ -73,15 +85,18 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
  *   when it is tapped; exam nodes open the mock exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
+ * @param pathUnlockViewModel tells the path which nodes opened since Home last showed it
  */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
-    onStreakClick: () -> Unit = {}
+    onStreakClick: () -> Unit = {},
+    pathUnlockViewModel: PathUnlockViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val unlockState by pathUnlockViewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -103,8 +118,12 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues),
-            pathNodes = uiState.pathNodes,
+            // Held back until the unlock check is done, so a node that is about to animate open
+            // is not drawn open for a frame first.
+            pathNodes = if (unlockState.isReady) uiState.pathNodes else emptyList(),
             isPathLoading = uiState.isPathLoading,
+            unlock = unlockState.unlock,
+            onUnlockPlayed = pathUnlockViewModel::onUnlockPlayed,
             onNodeClick = { node ->
                 onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
             },
@@ -224,6 +243,9 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
+ * @param unlock nodes that opened since Home last showed the path: the connectors into them fill
+ *   in one after another and each new node pops open; null for no animation
+ * @param onUnlockPlayed invoked once that animation has finished
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -232,7 +254,9 @@ fun LearningPathGraph(
     pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
     onNodeClick: (LessonNode) -> Unit,
-    onGenerateClick: () -> Unit
+    onGenerateClick: () -> Unit,
+    unlock: PathUnlock? = null,
+    onUnlockPlayed: () -> Unit = {}
 ) {
     if (pathNodes.isEmpty()) {
         if (isPathLoading) PathLoadingState(modifier)
@@ -252,6 +276,25 @@ fun LearningPathGraph(
     var containerCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
 
     val listState = rememberLazyListState()
+
+    // The unlock animation: each newly opened node takes one step, in path order.
+    val unlockSteps = remember(unlock, pathNodes) {
+        if (unlock == null) {
+            emptyMap()
+        } else {
+            pathNodes
+                .filter { it.status != NodeStatus.LOCKED && it.orderIndex > unlock.fromOrder && it.orderIndex <= unlock.toOrder }
+                .sortedBy { it.orderIndex }
+                .mapIndexed { step, node -> node.id to step }
+                .toMap()
+        }
+    }
+    LaunchedEffect(unlockSteps) {
+        if (unlockSteps.isNotEmpty()) {
+            delay(unlockSteps.size * UNLOCK_STEP_MS + NODE_BURST_MS + 100L)
+            onUnlockPlayed()
+        }
+    }
 
     // Close popup on scroll
     LaunchedEffect(listState.firstVisibleItemScrollOffset) {
@@ -296,20 +339,22 @@ fun LearningPathGraph(
                 }
 
                 itemsIndexed(sectionNodes, key = { _, node -> node.id }) { nodeIdx, node ->
+                    val xOffset = pathNodeOffset(node)
+                    val unlockStep = unlockSteps[node.id]
                     if (nodeIdx > 0) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
-
-                    // Exam nodes always sit centered; the rest follow the zigzag.
-                    val xOffset = if (node.nodeType == NodeType.EXAM) {
-                        0.dp
-                    } else {
-                        PathZigzagOffsets[node.unitIndex % PathZigzagOffsets.size]
+                        val previous = sectionNodes[nodeIdx - 1]
+                        PathConnector(
+                            fromOffset = pathNodeOffset(previous),
+                            toOffset = xOffset,
+                            filled = previous.status == NodeStatus.COMPLETED && node.status != NodeStatus.LOCKED,
+                            fillDelayMillis = unlockStep?.let { it * UNLOCK_STEP_MS }
+                        )
                     }
 
                     PathNodeItem(
                         node = node,
                         offset = xOffset,
+                        unlockDelayMillis = unlockStep?.let { (it + 1) * UNLOCK_STEP_MS },
                         onSelect = {
                             selectedNodeId = if (selectedNodeId == node.id) null else node.id
                         },
@@ -353,6 +398,80 @@ fun LearningPathGraph(
                 },
                 onDismiss = { selectedNodeId = null }
             )
+        }
+    }
+}
+
+/**
+ * Horizontal shift of a node: exam nodes always sit centered, the rest follow the zigzag.
+ *
+ * @param node the node to place
+ * @return the shift from the centre of the path
+ */
+private fun pathNodeOffset(node: LessonNode): Dp =
+    if (node.nodeType == NodeType.EXAM) 0.dp else PathZigzagOffsets[node.unitIndex % PathZigzagOffsets.size]
+
+/** Height of the connector between two nodes, which is also the gap between them. */
+private val PathConnectorHeight = 32.dp
+
+/** How long one step of the unlock animation takes: a connector filling in. */
+private const val UNLOCK_STEP_MS = 650L
+
+/** How long the pop of a newly opened node lasts, counted from the moment it opens. */
+private const val NODE_BURST_MS = 800L
+
+/**
+ * The curved stretch of path between two consecutive nodes of a section. It is empty until the
+ * user has walked it. When [fillDelayMillis] is set it fills in from top to bottom once, after
+ * that delay, instead of appearing already full: that is the moment a node is completed.
+ *
+ * @param fromOffset horizontal shift of the node above
+ * @param toOffset horizontal shift of the node below
+ * @param filled whether the stretch has been walked: the node above is completed and the one
+ *   below is open
+ * @param fillDelayMillis delay before the fill-in animation starts, or null to draw the stretch
+ *   in its final state without animating
+ */
+@Composable
+private fun PathConnector(
+    fromOffset: Dp,
+    toOffset: Dp,
+    filled: Boolean,
+    fillDelayMillis: Long?
+) {
+    val fill = remember { Animatable(if (filled && fillDelayMillis == null) 1f else 0f) }
+    LaunchedEffect(filled, fillDelayMillis) {
+        when {
+            !filled -> fill.snapTo(0f)
+            fillDelayMillis == null -> fill.snapTo(1f)
+            else -> {
+                fill.snapTo(0f)
+                delay(fillDelayMillis)
+                fill.animateTo(1f, tween(durationMillis = UNLOCK_STEP_MS.toInt(), easing = FastOutSlowInEasing))
+            }
+        }
+    }
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val ink = MaterialTheme.colorScheme.primary
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(PathConnectorHeight)
+    ) {
+        val startX = center.x + fromOffset.toPx()
+        val endX = center.x + toOffset.toPx()
+        val curve = Path().apply {
+            moveTo(startX, 0f)
+            cubicTo(startX, size.height / 2f, endX, size.height / 2f, endX, size.height)
+        }
+        val stroke = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+        drawPath(curve, color = track, style = stroke)
+        if (fill.value > 0f) {
+            val measure = PathMeasure().apply { setPath(curve, false) }
+            val partial = Path()
+            measure.getSegment(0f, measure.length * fill.value, partial, true)
+            drawPath(partial, color = ink, style = stroke)
         }
     }
 }
@@ -426,18 +545,36 @@ fun SectionHeaderCard(
  * @param offset horizontal shift that produces the path's zigzag
  * @param onSelect invoked when an unlocked or completed node is tapped
  * @param onPositioned reports the node's layout coordinates so a popup can anchor to it
+ * @param unlockDelayMillis for a node that has just opened: the wait before it pops open, which
+ *   it spends drawn as locked while the connector into it fills in; null for a node that did
+ *   not just open. The node is tappable throughout.
  */
 @Composable
 fun PathNodeItem(
     node: LessonNode,
     offset: Dp,
     onSelect: () -> Unit,
-    onPositioned: (LayoutCoordinates) -> Unit = {}
+    onPositioned: (LayoutCoordinates) -> Unit = {},
+    unlockDelayMillis: Long? = null
 ) {
-    val isLocked = node.status == NodeStatus.LOCKED
-    val isUnlocked = node.status == NodeStatus.UNLOCKED
     val isCompleted = node.status == NodeStatus.COMPLETED
     val context = LocalContext.current
+
+    // A node that just opened is drawn locked until its turn, then pops open with a burst.
+    var revealed by remember(node.id, unlockDelayMillis) { mutableStateOf(unlockDelayMillis == null) }
+    val popScale = remember { Animatable(1f) }
+    val burst = remember { Animatable(0f) }
+    LaunchedEffect(unlockDelayMillis) {
+        if (unlockDelayMillis == null) return@LaunchedEffect
+        delay(unlockDelayMillis)
+        revealed = true
+        popScale.snapTo(0.8f)
+        launch { popScale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMedium)) }
+        burst.snapTo(0f)
+        burst.animateTo(1f, tween(durationMillis = NODE_BURST_MS.toInt(), easing = LinearOutSlowInEasing))
+    }
+    val isLocked = node.status == NodeStatus.LOCKED || !revealed
+    val isUnlocked = node.status == NodeStatus.UNLOCKED && revealed
 
     val rotation = if (isUnlocked) {
         val infiniteTransition = rememberInfiniteTransition(label = "node_rotate")
@@ -453,7 +590,11 @@ fun PathNodeItem(
         0f
     }
 
-    val bgColor = if (isUnlocked) BaliAccentYellow else MaterialTheme.colorScheme.surfaceVariant
+    val bgColor by animateColorAsState(
+        targetValue = if (isUnlocked) BaliAccentYellow else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = tween(durationMillis = 300),
+        label = "node_color"
+    )
 
     // Resolve drawable icon
     val resId = remember(node.iconResName) {
@@ -485,9 +626,13 @@ fun PathNodeItem(
             Surface(
                 modifier = Modifier
                     .size(80.dp)
+                    .graphicsLayer {
+                        scaleX = popScale.value
+                        scaleY = popScale.value
+                    }
                     .onGloballyPositioned { coords -> onPositioned(coords) }
                     .then(
-                        if (!isLocked) Modifier.clickable { onSelect() } else Modifier
+                        if (node.status != NodeStatus.LOCKED) Modifier.clickable { onSelect() } else Modifier
                     ),
                 shape = CircleShape,
                 color = bgColor,
@@ -518,7 +663,46 @@ fun PathNodeItem(
                     }
                 }
             }
+
+            if (burst.value > 0f && burst.value < 1f) {
+                Canvas(modifier = Modifier.requiredSize(NodeBurstSize)) {
+                    drawNodeBurst(progress = burst.value, ringColor = BaliAccentYellow)
+                }
+            }
         }
+    }
+}
+
+/** Size of the area the burst of a newly opened node is drawn in; it spills past the node. */
+private val NodeBurstSize = 180.dp
+
+/** Number of sparks in the burst of a newly opened node. */
+private const val NODE_BURST_SPARKS = 10
+
+/**
+ * Burst for a node that has just opened: one ring that widens and fades, and sparks that fly
+ * out, shrink and fade. Nothing loops; it ends when [progress] reaches 1.
+ *
+ * @param progress 0 at the start, 1 once everything has faded
+ * @param ringColor colour of the ring; the sparks use the app's flame colours
+ */
+private fun DrawScope.drawNodeBurst(progress: Float, ringColor: Color) {
+    val nodeRadius = 40.dp.toPx()
+    val reach = size.minDimension / 2f
+    val fade = 1f - progress
+    drawCircle(
+        color = ringColor.copy(alpha = 0.8f * fade),
+        radius = nodeRadius + (reach - nodeRadius) * progress,
+        style = Stroke(width = (5f * fade + 1f).dp.toPx())
+    )
+    repeat(NODE_BURST_SPARKS) { index ->
+        val angle = Math.toRadians(index * (360.0 / NODE_BURST_SPARKS) + 9.0)
+        val distance = nodeRadius + (reach - nodeRadius) * (0.35f + 0.65f * progress)
+        drawCircle(
+            color = BaliFlameColors[index % BaliFlameColors.size].copy(alpha = fade),
+            radius = (5f * fade + 1f).dp.toPx(),
+            center = center + Offset((distance * cos(angle)).toFloat(), (distance * sin(angle)).toFloat())
+        )
     }
 }
 
