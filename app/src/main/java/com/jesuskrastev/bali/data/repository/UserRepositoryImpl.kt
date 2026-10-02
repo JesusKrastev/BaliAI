@@ -166,15 +166,27 @@ class UserRepositoryImpl @Inject constructor(
             )
         }
 
-    /**
-     * Pays the active streak wager in whichever store currently owns the user's profile.
-     *
-     * @return true when a wager was paid.
-     */
-    override suspend fun claimStreakBet(): Boolean = withContext(Dispatchers.IO) {
+    /** See [UserRepository.placeStreakBet]. */
+    override suspend fun placeStreakBet(cost: Int, target: Int): Boolean = withContext(Dispatchers.IO) {
         withAuthRouting(
-            actionRemote = { userId -> firestoreUserDao.claimStreakBet(userId, STREAK_BET_PAYOUT) },
-            actionLocal = { userDao.claimStreakBet(STREAK_BET_PAYOUT) == 1 }
+            actionRemote = { userId -> firestoreUserDao.placeStreakBet(userId, cost, target) },
+            actionLocal = { userDao.placeStreakBet(cost, target) == 1 }
+        )
+    }
+
+    /** See [UserRepository.claimStreakBet]. */
+    override suspend fun claimStreakBet(payout: Int): Boolean = withContext(Dispatchers.IO) {
+        withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.claimStreakBet(userId, payout) },
+            actionLocal = { userDao.claimStreakBet(payout) == 1 }
+        )
+    }
+
+    /** See [UserRepository.clearStreakBet]. */
+    override suspend fun clearStreakBet() = withContext(Dispatchers.IO) {
+        withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.clearStreakBet(userId) },
+            actionLocal = { userDao.clearStreakBet() }
         )
     }
 
@@ -223,8 +235,4 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
-
-    private companion object {
-        const val STREAK_BET_PAYOUT = 100
-    }
 }

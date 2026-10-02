@@ -20,7 +20,6 @@ import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.LessonNode
-import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -144,21 +143,12 @@ class HomeViewModel @Inject constructor(
             val now = System.currentTimeMillis()
             // Settled here too, so a lost streak never flashes as alive while the save lands.
             val streak = DailyStreak.of(user).settledAt(now)
-            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(streak.practiceDays, streak.frozenDays, now)
-            // Counted from practiceDays like the streak screens: user.weekSessions is only
-            // refreshed on the next practice, so it can still hold last week's number.
-            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
                 profilePictureUrl = profilePictureUrl,
                 userEmail = userEmail,
-                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now),
                 streak = streak.current,
                 practicedToday = streak.hasPracticedOn(now),
-                weekSessions = weekSessions,
-                weeklyGoal = weeklyGoal,
-                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
                 avgScore = avgScore.toInt(),
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
@@ -168,7 +158,6 @@ class HomeViewModel @Inject constructor(
                 streakFreezes = streak.freezes,
                 highestStreak = streak.highest,
                 dailyTip = dailyTip,
-                weeklyStreak = weeklyStreak,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
                 pathNodes = typedPathNodes,
                 isPathLoading = isPathLoading,
@@ -187,37 +176,6 @@ class HomeViewModel @Inject constructor(
             analyticsTracker.logout()
             analyticsTracker.resetUser()
         }
-    }
-
-    /**
-     * Saves the exam date picked on the plan card; from then on the card counts down to it.
-     *
-     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
-     */
-    fun setExamDate(pickerMillis: Long) {
-        val examDay = localDayFromPickerMillis(pickerMillis)
-        val hadPlanDate = uiState.value.plan.targetMillis != null
-        viewModelScope.launch {
-            userRepository.updateExamDate(examDay)
-            analyticsTracker.examDateSet(
-                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
-                hadPlanDate = hadPlanDate
-            )
-        }
-    }
-
-    /**
-     * Records a tap on the plan card's study button, right before the lesson it opens, to tell
-     * how many sessions start from the card rather than from the path.
-     */
-    fun trackPlanStudyClick() {
-        val state = uiState.value
-        val pace = weekPaceOf(state.weeklyStreak, state.weekSessions, state.weeklyGoal)
-        analyticsTracker.planStudyClicked(
-            daysLeft = state.plan.daysLeft,
-            practicedToday = pace.practicedToday,
-            weekSessions = pace.sessions
-        )
     }
 
     fun generateNextPathNodesCount(count: Int = 5) {

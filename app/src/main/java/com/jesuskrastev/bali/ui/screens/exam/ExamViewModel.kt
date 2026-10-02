@@ -6,16 +6,20 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -61,6 +65,7 @@ class ExamViewModel @Inject constructor(
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -169,13 +174,20 @@ class ExamViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }
@@ -354,13 +366,13 @@ class ExamViewModel @Inject constructor(
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
 
         // Un examen de la DGT de 30 preguntas se aprueba con 3 fallos o menos (27 correctas)
-        val isPassed = correct >= 27
+        val isPassed = ExamRules.isPassed(correct)
         var newStreakDays = -1
 
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
         // content again" — otherwise a 100-coin exam would silently pay full XP every time.
-        val isRepeat = testResultRepository.get().first().any { it.category == OFFICIAL_EXAM_CATEGORY }
+        val isRepeat = testResultRepository.get().first().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -375,7 +387,7 @@ class ExamViewModel @Inject constructor(
         withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
                 TestResult(
-                    category = OFFICIAL_EXAM_CATEGORY,
+                    category = ExamRules.OFFICIAL_EXAM_CATEGORY,
                     score = correct,
                     total = state.questions.size,
                     date = Date(),
@@ -386,13 +398,18 @@ class ExamViewModel @Inject constructor(
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
+                    // The official exam mixes every topic and its questions carry none, so the
+                    // answer has no topic; the question id and the mode are still saved.
                     answerRepository.insert(
                         Answer(
                             date = Date(),
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = null,
+                            mode = AnswerMode.OFFICIAL_EXAM
                         )
                     )
                 }
@@ -431,9 +448,6 @@ class ExamViewModel @Inject constructor(
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"
-
-        /** [TestResult.category] used for every official-exam attempt, win or lose. */
-        private const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
     }
 
     @Serializable

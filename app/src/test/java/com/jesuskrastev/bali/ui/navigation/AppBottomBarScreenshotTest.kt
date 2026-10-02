@@ -25,7 +25,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-/** Captures the app's bottom bar with Home selected, including the chat entry. */
+/** Captures the app's bottom bar with Home selected and with the Chat tab selected. */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h800dp-xxhdpi")
 @RunWith(RobolectricTestRunner::class)
@@ -35,12 +35,13 @@ class AppBottomBarScreenshotTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     /**
-     * Renders the bar under a navigation host sitting on Home and captures it.
+     * Renders the bar under a navigation host sitting on [start] and captures it.
      *
      * @param name file name suffix of the capture
      * @param darkTheme whether to use the dark color scheme
+     * @param start the destination the host opens on, which is the tab drawn as selected
      */
-    private fun capture(name: String, darkTheme: Boolean) {
+    private fun capture(name: String, darkTheme: Boolean, start: Any = HomeRoute) {
         composeTestRule.setContent {
             BaliTheme(darkTheme = darkTheme) {
                 val navController = rememberNavController()
@@ -51,8 +52,10 @@ class AppBottomBarScreenshotTest {
                         .height(160.dp)
                         .background(MaterialTheme.colorScheme.background)
                 ) {
-                    NavHost(navController = navController, startDestination = HomeRoute) {
+                    NavHost(navController = navController, startDestination = start) {
                         composable<HomeRoute> {}
+                        composable<ChatRoute> {}
+                        composable<StatsRoute> {}
                     }
                     Box(modifier = Modifier.align(Alignment.BottomCenter)) {
                         AppBottomBar(
@@ -60,7 +63,8 @@ class AppBottomBarScreenshotTest {
                             onHomeClick = {},
                             onGamesClick = {},
                             onSettingsClick = {},
-                            onChatClick = {}
+                            onChatClick = {},
+                            onStatsClick = {}
                         )
                     }
                 }
@@ -74,4 +78,16 @@ class AppBottomBarScreenshotTest {
 
     @Test
     fun dark() = capture("dark", darkTheme = true)
+
+    @Test
+    fun chatSelected() = capture("chat_light", darkTheme = false, start = ChatRoute)
+
+    @Test
+    fun statsSelected() = capture("stats_light", darkTheme = false, start = StatsRoute)
+
+    @Test
+    fun statsSelectedDark() = capture("stats_dark", darkTheme = true, start = StatsRoute)
+
+    @Test
+    fun chatSelectedDark() = capture("chat_dark", darkTheme = true, start = ChatRoute)
 }

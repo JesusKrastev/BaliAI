@@ -8,9 +8,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +35,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SportsEsports
@@ -48,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -84,13 +83,13 @@ import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 import com.jesuskrastev.bali.ui.screens.test.TestScreen
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import com.jesuskrastev.bali.ui.screens.test.TestViewModel
+import com.jesuskrastev.bali.ui.screens.stats.StatsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsScreen
 import com.jesuskrastev.bali.ui.screens.suggestions.SuggestionsViewModel
 import com.jesuskrastev.bali.ui.screens.streak.LessonStreakScreen
 import com.jesuskrastev.bali.ui.screens.streak.StreakScreen
 import com.jesuskrastev.bali.ui.screens.streak.StreakViewModel
 import com.jesuskrastev.bali.ui.screens.settings.SettingsScreen
-import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliGrayMedium
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 import com.jesuskrastev.bali.ui.theme.White
@@ -131,6 +130,9 @@ object ExamRoute
 
 @Serializable
 object ShopRoute
+
+@Serializable
+object StatsRoute
 
 @Serializable
 object SuggestionsRoute
@@ -236,6 +238,8 @@ fun AppNavigation(
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentDestination?.let { destination ->
         destination.hasRoute<HomeRoute>() ||
+            destination.hasRoute<ChatRoute>() ||
+            destination.hasRoute<StatsRoute>() ||
             destination.hasRoute<GamesRoute>() ||
             destination.hasRoute<SettingsRoute>()
     } == true
@@ -249,7 +253,8 @@ fun AppNavigation(
                         onHomeClick = { navController.navigateTopLevel(HomeRoute) },
                         onGamesClick = { navController.navigateTopLevel(GamesRoute) },
                         onSettingsClick = { navController.navigateTopLevel(SettingsRoute) },
-                        onChatClick = { navController.navigate(ChatRoute) },
+                        onChatClick = { navController.navigateTopLevel(ChatRoute) },
+                        onStatsClick = { navController.navigateTopLevel(StatsRoute) },
                     )
                 }
             },
@@ -522,6 +527,10 @@ fun AppNavigation(
                 )
             }
 
+            composable<StatsRoute> {
+                StatsScreen()
+            }
+
             composable<SuggestionsRoute> {
                 val viewModel: SuggestionsViewModel = hiltViewModel()
                 SuggestionsScreen(
@@ -532,10 +541,7 @@ fun AppNavigation(
 
             composable<ChatRoute> {
                 val viewModel: ChatViewModel = hiltViewModel()
-                ChatScreen(
-                    viewModel = viewModel,
-                    onBackClick = { navController.popBackStack() }
-                )
+                ChatScreen(viewModel = viewModel)
             }
             }
         }
@@ -543,14 +549,16 @@ fun AppNavigation(
 }
 
 /**
- * Renders the primary app navigation: the three persistent destinations plus the entry to the
- * AI tutor chat, reachable from every tab.
+ * Renders the primary app navigation: Home, the AI tutor chat, the statistics, Games and
+ * Settings. The chat and the statistics are tabs like the others, so the bar stays visible
+ * while they are open.
  *
  * @param currentDestination back stack entry's destination, used to highlight the active tab
  * @param onHomeClick navigates to [HomeRoute]
  * @param onGamesClick navigates to [GamesRoute]
  * @param onSettingsClick navigates to [SettingsRoute]
- * @param onChatClick opens [ChatRoute] full screen, on top of the current tab
+ * @param onChatClick navigates to [ChatRoute]
+ * @param onStatsClick navigates to [StatsRoute]
  */
 @Composable
 internal fun AppBottomBar(
@@ -559,6 +567,7 @@ internal fun AppBottomBar(
     onGamesClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onChatClick: () -> Unit,
+    onStatsClick: () -> Unit,
 ) {
     // The bar's background is drawn flush to the true bottom edge (behind the system nav bar,
     // matching edge-to-edge), but the tappable row is lifted above it by the real nav bar inset
@@ -588,7 +597,7 @@ internal fun AppBottomBar(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(start = 18.dp, top = 4.dp, end = 18.dp, bottom = 8.dp + navBarInset),
+                .padding(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 8.dp + navBarInset),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -599,8 +608,18 @@ internal fun AppBottomBar(
                 onClick = onHomeClick,
                 modifier = Modifier.weight(1f),
             )
-            AskBaliBarItem(
+            BaliBottomBarItem(
+                label = "Chat",
+                icon = Icons.Rounded.ChatBubble,
+                selected = currentDestination?.hasRoute<ChatRoute>() == true,
                 onClick = onChatClick,
+                modifier = Modifier.weight(1f),
+            )
+            BaliBottomBarItem(
+                label = "Progreso", // "Estadísticas" no cabe en una pestaña de cinco y se parte en dos líneas
+                icon = Icons.Rounded.BarChart,
+                selected = currentDestination?.hasRoute<StatsRoute>() == true,
+                onClick = onStatsClick,
                 modifier = Modifier.weight(1f),
             )
             BaliBottomBarItem(
@@ -687,7 +706,7 @@ private fun BaliBottomBarItem(
                 onClick = onClick,
                 role = Role.Tab,
             )
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top,
     ) {
@@ -719,6 +738,7 @@ private fun BaliBottomBarItem(
             color = labelColor,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium,
+            maxLines = 1,
         )
         Spacer(modifier = Modifier.height(3.dp))
         Box(
@@ -727,49 +747,6 @@ private fun BaliBottomBarItem(
                 .height(3.dp)
                 .clip(RoundedCornerShape(50))
                 .background(BaliPrimary),
-        )
-    }
-}
-
-/**
- * The bar's entry to the AI tutor chat. It opens the chat on top of the current tab instead of
- * switching tabs, so it is an action rather than a selectable tab: the mascot in colour on a
- * soft orange pill makes it read as "ask Bali", like the floating button it replaces.
- *
- * @param onClick opens the chat
- * @param modifier layout modifier applied to the item's touch target
- */
-@Composable
-private fun AskBaliBarItem(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .height(70.dp)
-            .clickable(onClickLabel = "Pregunta a Bali", role = Role.Button, onClick = onClick)
-            .padding(horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(13.dp))
-                .background(BaliPrimary.copy(alpha = 0.12f))
-                .width(44.dp)
-                .height(40.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(2.dp))
-        // Grey like the unselected tabs: an orange label would read as a second selected tab.
-        Text(
-            text = "Pregunta",
-            color = BaliGrayMedium,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
         )
     }
 }

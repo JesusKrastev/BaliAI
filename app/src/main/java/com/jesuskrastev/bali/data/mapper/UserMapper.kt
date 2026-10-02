@@ -28,7 +28,7 @@ fun UserEntity.toDomain(): User = User(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    streakBetTarget = streakBetTarget
 )
 
 /** Converts this [User] into the Room entity stored for offline access. */
@@ -55,7 +55,7 @@ fun User.toEntity(): UserEntity = UserEntity(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    streakBetTarget = streakBetTarget
 )
 
 /** Converts this [User] into its Firestore document representation. */
@@ -82,7 +82,7 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    streakBetTarget = streakBetTarget
 )
 
 /** Converts a Firestore profile document into the framework-free [User] domain model. */
@@ -109,5 +109,5 @@ fun UserFirestore.toDomain(): User = User(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    streakBetTarget = streakBetTarget
 )

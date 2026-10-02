@@ -2,6 +2,7 @@
 
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import kotlin.random.Random
 
@@ -10,7 +11,8 @@ import kotlin.random.Random
  *
  * The credit is applied as one atomic operation in [UserRepository.incrementCoins]
  * (a server-side increment, not a local read-then-write), so it's safe even if two
- * results get credited around the same time.
+ * results get credited around the same time. An owned double-coins boost doubles the reward and
+ * is spent by it (see [spendBoostIfOwned]).
  */
 open class IncrementCoinsUseCase @Inject constructor(
     private val userRepository: UserRepository
@@ -19,7 +21,7 @@ open class IncrementCoinsUseCase @Inject constructor(
      * Grants a random coin reward sized by [accuracy].
      *
      * @param accuracy the test/exam score percentage that determines the reward tier.
-     * @return the number of coins granted.
+     * @return the number of coins granted, doubled when a boost was spent.
      */
     suspend operator fun invoke(accuracy: Int = 50): Int {
         val baseCoins = if (accuracy >= 50) {
@@ -27,7 +29,8 @@ open class IncrementCoinsUseCase @Inject constructor(
         } else {
             Random.nextInt(3, 6)    // 3, 4 o 5 monedas
         }
-        val coinsGained = if (userRepository.consumeInventoryItem(ShopInventoryItem.DOUBLE_COINS)) {
+        val boostsOwned = userRepository.get().first()?.doubleCoinBoosts ?: 0
+        val coinsGained = if (userRepository.spendBoostIfOwned(ShopInventoryItem.DOUBLE_COINS, boostsOwned)) {
             baseCoins * 2
         } else {
             baseCoins

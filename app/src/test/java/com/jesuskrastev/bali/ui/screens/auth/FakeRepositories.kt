@@ -72,16 +72,13 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
     /** Buys [item] from the fake inventory when the test profile can afford [cost]. */
     override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean {
         val user = _user.value ?: return false
-        if (user.coins < cost || (item == ShopInventoryItem.STREAK_BET && user.activeStreakBet)) {
-            return false
-        }
+        if (user.coins < cost) return false
         _user.value = user.copy(
             coins = user.coins - cost,
             hints = user.hints + if (item == ShopInventoryItem.HINT) 1 else 0,
             fiftyFifties = user.fiftyFifties + if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
             doubleXpBoosts = user.doubleXpBoosts + if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
-            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0,
-            activeStreakBet = user.activeStreakBet || item == ShopInventoryItem.STREAK_BET
+            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
         )
         return true
     }
@@ -102,7 +99,6 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
             ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties > 0
             ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts > 0
             ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts > 0
-            ShopInventoryItem.STREAK_BET -> false
         }
         if (!canConsume) return false
         _user.value = user.copy(
@@ -114,12 +110,25 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         return true
     }
 
-    /** Pays the fixed 100-coin wager reward if the fake profile has one pending. */
-    override suspend fun claimStreakBet(): Boolean {
+    /** Places a fake streak bet when the profile can pay and has none running. */
+    override suspend fun placeStreakBet(cost: Int, target: Int): Boolean {
         val user = _user.value ?: return false
-        if (!user.activeStreakBet) return false
-        _user.value = user.copy(coins = user.coins + 100, activeStreakBet = false)
+        if (user.coins < cost || user.streakBetTarget > 0) return false
+        _user.value = user.copy(coins = user.coins - cost, streakBetTarget = target)
         return true
+    }
+
+    /** Pays [payout] if the fake profile has a streak bet, and clears it. */
+    override suspend fun claimStreakBet(payout: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.streakBetTarget <= 0) return false
+        _user.value = user.copy(coins = user.coins + payout, streakBetTarget = 0)
+        return true
+    }
+
+    /** Forgets the fake profile's streak bet without paying it. */
+    override suspend fun clearStreakBet() {
+        _user.update { it?.copy(streakBetTarget = 0) }
     }
 
 

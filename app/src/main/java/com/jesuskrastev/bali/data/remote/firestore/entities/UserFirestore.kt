@@ -25,7 +25,7 @@ data class UserFirestore(
     val fiftyFifties: Int = 0,
     val doubleXpBoosts: Int = 0,
     val doubleCoinBoosts: Int = 0,
-    val activeStreakBet: Boolean = false,
+    val streakBetTarget: Int = 0,
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),
     val fcmToken: String = ""
 )

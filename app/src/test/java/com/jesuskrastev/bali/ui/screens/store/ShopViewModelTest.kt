@@ -3,12 +3,15 @@ package com.jesuskrastev.bali.ui.screens.store
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.StreakBet
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
-import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -111,24 +114,126 @@ class ShopViewModelTest {
         assertThat(viewModel.uiState.value.selectedItem).isNull()
     }
 
-    @Test
-    fun `a streak bet pays once after the next new study day`() = runTest {
+    /** A profile with a streak of [days] days that includes today, so a bet can be placed. */
+    private suspend fun studiedToday(days: Int, coins: Int) {
         val today = DailyStreak.startOfDayMillis(DailyStreak.epochDay(System.currentTimeMillis()))
         fakeUserRepository.insert(
             User(
-                coins = 100,
-                currentStreak = 2,
-                highestStreak = 2,
-                lastPracticeTimestamp = today - 24 * 60 * 60 * 1000L,
-                practiceDays = listOf(today - 24 * 60 * 60 * 1000L)
+                coins = coins,
+                currentStreak = days,
+                highestStreak = days,
+                lastPracticeTimestamp = today,
+                practiceDays = listOf(today)
             )
         )
+    }
+
+    @Test
+    fun `a streak bet charges its stake and aims seven days past the current streak`() = runTest {
+        studiedToday(days = 3, coins = 100)
 
         viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakBet))
         viewModel.onEvent(ShopEvent.ConfirmPurchase)
-        IncrementStreakUseCase(fakeUserRepository)()
 
-        val user = fakeUserRepository.get().first { it?.activeStreakBet == false && it.coins == 150 }!!
-        assertThat(user.currentStreak).isEqualTo(3)
+        val user = fakeUserRepository.get().first()!!
+        assertThat(user.coins).isEqualTo(100 - StreakBet.COST_COINS)
+        assertThat(user.streakBetTarget).isEqualTo(3 + StreakBet.DAYS)
+        val state = viewModel.uiState.first { it.hasActiveStreakBet }
+        assertThat(state.streakBetDaysDone).isEqualTo(0)
+        assertThat(state.canBetOnStreak).isFalse()
+    }
+
+    @Test
+    fun `a streak bet is not sold without a running streak`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakBet))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val user = fakeUserRepository.get().first()!!
+        assertThat(user.coins).isEqualTo(100)
+        assertThat(user.streakBetTarget).isEqualTo(0)
+        assertThat(viewModel.uiState.first { it.coinsCount == 100 }.canBetOnStreak).isFalse()
+    }
+
+    @Test
+    fun `a second streak bet is not sold while one is running`() = runTest {
+        studiedToday(days = 3, coins = 200)
+
+        repeat(2) {
+            viewModel.onEvent(ShopEvent.SelectItem(ShopItem.StreakBet))
+            viewModel.onEvent(ShopEvent.ConfirmPurchase)
+        }
+
+        assertThat(fakeUserRepository.get().first()!!.coins).isEqualTo(200 - StreakBet.COST_COINS)
+    }
+
+    @Test
+    fun `a streak bet whose streak was lost is no longer shown as running`() = runTest {
+        val today = DailyStreak.startOfDayMillis(DailyStreak.epochDay(System.currentTimeMillis()))
+        val longAgo = today - 10 * 24 * 60 * 60 * 1000L
+        // A bet placed at a streak of 5, which was then lost: the streak is 0 today.
+        fakeUserRepository.insert(
+            User(
+                coins = 100,
+                currentStreak = 5,
+                highestStreak = 5,
+                streakBetTarget = 5 + StreakBet.DAYS,
+                lastPracticeTimestamp = longAgo,
+                practiceDays = listOf(longAgo)
+            )
+        )
+        val state = viewModel.uiState.first { it.coinsCount == 100 }
+        assertThat(state.hasActiveStreakBet).isFalse()
+        // Nothing to bet on until the streak starts again.
+        assertThat(state.canBetOnStreak).isFalse()
+    }
+
+    @Test
+    fun `the surprise chest never pays more on average than it costs`() {
+        val average = (ShopCatalog.CHEST_MIN_REWARD + ShopCatalog.CHEST_MAX_REWARD) / 2.0
+
+        assertThat(average).isLessThan(ShopCatalog.SURPRISE_CHEST_COST.toDouble())
+        repeat(500) {
+            assertThat(ShopCatalog.rollChestReward())
+                .isIn(ShopCatalog.CHEST_MIN_REWARD..ShopCatalog.CHEST_MAX_REWARD)
+        }
+    }
+
+    @Test
+    fun `opening the surprise chest charges its price and credits the prize once`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val user = fakeUserRepository.get().first()!!
+        val prize = user.coins - (100 - ShopCatalog.SURPRISE_CHEST_COST)
+        assertThat(prize).isAtLeast(ShopCatalog.CHEST_MIN_REWARD)
+        assertThat(prize).isAtMost(ShopCatalog.CHEST_MAX_REWARD)
+        assertThat(viewModel.uiState.first { it.purchaseFeedback != null }.purchaseFeedback)
+            .contains("$prize monedas")
+    }
+
+    @Test
+    fun `a purchase that cannot reach the server reports it instead of crashing`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+        val offline = object : UserRepository by fakeUserRepository {
+            override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean =
+                throw IOException("offline")
+        }
+        val offlineViewModel = ShopViewModel(
+            userRepository = offline,
+            decrementCoinsUseCase = fakeDecrementCoinsUseCase,
+            recoverStreakUseCase = RecoverStreakUseCase(offline, fakeDecrementCoinsUseCase)
+        )
+
+        offlineViewModel.onEvent(ShopEvent.SelectItem(ShopItem.Hint))
+        offlineViewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val state = offlineViewModel.uiState.first { it.purchaseFeedback != null }
+        assertThat(state.purchaseFeedback).contains("No se ha podido completar la compra")
+        assertThat(state.isProcessing).isFalse()
+        assertThat(fakeUserRepository.get().first()!!.coins).isEqualTo(100)
     }
 }

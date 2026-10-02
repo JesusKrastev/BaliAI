@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.StreakBet
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -33,19 +35,38 @@ sealed class ShopEvent {
     data object DismissFeedback : ShopEvent()
 }
 
-/** Coin prices and payout rules for the shop's consumables. */
+/**
+ * Coin prices and payout rules for the shop's products. The streak bet's own numbers live in
+ * [StreakBet] and the recovery's in [DailyStreak.RECOVERY_COST_COINS].
+ */
 object ShopCatalog {
     const val STREAK_FREEZER_COST = 120
-    const val STREAK_BET_COST = 50
-    const val STREAK_BET_PAYOUT = 100
     const val HINT_COST = 30
     const val FIFTY_FIFTY_COST = 45
     const val SURPRISE_CHEST_COST = 60
     const val DOUBLE_XP_COST = 80
     const val DOUBLE_COINS_COST = 70
-    const val CHEST_MIN_REWARD = 30
-    const val CHEST_MAX_REWARD = 120
+
+    /**
+     * Smallest and largest prize of a surprise chest. Their average (55) has to stay below
+     * [SURPRISE_CHEST_COST]: a chest that pays more than it costs would print coins.
+     */
+    const val CHEST_MIN_REWARD = 20
+    const val CHEST_MAX_REWARD = 90
+
+    /**
+     * Picks a surprise chest's prize, every value in the range equally likely.
+     *
+     * @param random the source of randomness, replaceable in tests
+     * @return a coin amount from [CHEST_MIN_REWARD] to [CHEST_MAX_REWARD]
+     */
+    fun rollChestReward(random: Random = Random): Int =
+        random.nextInt(CHEST_MIN_REWARD, CHEST_MAX_REWARD + 1)
 }
+
+/** Shown when a purchase could not be completed, usually for lack of connection. */
+private const val PURCHASE_FAILED_MESSAGE =
+    "No se ha podido completar la compra. Comprueba tu conexión e inténtalo de nuevo."
 
 /**
  * What the shop shows.
@@ -60,8 +81,10 @@ object ShopCatalog {
  * @property fiftyFifties practice 50/50 aids currently owned
  * @property doubleXpBoosts double-XP rewards waiting for the next completed activity
  * @property doubleCoinBoosts double-coin rewards waiting for the next completed activity
- * @property hasActiveStreakBet true when the next new study day will pay the wager
- * @property purchaseFeedback one-time explanation of a completed surprise chest
+ * @property hasActiveStreakBet true while a streak bet is running and not lost
+ * @property streakBetDaysDone study days completed since the bet was placed, 0 without a bet
+ * @property canBetOnStreak true when a bet could be placed now: no bet running and a streak to bet on
+ * @property purchaseFeedback one-time message about a purchase: the surprise chest's prize or a failure
  */
 data class ShopUiState(
     val coinsCount: Int = 0,
@@ -74,6 +97,8 @@ data class ShopUiState(
     val doubleXpBoosts: Int = 0,
     val doubleCoinBoosts: Int = 0,
     val hasActiveStreakBet: Boolean = false,
+    val streakBetDaysDone: Int = 0,
+    val canBetOnStreak: Boolean = false,
     val purchaseFeedback: String? = null
 )
 
@@ -96,17 +121,23 @@ class ShopViewModel @Inject constructor(
     ) { user, selected, isProcessing, purchaseFeedback ->
         user?.let {
             val now = System.currentTimeMillis()
+            val settledStreak = DailyStreak.of(it).settledAt(now)
+            val betRunning =
+                it.streakBetTarget > 0 && !StreakBet.isLost(it.streakBetTarget, settledStreak.current)
             ShopUiState(
                 coinsCount = it.coins,
                 streakFreezes = it.streakFreezes,
-                recoverableStreak = DailyStreak.of(it).settledAt(now).recoverableStreakAt(now),
+                recoverableStreak = settledStreak.recoverableStreakAt(now),
                 selectedItem = selected,
                 isProcessing = isProcessing,
                 hints = it.hints,
                 fiftyFifties = it.fiftyFifties,
                 doubleXpBoosts = it.doubleXpBoosts,
                 doubleCoinBoosts = it.doubleCoinBoosts,
-                hasActiveStreakBet = it.activeStreakBet,
+                hasActiveStreakBet = betRunning,
+                streakBetDaysDone =
+                    if (betRunning) StreakBet.daysDone(it.streakBetTarget, settledStreak.current) else 0,
+                canBetOnStreak = !betRunning && StreakBet.canBetOn(settledStreak.current),
                 purchaseFeedback = purchaseFeedback
             )
         } ?: ShopUiState()
@@ -135,7 +166,7 @@ class ShopViewModel @Inject constructor(
         when (_selectedItem.value) {
             ShopItem.StreakFreezer -> purchaseStreakFreezer()
             ShopItem.StreakRecovery -> purchaseStreakRecovery()
-            ShopItem.StreakBet -> purchaseInventory(ShopInventoryItem.STREAK_BET, ShopCatalog.STREAK_BET_COST)
+            ShopItem.StreakBet -> purchaseStreakBet()
             ShopItem.Hint -> purchaseInventory(ShopInventoryItem.HINT, ShopCatalog.HINT_COST)
             ShopItem.FiftyFifty -> purchaseInventory(ShopInventoryItem.FIFTY_FIFTY, ShopCatalog.FIFTY_FIFTY_COST)
             ShopItem.DoubleXp -> purchaseInventory(ShopInventoryItem.DOUBLE_XP, ShopCatalog.DOUBLE_XP_COST)
@@ -145,75 +176,84 @@ class ShopViewModel @Inject constructor(
         }
     }
 
-    /** Charges [cost] and adds [item] to the user's synchronized inventory. */
-    private fun purchaseInventory(item: ShopInventoryItem, cost: Int) {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
-            } finally {
-                _isProcessing.value = false
-            }
-        }
-    }
-
-    /** Opens a paid chest and retains its random coin result long enough for the UI to show it. */
-    private fun openSurpriseChest() {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                val reward = Random.nextInt(ShopCatalog.CHEST_MIN_REWARD, ShopCatalog.CHEST_MAX_REWARD + 1)
-                if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
-                    _selectedItem.value = null
-                    _purchaseFeedback.value = "¡Cofre abierto! Has ganado $reward monedas."
-                }
-            } finally {
-                _isProcessing.value = false
-            }
-        }
-    }
-
     /**
-     * Buys back the lost streak, closing the purchase sheet when it worked. Guarded by
-     * [_isProcessing] like [purchaseStreakFreezer], so a second tap cannot charge twice.
-     */
-    private fun purchaseStreakRecovery() {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                if (recoverStreakUseCase() != null) _selectedItem.value = null
-            } finally {
-                _isProcessing.value = false
-            }
-        }
-    }
-
-    /**
-     * Buys a streak freezer for 120 coins, capped at 2 owned at once.
+     * Runs one purchase with the guards every purchase needs: a second tap while one is in
+     * flight is ignored (so nothing is charged twice), and a failure such as no connection
+     * becomes a message instead of crashing the app.
      *
-     * Guarded by [_isProcessing] so a second tap while a purchase is already in flight is
-     * ignored instead of racing it — two concurrent calls could otherwise both pass the
-     * `streakFreezes < 2` check before either write lands, charging twice for one freezer.
+     * @param purchase the purchase itself; it closes the sheet when it worked
      */
-    private fun purchaseStreakFreezer() {
+    private fun runPurchase(purchase: suspend () -> Unit) {
         if (_isProcessing.value) return
         viewModelScope.launch {
             _isProcessing.value = true
             try {
-                val user = userRepository.get().first() ?: return@launch
-                if (user.streakFreezes >= 2) return@launch
-
-                val success = decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)
-                if (success) {
-                    userRepository.updateStreakFreezes(user.streakFreezes + 1)
-                    _selectedItem.value = null
-                }
+                purchase()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _purchaseFeedback.value = PURCHASE_FAILED_MESSAGE
             } finally {
                 _isProcessing.value = false
             }
+        }
+    }
+
+    /** Charges [cost] and adds [item] to the user's synchronized inventory. */
+    private fun purchaseInventory(item: ShopInventoryItem, cost: Int) = runPurchase {
+        if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
+    }
+
+    /** Opens a paid chest and keeps its prize in [uiState] long enough for the UI to show it. */
+    private fun openSurpriseChest() = runPurchase {
+        val reward = ShopCatalog.rollChestReward()
+        if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = "¡Cofre abierto! Has ganado $reward monedas."
+        }
+    }
+
+    /**
+     * Places the streak bet when there is a streak to bet on and no bet is running. A bet whose
+     * streak was already lost is forgotten first, so the user can bet again.
+     */
+    private fun purchaseStreakBet() = runPurchase {
+        val user = userRepository.get().first() ?: return@runPurchase
+        val settledStreak = DailyStreak.of(user).settledAt(System.currentTimeMillis()).current
+        if (!StreakBet.canBetOn(settledStreak)) return@runPurchase
+        if (StreakBet.isLost(user.streakBetTarget, settledStreak)) {
+            userRepository.clearStreakBet()
+        } else if (user.streakBetTarget > 0) {
+            return@runPurchase
+        }
+        if (userRepository.placeStreakBet(StreakBet.COST_COINS, StreakBet.targetFor(settledStreak))) {
+            _selectedItem.value = null
+        }
+    }
+
+    /**
+     * Buys back the lost streak, closing the purchase sheet when it worked. Guarded like every
+     * purchase, so a second tap cannot charge twice.
+     */
+    private fun purchaseStreakRecovery() = runPurchase {
+        if (recoverStreakUseCase() != null) _selectedItem.value = null
+    }
+
+    /**
+     * Buys a streak freezer for [ShopCatalog.STREAK_FREEZER_COST] coins, capped at
+     * [DailyStreak.MAX_FREEZES] owned at once.
+     *
+     * Guarded by [runPurchase] so a second tap while a purchase is already in flight is ignored
+     * instead of racing it: two concurrent calls could otherwise both pass the limit check before
+     * either write lands, charging twice for one freezer.
+     */
+    private fun purchaseStreakFreezer() = runPurchase {
+        val user = userRepository.get().first() ?: return@runPurchase
+        if (user.streakFreezes >= DailyStreak.MAX_FREEZES) return@runPurchase
+
+        if (decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)) {
+            userRepository.updateStreakFreezes(user.streakFreezes + 1)
+            _selectedItem.value = null
         }
     }
 }

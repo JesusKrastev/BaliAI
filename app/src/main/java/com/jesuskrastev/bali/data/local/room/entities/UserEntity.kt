@@ -34,5 +34,5 @@ data class UserEntity(
     @ColumnInfo(defaultValue = "0") val fiftyFifties: Int = 0,
     @ColumnInfo(defaultValue = "0") val doubleXpBoosts: Int = 0,
     @ColumnInfo(defaultValue = "0") val doubleCoinBoosts: Int = 0,
-    @ColumnInfo(defaultValue = "0") val activeStreakBet: Boolean = false
+    @ColumnInfo(defaultValue = "0") val streakBetTarget: Int = 0
 )

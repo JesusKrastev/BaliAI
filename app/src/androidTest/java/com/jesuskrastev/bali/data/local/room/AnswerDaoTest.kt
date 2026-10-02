@@ -119,4 +119,45 @@ class AnswerDaoTest {
 
         assertThat(all).isEmpty()
     }
+
+    @Test
+    fun insertAnswerKeepsItsQuestionIdTopicAndMode() = runTest {
+        answerDao.insert(
+            AnswerEntity(
+                id = "answer_1",
+                testId = "test_1",
+                questionText = "Q",
+                selectedOption = 1,
+                isCorrect = true,
+                questionId = "q_abc123def456",
+                topic = "SPEED",
+                mode = "LESSON"
+            )
+        )
+
+        val retrieved = answerDao.getAll().first().single()
+
+        assertThat(retrieved.questionId).isEqualTo("q_abc123def456")
+        assertThat(retrieved.topic).isEqualTo("SPEED")
+        assertThat(retrieved.mode).isEqualTo("LESSON")
+    }
+
+    @Test
+    fun anAnswerWithoutTheNewFieldsReadsThemAsNull() = runTest {
+        answerDao.insert(
+            AnswerEntity(
+                id = "answer_1",
+                testId = "test_1",
+                questionText = "Q",
+                selectedOption = 1,
+                isCorrect = true
+            )
+        )
+
+        val retrieved = answerDao.getAll().first().single()
+
+        assertThat(retrieved.questionId).isNull()
+        assertThat(retrieved.topic).isNull()
+        assertThat(retrieved.mode).isNull()
+    }
 }

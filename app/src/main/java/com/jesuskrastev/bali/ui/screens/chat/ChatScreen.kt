@@ -36,7 +36,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -96,15 +95,14 @@ private val SuggestedQuestions = listOf(
 /**
  * Chat screen where the student asks the AI tutor anything about the DGT theory exam.
  *
+ * It is a tab of the bottom bar and the only way in, so there is nothing behind it to go back to
+ * and its top bar has no back arrow; the user leaves by choosing another tab.
+ *
  * @param viewModel state holder for the conversation
- * @param onBackClick invoked when the user leaves the screen
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(
-    viewModel: ChatViewModel,
-    onBackClick: () -> Unit
-) {
+fun ChatScreen(viewModel: ChatViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
@@ -134,11 +132,6 @@ fun ChatScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Atrás")
                     }
                 },
                 actions = {

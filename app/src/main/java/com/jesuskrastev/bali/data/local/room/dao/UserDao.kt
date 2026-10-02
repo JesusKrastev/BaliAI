@@ -59,16 +59,15 @@ interface UserDao {
      * Charges [cost] and adds [item] in one SQLite statement, preventing an interrupted
      * purchase from taking coins without granting its inventory item.
      *
-     * @return 1 for a completed purchase, or 0 for insufficient coins/an existing streak bet.
+     * @return 1 for a completed purchase, or 0 for insufficient coins.
      */
     @Query(
         "UPDATE users SET coins = coins - :cost, " +
             "hints = hints + CASE WHEN :item = 'HINT' THEN 1 ELSE 0 END, " +
             "fiftyFifties = fiftyFifties + CASE WHEN :item = 'FIFTY_FIFTY' THEN 1 ELSE 0 END, " +
             "doubleXpBoosts = doubleXpBoosts + CASE WHEN :item = 'DOUBLE_XP' THEN 1 ELSE 0 END, " +
-            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END, " +
-            "activeStreakBet = CASE WHEN :item = 'STREAK_BET' THEN 1 ELSE activeStreakBet END " +
-            "WHERE coins >= :cost AND (:item != 'STREAK_BET' OR activeStreakBet = 0)"
+            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END " +
+            "WHERE coins >= :cost"
     )
     suspend fun purchaseInventoryItem(item: String, cost: Int): Int
 
@@ -99,12 +98,27 @@ interface UserDao {
     suspend fun consumeInventoryItem(item: String): Int
 
     /**
-     * Pays the active streak wager one time and clears its pending flag.
+     * Charges [cost] and records the streak bet's [target] in one statement.
      *
-     * @return 1 if a wager was paid, otherwise 0.
+     * @return 1 if the bet was placed, 0 for insufficient coins or a bet that is already active.
      */
-    @Query("UPDATE users SET coins = coins + :payout, activeStreakBet = 0 WHERE activeStreakBet = 1")
+    @Query(
+        "UPDATE users SET coins = coins - :cost, streakBetTarget = :target " +
+            "WHERE coins >= :cost AND streakBetTarget = 0"
+    )
+    suspend fun placeStreakBet(cost: Int, target: Int): Int
+
+    /**
+     * Pays the won streak bet one time and clears it.
+     *
+     * @return 1 if a bet was paid, otherwise 0.
+     */
+    @Query("UPDATE users SET coins = coins + :payout, streakBetTarget = 0 WHERE streakBetTarget > 0")
     suspend fun claimStreakBet(payout: Int): Int
+
+    /** Forgets the streak bet without paying it: the stake of a lost bet is not returned. */
+    @Query("UPDATE users SET streakBetTarget = 0")
+    suspend fun clearStreakBet()
 
     /**
      * Replaces the exam date with the one the user picked on Home's plan card.

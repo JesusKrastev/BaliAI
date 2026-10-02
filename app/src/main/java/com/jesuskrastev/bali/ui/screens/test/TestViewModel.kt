@@ -6,10 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.DrivingTopic
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -20,13 +23,14 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -87,6 +91,7 @@ class TestViewModel @Inject constructor(
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val pathRepository: PathRepository,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -443,13 +448,20 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }
@@ -460,28 +472,46 @@ class TestViewModel @Inject constructor(
         val state = _uiState.value
         if (state.isAnswerChecked || state.isHintVisible || state.hints == 0) return
         viewModelScope.launch {
-            if (userRepository.consumeInventoryItem(ShopInventoryItem.HINT)) {
+            if (spendAid(ShopInventoryItem.HINT)) {
                 _uiState.update { it.copy(isHintVisible = true) }
                 persistSession()
             }
         }
     }
 
-    /** Consumes one 50/50 aid and leaves the correct option plus one incorrect option visible. */
+    /**
+     * Spends one owned practice aid. A failure (a signed-in user without connection cannot run
+     * the transaction) means the aid is not used and not charged; it never crashes the quiz.
+     *
+     * @param item the aid to spend
+     * @return true when one was spent
+     */
+    private suspend fun spendAid(item: ShopInventoryItem): Boolean = try {
+        userRepository.consumeInventoryItem(item)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        false
+    }
+
+    /**
+     * Consumes one 50/50 aid and leaves the correct option plus one incorrect option visible. If
+     * the user had already picked an incorrect option, that one stays, so the selection never
+     * disappears from the screen.
+     */
     private fun useFiftyFifty() {
         val state = _uiState.value
         if (state.isAnswerChecked || state.eliminatedOptionIndices.isNotEmpty() || state.fiftyFifties == 0) {
             return
         }
         val question = state.questions.getOrNull(state.currentQuestionIndex) ?: return
-        val eliminated = question.options.indices
-            .filter { it != question.correctAnswerIndex }
-            .shuffled()
-            .drop(1)
-            .toSet()
+        val incorrect = question.options.indices.filter { it != question.correctAnswerIndex }
+        val kept = state.selectedAnswers[state.currentQuestionIndex]?.takeIf { it in incorrect }
+            ?: incorrect.randomOrNull()
+        val eliminated = incorrect.filter { it != kept }.toSet()
         if (eliminated.isEmpty()) return
         viewModelScope.launch {
-            if (userRepository.consumeInventoryItem(ShopInventoryItem.FIFTY_FIFTY)) {
+            if (spendAid(ShopInventoryItem.FIFTY_FIFTY)) {
                 _uiState.update { it.copy(eliminatedOptionIndices = eliminated) }
                 persistSession()
             }
@@ -543,7 +573,10 @@ class TestViewModel @Inject constructor(
                 )
             )
 
-            // 2. Save individual answers
+            // 2. Save individual answers, each tagged with its question id, the session's topic
+            // (when the category names one) and where it was given
+            val topic = DrivingTopic.fromCategory(state.category)
+            val mode = AnswerMode.fromNodeType(aiNodeType)
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
@@ -553,7 +586,10 @@ class TestViewModel @Inject constructor(
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = topic,
+                            mode = mode
                         )
                     )
                 }

@@ -34,7 +34,7 @@ package com.jesuskrastev.bali.domain.model
  * @property fiftyFifties practice 50/50 aids available to remove incorrect options.
  * @property doubleXpBoosts one-session double-XP boosts waiting to be applied.
  * @property doubleCoinBoosts one-session double-coin boosts waiting to be applied.
- * @property activeStreakBet whether the next newly extended streak pays 100 coins.
+ * @property streakBetTarget streak length that wins the active streak bet ([StreakBet]), 0 for none.
  */
 data class User(
     val id: String = "",
@@ -59,5 +59,5 @@ data class User(
     val fiftyFifties: Int = 0,
     val doubleXpBoosts: Int = 0,
     val doubleCoinBoosts: Int = 0,
-    val activeStreakBet: Boolean = false
+    val streakBetTarget: Int = 0
 )
