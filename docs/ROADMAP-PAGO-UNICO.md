@@ -516,7 +516,8 @@ No hay conector de RevenueCat en este entorno, pero sus webhooks llegan a PostHo
 
 | Hecho | Dato |
 |-------|------|
-| Productos | `baliai_premium_monthly_v1` a **11,38 €** (la *win-back* a 5,66 €, ≈ −50 %) y `baliai_premium_weekly_v1`. *(No sé si «revenue» es bruto o neto de comisión: confírmalo.)* |
+| Productos y precios | El paywall (`paywall_purchase_started` en PostHog) muestra **mensual 9,99 €** y **semanal 5,99 €**; la *win-back* es el mensual con precio de introducción (5,66 € cobrados en la única compra vista). RevenueCat reportó **11,38 €** de `revenue` en una compra mensual: no coincide con 9,99 €. Confirma si fue otro país/moneda, un precio anterior o un importe bruto/neto. |
+| Por precio (60 días, personas únicas) | Mensual 9,99 €: 19 pulsan comprar y **16 abandonan (84 %)**. *Win-back*: 15 pulsan y **14 abandonan (93 %)**. Semanal 5,99 €: **1** persona lo pulsó. Hubo además 1 intento desde Perú (32,99 PEN). |
 | Cancelaciones | Las dos bajas del semanal son `UNSUBSCRIBE`, ~31 días después de empezar. El comprador de la *win-back* **desactivó la renovación 6 h después de pagar**: pagó exactamente un periodo y lo dejó. Hay además 1 `BILLING_ERROR`. |
 | Embudo (60 días, personas únicas) | 406 instalaciones → 238 inician onboarding → 96 lo terminan → **136 ven el paywall** → **33 pulsan comprar → 28 se salen de la hoja de Google Play** → 2 compras iniciales registradas. |
 | Aviso | Las fechas del producto «semanal» abarcan 31 días, lo que no parece un ciclo semanal: revísalo en RevenueCat antes de fiarte de ellas. |
@@ -541,6 +542,19 @@ Con un ingreso por pagador actual de ~11–15 € (≈ 1 periodo pagado), la con
 **Alternativa a probar frente al *lifetime*:** un **plan prepago de Google Play** (p. ej. 3 meses, sin
 renovación). Se paga una vez, no hay baja que gestionar y el acceso caduca solo, lo que **acota el coste de IA**
 y encaja con una ventana de estudio corta. Verifica en Play Console y RevenueCat que tu configuración lo admite.
+
+**Alternativa: seguir mensual y subir el precio (la que recomiendo probar primero).**
+- Con usuarios que pagan ~1 periodo, un mensual a X € ingresa casi lo mismo que un pago único a X €, pero además
+  vuelve a cobrar a quien necesita un segundo mes y el acceso caduca solo (acota el coste de IA). Es
+  **reversible**: se cambia el precio *para nuevos suscriptores* en Play Console y los actuales conservan el
+  suyo (verifica las reglas de subida de precio de Play).
+- Rampa: 9,99 → 14,99 → 19,99 €, al menos 3-4 semanas por escalón. Métrica: **ingreso por visita al paywall**
+  (conversión × precio), no la conversión sola. Deja la *win-back* en el precio de hoy (9,99 €) para no perder a
+  quien duda; el semanal de 5,99 € sigue valiendo de ancla.
+- **Aviso de volumen:** ~8 personas al día ven el paywall. Detectar que la conversión cae a la mitad (2 % → 1 %)
+  exige ~2.300 visitas por variante, así que **un A/B de precio no concluye en meses**. Se decide por criterio y
+  se vigila el ingreso, no la significancia estadística. Hoy este canal factura del orden de decenas de euros al
+  mes: el cuello de botella es el tráfico y el 84-93 % que abandona la hoja de pago, no el precio.
 
 ### 4.2 Economía por usuario (ilustrativa — sustituir con datos reales)
 
