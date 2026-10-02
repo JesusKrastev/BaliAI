@@ -6,6 +6,11 @@
 > basados en el blog de RevenueCat, (3) el cambio de modelo de negocio a **pago único (~30 €)** y lo que
 > hay que hacer para que sea rentable, y (4) funcionalidades extra que se deducen de esas lecturas.
 > Cada punto parte de lo que **hay hoy en el código**, no de suposiciones.
+>
+> **Decisión (2026-10-02):** se **mantiene la suscripción mensual y se sube el precio**; el pago único queda como
+> alternativa descartada por ahora. Lee primero la sección **4.0**: contiene un hallazgo que condiciona el plan
+> (hoy la app **no retira el acceso** cuando caduca la suscripción). Las secciones 4.1 en adelante analizan el
+> pago único y se conservan como referencia.
 
 ## Índice
 
@@ -492,6 +497,55 @@ Ya existe base sólida (XP, niveles, monedas, rachas, congeladores, minijuegos).
 
 ## 4. Modelo de negocio: pago único
 
+### 4.0 Decisión vigente: suscripción mensual con precio al alza
+
+**Por qué.** El uso medio es de dos semanas a un mes. Con suscripción, el acceso (y el gasto de IA que lleva
+asociado) termina cuando el usuario se da de baja. Un mensual a X € ingresa casi lo mismo que un pago único a X €,
+vuelve a cobrar a quien necesita otro mes y es reversible (ver la rampa de precios en 4.1-bis).
+
+**Hallazgo bloqueante: hoy la app no retira el acceso al caducar.**
+`MainViewModel.kt:91` evalúa `loggedIn -> AppEntryPoint.HOME` **antes** de mirar el entitlement (línea 92). El
+paywall solo se aplica a quien todavía no ha iniciado sesión. Una vez dentro (y «Ya tengo cuenta» deja entrar con
+una cuenta existente), un suscriptor que cancela o cuyo cobro falla **conserva el acceso completo y el gasto de
+IA indefinidamente**. Buscando `hasPremium`/`unlocked` solo aparecen `MainViewModel`, el paywall y el onboarding;
+si existe una regla en servidor, no está en este repo. Consecuencias:
+1. El modelo actual ya se comporta como un pago único que se cobra la primera vez.
+2. Una baja en RevenueCat **no equivale a perder un usuario**: sigue usando la app (y la IA) sin pagar.
+3. Subir el precio solo cobra más por un acceso que, una vez concedido, no caduca.
+
+**Arreglo.** `loggedIn && unlocked → HOME` · `loggedIn && !unlocked → PAYWALL` (sin exigir el *flag* local de
+onboarding, que el login borra) · usar el valor en caché de RevenueCat y respetar el *grace period*
+(`billing_issue`) para no bloquear a quien paga por un fallo de red · mantener la excepción de `BuildConfig.DEBUG`.
+La comprobación es solo de cliente: App Check atestigua la app, no al usuario. Un cliente modificado podría seguir
+llamando a Gemini; un servidor que verifique el entitlement solo compensa si aparece abuso real.
+
+**Decisión de producto previa a desplegarlo:** qué hacer con los usuarios actuales que ya no pagan (corte
+inmediato, aviso con unos días de gracia, o oferta de recuperación). Es la parte con riesgo de reseñas y soporte.
+
+**Economía mensual** (IVA 21 %, comisión de Google 15 % en suscripciones — verifícala en Play Console):
+
+| Precio | Base sin IVA | Neto tras Google | Presupuesto de IA (≈ 10 %) | CPI máx. con 3 % de conversión* |
+|--------|--------------|------------------|----------------------------|----------------------------------|
+| 9,99 € | 8,26 € | 7,02 € | 0,70 € | 0,21 € |
+| 14,99 € | 12,39 € | 10,53 € | 1,05 € | 0,32 € |
+| 19,99 € | 16,52 € | 14,04 € | 1,40 € | 0,42 € |
+| 24,99 € | 20,65 € | 17,55 € | 1,75 € | 0,53 € |
+
+\* El 3 % es una hipótesis; hoy la conversión del paywall ronda el 1,5-2 %. Antes de impuestos propios y reembolsos.
+Subir el precio es lo que más amplía el margen para pagar IA y adquisición.
+
+**Qué se mantiene del resto del plan**
+- **Controles de IA (4.4)**: un mes de uso intenso también cuesta. Banco de preguntas con ID, caché de
+  explicaciones y tope diario de tutor siguen haciendo falta.
+- **«Gestionar suscripción» vuelve a tener sentido** (4.3 decía lo contrario para el pago único): cablear
+  `CustomerCenterLauncher` en Ajustes y ofrecerlo en el flujo «Aprobé» de 2.6, para evitar cobros olvidados del
+  segundo mes (reembolsos y reseñas). Esto cierra la decisión abierta de `CLAUDE.md` sobre la gestión de suscripción.
+- **Plan semanal**: casi no se usa (1 de ~20 que pulsan comprar). Re-equilibrarlo para que el mensual siga
+  pareciendo un ahorro (p. ej. semanal 7,99 € con mensual 19,99 €) o retirarlo.
+
+**KPIs de esta opción:** retención al periodo 2 (RevenueCat), ingreso por visita al paywall, % de usuarios que
+pierden el acceso y se resuscriben, coste de IA por suscriptor y mes, reembolsos.
+
 ### 4.1 Por qué encaja y dónde está el riesgo
 
 - **Encaja:** el usuario medio estudia semanas y se va cuando aprueba; el éxito del producto *es* el churn.
@@ -724,7 +778,7 @@ graph LR
 
 | Fase | Contenido | Por qué en este orden |
 |------|-----------|----------------------|
-| **0 — Cimientos** (1–3 sem.) | Medición de coste de IA · campos nuevos (`Answer.questionId/topic`, `User.studyHour/examDateConfirmed/examOutcome/purchasedAt`) con **Room 14 + `MigrationV6ToV7`** · `Purchases.logIn(uid)` · eventos de analítica | Todo lo demás depende de esto y son cambios de esquema (los más caros de rehacer). |
+| **0 — Cimientos** (1–3 sem.) | **Comprobar el entitlement también tras el login (4.0)** · medición de coste de IA · campos nuevos (`Answer.questionId/topic`, `User.studyHour/examDateConfirmed/examOutcome/purchasedAt`) con **Room 14 + `MigrationV6ToV7`** · `Purchases.logIn(uid)` · eventos de analítica | Todo lo demás depende de esto y son cambios de esquema (los más caros de rehacer). |
 | **1 — Victorias rápidas** (3–5 sem.) | Sonidos (2.8) · hora de estudio + permiso (2.1) · notificaciones 1 y 2 (2.2) · feedback (2.5) · onboarding condensado y mensaje 64 % tras A/B (2.3) · producto y paywall de pago único + oferta de salida (4.3) | Poco riesgo, mejoran activación, y el paywall nuevo ya empieza a dar datos. |
 | **2 — El motor** (4–8 sem.) | Indicador ¿listo? (2.4) · ¿Aprobaste? (2.6) · notificaciones 3 y 4 en OneSignal · gamificación G1–G6 · referidos | Es lo que convierte el producto en crecimiento orgánico. |
 | **3 — Ingresos extra** (8–14 sem.) | Informe semanal (2.7, requiere servidor) · Biblioteca: flashcards → resúmenes → audio (2.9) · autoescuelas (4.5) · widget y reto con amigo | Más caros y dependen de las fases previas. |
@@ -806,7 +860,8 @@ visibles, y registrarlo en el vault de Obsidian. **Esta sesión se ejecuta en la
 `_plantillas\plantilla-linea-log.md` no lo he podido ver; adáptalas)*:
 
 ```
-BaliAI → BaliAIPage · PRECIO: pasa de suscripción a pago único (~29,99 €), sin renovaciones; actualizar precios, FAQ y textos de "cancela cuando quieras".
+BaliAI → BaliAIPage · PRECIO: se mantiene la suscripción mensual y sube el precio (rampa 9,99 → 14,99 → 19,99 €); actualizar precios y FAQ.
+BaliAI → BaliAIPage · ACCESO: al caducar o cancelarse la suscripción se retira el acceso a la app (pendiente de implementar, ver 4.0); revisar textos de "cancela cuando quieras".
 BaliAI → BaliAIPage · FUNCIONES: hora de estudio + recordatorios, indicador "¿estás listo?", "¿Aprobaste?", informe semanal por email, sonidos, Biblioteca (flashcards/resúmenes/audio).
 BaliAI → BaliAIPage · DATOS/PRIVACIDAD: nuevos datos (hora de estudio, resultado del examen, feedback, testimonios con consentimiento, email para informes, tags de OneSignal); actualizar política de privacidad y Data safety.
 BaliAI → BaliAIPage · PRUEBA SOCIAL: sustituir cifras y testimonios por datos verificables de "¿Aprobaste?".
