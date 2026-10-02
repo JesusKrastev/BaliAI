@@ -74,10 +74,14 @@ class StatsScreenScreenshotTest {
         practice("Marcas viales", 9, 8), practice("Mecánica", 2, 9)
     )
 
-    private fun capture(stats: ProgressStats, darkTheme: Boolean = false) {
+    /** Captures the screen for [stats], counting down to the date [user] has saved. */
+    private fun capture(stats: ProgressStats, user: User = profile, darkTheme: Boolean = false) {
+        val plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now)
         composeTestRule.setContent {
             BaliTheme(darkTheme = darkTheme) {
-                Surface(color = MaterialTheme.colorScheme.background) { StatsContent(stats = stats) }
+                Surface(color = MaterialTheme.colorScheme.background) {
+                    StatsContent(stats = stats, plan = plan, onDateClick = {})
+                }
             }
         }
         composeTestRule.onRoot().captureRoboImage()
@@ -100,23 +104,31 @@ class StatsScreenScreenshotTest {
     )
 
     @Test
-    fun captureStatsScreen_notYet() = capture(
-        useCase(
-            listOf(exam(17, 9), exam(20, 5), exam(21, 2)) + topicPractice.take(3),
-            answers(listOf(0, 0, 0, 10, 0, 20, 30), 0.6f), profile.copy(examDateMillis = day(3)), now
+    fun captureStatsScreen_notYet() {
+        val user = profile.copy(examDateMillis = day(3))
+        capture(
+            useCase(
+                listOf(exam(17, 9), exam(20, 5), exam(21, 2)) + topicPractice.take(3),
+                answers(listOf(0, 0, 0, 10, 0, 20, 30), 0.6f), user, now
+            ),
+            user
         )
-    )
+    }
 
     @Test
-    fun captureStatsScreen_notEnoughData() = capture(
-        useCase(
-            listOf(exam(23, 1)) + topicPractice.take(2),
-            answers(listOf(0, 0, 0, 0, 0, 10, 30)), User(level = 2, xp = 240, currentStreak = 1, highestStreak = 1, practiceDays = listOf(day(0), day(-1))), now
+    fun captureStatsScreen_notEnoughData() {
+        val user = User(
+            level = 2, xp = 240, currentStreak = 1, highestStreak = 1,
+            practiceDays = listOf(day(0), day(-1)), planTargetMillis = day(30)
         )
-    )
+        capture(
+            useCase(listOf(exam(23, 1)) + topicPractice.take(2), answers(listOf(0, 0, 0, 0, 0, 10, 30)), user, now),
+            user
+        )
+    }
 
     @Test
-    fun captureStatsScreen_newUser() = capture(useCase(emptyList(), emptyList(), User(), now))
+    fun captureStatsScreen_newUser() = capture(useCase(emptyList(), emptyList(), User(), now), User())
 
     @Test
     fun captureStatsScreen_darkTheme() = capture(

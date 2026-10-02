@@ -63,14 +63,14 @@ import com.jesuskrastev.bali.domain.model.NodeType
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 
 /**
- * Renders the home dashboard: streak/coins status, the plan card and the scrollable
- * learning-path graph. The AI-tutor chat opens from the app's bottom bar. The account menu that used to open from here as a
- * side drawer (profile, legal links, sign out) now lives in the Settings tab.
+ * Renders the home dashboard: streak/coins status and the scrollable learning-path graph. The
+ * AI-tutor chat opens from the app's bottom bar. The account menu that used to open from here as a
+ * side drawer (profile, legal links, sign out) now lives in the Settings tab. The countdown to the
+ * exam lives in the statistics screen, not here.
  *
- * @param viewModel supplies [HomeUiState], drives path generation and saves the exam date
+ * @param viewModel supplies [HomeUiState] and drives path generation
  * @param onNodeTestClick invoked with a path node's title, description, id, and node-type name,
- *   when it is tapped or opened from the plan card's study button; exam nodes open the mock
- *   exam directly, since it costs no coins
+ *   when it is tapped; exam nodes open the mock exam directly, since it costs no coins
  * @param onShopClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
  */
@@ -82,18 +82,6 @@ fun HomeScreen(
     onStreakClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showExamDatePicker by rememberSaveable { mutableStateOf(false) }
-
-    if (showExamDatePicker) {
-        ExamDatePickerDialog(
-            initialDateMillis = uiState.plan.targetMillis,
-            onConfirm = { pickerMillis ->
-                viewModel.setExamDate(pickerMillis)
-                showExamDatePicker = false
-            },
-            onDismiss = { showExamDatePicker = false }
-        )
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -122,23 +110,6 @@ fun HomeScreen(
             },
             onGenerateClick = {
                 viewModel.generateNextPathNodesCount()
-            },
-            header = {
-                val nextNode = uiState.pathNodes.firstOrNull { it.status == NodeStatus.UNLOCKED }
-                PlanCard(
-                    plan = uiState.plan,
-                    week = uiState.weeklyStreak,
-                    weekSessions = uiState.weekSessions,
-                    weeklyGoal = uiState.weeklyGoal,
-                    canStudy = nextNode != null,
-                    onStudyClick = {
-                        nextNode?.let { node ->
-                            viewModel.trackPlanStudyClick()
-                            onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
-                        }
-                    },
-                    onDateClick = { showExamDatePicker = true }
-                )
             }
         )
     }
@@ -253,7 +224,6 @@ private val UnlockedNodeBorder = Color(0xFFF59E0B)
  * @param isPathLoading true while new nodes are being generated
  * @param onNodeClick invoked when the popup's action button is tapped for a node
  * @param onGenerateClick requests a new batch of nodes once the whole path is completed
- * @param header content placed above the first section, scrolling away with the path
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -262,8 +232,7 @@ fun LearningPathGraph(
     pathNodes: List<LessonNode>,
     isPathLoading: Boolean,
     onNodeClick: (LessonNode) -> Unit,
-    onGenerateClick: () -> Unit,
-    header: @Composable () -> Unit = {}
+    onGenerateClick: () -> Unit
 ) {
     if (pathNodes.isEmpty()) {
         if (isPathLoading) PathLoadingState(modifier)
@@ -295,12 +264,8 @@ fun LearningPathGraph(
         LazyColumn(
             state = listState,
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 24.dp)
         ) {
-            item(key = "header") {
-                Box(modifier = Modifier.padding(top = 8.dp)) { header() }
-            }
-
             sortedSectionKeys.forEachIndexed { sectionIdx, sectionKey ->
                 val sectionNodes = nodesBySection[sectionKey].orEmpty()
                 if (sectionNodes.isEmpty()) return@forEachIndexed

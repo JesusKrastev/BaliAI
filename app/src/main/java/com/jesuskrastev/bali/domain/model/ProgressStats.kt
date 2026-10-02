@@ -128,7 +128,6 @@ data class DayActivity(
  * @property highestStreak highest streak momentum ever reached
  * @property level the user's level
  * @property xp the user's experience points
- * @property daysToExam days until the exam date, or null when none is set; negative once past
  */
 data class ProgressStats(
     val readiness: ReadinessResult,
@@ -142,8 +141,7 @@ data class ProgressStats(
     val currentStreak: Int,
     val highestStreak: Int,
     val level: Int,
-    val xp: Int,
-    val daysToExam: Int?
+    val xp: Int
 ) {
     /** Share of correct answers from 0 to 1, or null before the first answer. */
     val accuracy: Float? get() =

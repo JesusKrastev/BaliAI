@@ -53,8 +53,7 @@ class CalculateProgressStatsUseCase @Inject constructor(
             currentStreak = streak.current,
             highestStreak = streak.highest,
             level = profile.level,
-            xp = profile.xp,
-            daysToExam = profile.examDateMillis?.let { daysUntil(it, nowMillis) }
+            xp = profile.xp
         )
     }
 
@@ -114,16 +113,6 @@ class CalculateProgressStatsUseCase @Inject constructor(
         val studied = practiceDays.map(DailyStreak::epochDay).toSet()
         return (today - (CALENDAR_DAYS - 1)..today).map { it in studied }
     }
-
-    /**
-     * Counts the calendar days from today to a date.
-     *
-     * @param targetMillis the date
-     * @param nowMillis the current time
-     * @return days remaining, 0 on the day itself, negative once it has passed
-     */
-    private fun daysUntil(targetMillis: Long, nowMillis: Long): Int =
-        (DailyStreak.epochDay(targetMillis) - DailyStreak.epochDay(nowMillis)).toInt()
 
     companion object {
         /** Days the activity chart covers. */
