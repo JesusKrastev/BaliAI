@@ -18,7 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.EmojiEvents
@@ -31,7 +30,6 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -63,15 +61,13 @@ import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
 /**
  * "Mis estadísticas": answers "will I pass?" and shows how the user's study is going — the exam
  * verdict, the latest mock exams, accuracy by topic, the week's activity and how consistent they
- * have been.
+ * have been. It is a tab of the bottom bar, so it has no back arrow.
  *
- * @param onBackClick closes the screen
  * @param viewModel owner of the figures
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatsScreen(
-    onBackClick: () -> Unit,
     viewModel: StatsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,12 +76,7 @@ fun StatsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Mis estadísticas", fontWeight = FontWeight.Black) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Atrás")
-                    }
-                }
+                title = { Text("Mis estadísticas", fontWeight = FontWeight.Black) }
             )
         }
     ) { paddingValues ->

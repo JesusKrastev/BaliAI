@@ -18,7 +18,6 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.QueryStats
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
@@ -96,7 +95,6 @@ private fun Context.openLink(url: String) {
  * @param viewModel supplies the signed-in profile and the sign-out action
  * @param onAuthClick navigates to sign-in when the viewer is signed out
  * @param onFeedbackClick navigates to the "send feedback" destination
- * @param onStatsClick navigates to the statistics screen
  * @param onManageSubscriptionClick opens RevenueCat's Customer Center to manage or cancel
  */
 @Composable
@@ -105,7 +103,6 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onAuthClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
-    onStatsClick: () -> Unit = {},
     onManageSubscriptionClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,17 +119,6 @@ fun SettingsScreen(
         SettingsHeader()
 
         ProfileCard(uiState = uiState, onAuthClick = onAuthClick)
-
-        SettingsSection(
-            title = "Progreso",
-            items = listOf(
-                SettingsRowSpec(
-                    icon = Icons.Rounded.QueryStats,
-                    label = "Mis estadísticas",
-                    onClick = onStatsClick
-                )
-            )
-        )
 
         SettingsSection(
             title = "Suscripción",
