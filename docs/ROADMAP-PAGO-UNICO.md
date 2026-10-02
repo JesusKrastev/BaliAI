@@ -546,6 +546,58 @@ Subir el precio es lo que más amplía el margen para pagar IA y adquisición.
 **KPIs de esta opción:** retención al periodo 2 (RevenueCat), ingreso por visita al paywall, % de usuarios que
 pierden el acceso y se resuscriben, coste de IA por suscriptor y mes, reembolsos.
 
+### 4.0-bis Retirar el acceso con aviso y oferta previos (decisión del 2026-10-02)
+
+**Decisión:** avisar con una notificación y una oferta **antes** de que termine la suscripción, y solo después
+retirar el acceso. Nada de cortes por sorpresa.
+
+**Dos límites técnicos que condicionan el diseño**
+1. **El descuento no se puede cobrar mientras la suscripción siga activa**, aunque esté cancelada: Google Play
+   entiende que el usuario ya tiene el producto y bloquea la compra (`ITEM_ALREADY_OWNED`). *(Es el
+   comportamiento habitual de Play Billing; compruébalo con una compra de prueba de un tester de licencias.)* Por
+   eso el aviso va **antes** y el descuento se activa **al caducar**. La alternativa, un cambio de plan diferido a
+   un producto con descuento, es más compleja y menos fiable.
+2. **Hoy no se pueden enviar esas notificaciones desde el servidor.** RevenueCat usa un ID anónimo y la app nunca
+   le pasa el de OneSignal (solo `setPostHogUserId`), así que la integración RevenueCat → OneSignal no puede
+   apuntar a un usuario. Además la app **no pide el permiso `POST_NOTIFICATIONS`** (se eliminó en `164b384`).
+   → Notificaciones **locales** con WorkManager a partir de `EntitlementInfo.expirationDate` y `willRenew`, más un
+   aviso dentro de la app para quien no concedió el permiso.
+
+**Secuencia para una suscripción cancelada pero aún activa (`willRenew == false`)**
+
+| Cuándo | Qué |
+|--------|-----|
+| **T − 3 d** | Notificación + tarjeta en Home: «Tu acceso termina el {fecha}». Si ya hizo el examen, flujo 2.6 y **sin oferta**. Si no: «¿Te hace falta más tiempo? Al terminar tendrás un descuento para volver.» |
+| **T − 1 d** | Un único recordatorio más. |
+| **T (caduca)** | La app muestra el paywall de **vuelta** (con el descuento como primera pantalla, no tras cerrar el paywall normal). |
+| **T + 3 d** | Una notificación: «Tu descuento de vuelta caduca hoy». Después, silencio. |
+
+Suscripción que se renueva: nada. Fallo de cobro (`grace_period`): pedir que actualice el método de pago, sin oferta.
+
+**Usuarios que ya no pagan hoy (al desplegar el arreglo):** 7 días de gracia con banner de cuenta atrás y la oferta
+de vuelta; pasada la fecha, bloqueo. La fecha de corte es global y vive en Remote Config
+(`access_gate_enforce_from`) para poder moverla sin publicar versión. *(Propuesta mía, pendiente de tu OK.)*
+
+**Piezas técnicas**
+- Dominio: `AccessPolicy`, función pura con tests, que convierte `{activa, willRenew, caducaEn, avisoDePago, ahora}`
+  en `FullAccess | Expiring(díasRestantes) | Grace(hasta) | Locked`.
+- `MainViewModel`: `loggedIn && !unlocked` pasa a mostrar el paywall de vuelta (hoy va a HOME).
+- Nueva *offering* `returning_discount` en RevenueCat, reutilizando el mecanismo de `winback_monthly_discount`;
+  `PaywallScreen` recibe el identificador de la *offering* a mostrar.
+- `androidx.work` + `hilt-work`, un canal de notificaciones `acceso`, y el permiso `POST_NOTIFICATIONS` pedido en
+  contexto (tras la compra o en el onboarding, ver 2.1).
+- Eventos en `AnalyticsTracker`: `access_expiry_notice_shown|opened`, `returning_offer_shown|purchased`,
+  `access_locked`.
+- Ficheros: `MainViewModel.kt`, `SubscriptionRepository` y su implementación, `PaywallScreen.kt`,
+  `AppNavigation.kt`, y un nuevo `ExpiryReminderWorker`.
+
+**Riesgos:** bloquear por error a quien paga (de ahí la caché de RevenueCat, el periodo de gracia y el *flag*
+remoto), reseñas por el corte, y el permiso de notificaciones (sin él solo funciona el aviso dentro de la app).
+
+**Límite de este entorno:** aquí no hay Android SDK ni distribución de Gradle, así que **no puedo compilar ni
+ejecutar tests**. Escribiría los tests de `AccessPolicy`, pero tendrá que correrlos tu CI o tu máquina antes de
+publicar.
+
 ### 4.1 Por qué encaja y dónde está el riesgo
 
 - **Encaja:** el usuario medio estudia semanas y se va cuando aprueba; el éxito del producto *es* el churn.
