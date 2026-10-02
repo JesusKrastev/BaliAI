@@ -11,6 +11,7 @@ import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.util.RecordingAnswerRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -49,6 +50,7 @@ class ExamViewModelAnswersTest {
             incrementXpUseCase = IncrementXpUseCase(userRepository),
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
             analytics = mock<AnalyticsTracker>(),
+            soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle(mapOf("exam_saved_session" to session))
         )
     }

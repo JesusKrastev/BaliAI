@@ -12,6 +12,7 @@ import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeTestResultRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.util.RecordingAnswerRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -45,6 +46,7 @@ class TestViewModelAnswersTest {
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
             pathRepository = FakePathRepository(),
             analytics = mock<AnalyticsTracker>(),
+            soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle()
         )
     }
