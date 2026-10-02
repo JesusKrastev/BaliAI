@@ -2,7 +2,8 @@ name: PR Checks
 
 on:
   pull_request:
-    branches: [main]
+    # develop recibe las features; release/** los arreglos de una release; main solo releases.
+    branches: [main, develop, 'release/**']
   workflow_dispatch:
 
 concurrency:
@@ -10,6 +11,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Check obligatorio en main (ruleset): una feature que apunte a main por error se para aqui
+  # en segundos, antes de que pr-play.yml la suba a Play.
+  branch-policy:
+    name: Rama de origen
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: A main solo entran release/* y hotfix/*
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE_REF" != "main" ]; then
+            echo "OK: $HEAD_REF -> ${BASE_REF:-sin PR}"
+            exit 0
+          fi
+          case "$HEAD_REF" in
+            release/*|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::A main solo entran release/* o hotfix/* (llega $HEAD_REF). Cambia la base del PR a develop."
+               exit 1 ;;
+          esac
+
   verify:
     name: Tests + Debug build
     runs-on: ubuntu-latest

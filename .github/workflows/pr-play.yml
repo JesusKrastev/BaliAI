@@ -18,7 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # Los PR desde forks no reciben secrets: el job se salta en vez de fallar.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Solo release/* y hotfix/* suben: una rama sin fusionar en Play deja a los testers con
+    # migraciones que la linea principal no conoce (BaliAI-errores E-017).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
 
     env:
       ONE_SIGNAL_APP_ID: ${{ secrets.ONE_SIGNAL_APP_ID }}

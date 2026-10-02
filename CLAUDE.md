@@ -141,6 +141,41 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
 - When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel + PostHog), never call any of those SDKs directly from a ViewModel.
 
+## Branches and releases
+
+`develop` is the feature branch: every feature starts from it and comes back to it, so a problem in
+one feature is handled in that feature's branch only. `main` is what is in production. The why and
+the edge cases live in the brain: `05-Patrones\patron-ramas-git.md` and D-024.
+
+- **Start every feature from the latest `develop`** — never from another feature, `release/*`,
+  `main` or a `test/*` branch: `git fetch origin && git worktree add ../BaliAI-<slug> -b feature/<slug> origin/develop`.
+  One feature = one branch = one PR. A bug already in `develop` gets a `fix/<slug>` branch, same way.
+- **Never stack branches.** If feature B needs A, wait until A is in `develop` and branch B from there.
+- **A problem in a feature is fixed in its own branch.** Nothing else is touched until it merges.
+- Keep a long feature current with `git merge origin/develop` (no rebase + force-push; the squash hides the merges).
+- **Into `develop` only through a PR, squash-merged**, with PR Checks green and once the user says the
+  feature is ready. The PR title becomes the single commit in `develop`: write it like a commit
+  subject. Never `gh pr merge --admin` unless the user asks. GitHub deletes the remote branch on
+  merge; delete the local branch and its worktree too (brain `BaliAI-errores` E-016 for compiled worktrees).
+- **Migration numbers are claimed when the PR merges, not when the branch is created** (Room
+  `BaliDatabase.version` and `MigrationV{N}To{N+1}`). Before opening the PR, merge `origin/develop`
+  and renumber if another feature took the number. A number that reached Play is never reused,
+  even if its code was reverted (E-017).
+- **A feature branch never goes to Play.** Try it on a phone with a local debug build. Play builds
+  come only from `develop`, `release/*`, `hotfix/*`, `main` or a `v*` tag (`release-play.yml`
+  refuses anything else; production only from `main` or a tag).
+- **Undo a merged feature** with `git revert <its squash commit>` in a `fix/` branch + PR. If it
+  carried a migration that reached Play, keep the migration and add a new forward one instead.
+- **Release:** `release/X.Y.Z` from `origin/develop`, bump `versionName`, PR `release/X.Y.Z → main`
+  (each push uploads a release candidate to Play internal). Fixes found while testing: `fix/<slug>`
+  from the release branch, PR into it. When it is good: merge with a **merge commit** (never squash
+  into `main`), tag `vX.Y.Z` on `main` and push the tag, then PR `main → develop` with a merge commit.
+- **Hotfix:** `hotfix/X.Y.Z` from `main`, PR → `main`, tag, PR `main → develop`.
+- Never push a `v*` tag for an old commit: every `v*` push builds and uploads to Play internal.
+- No `test/*` integration branches: `develop` is the integration branch. Rulesets
+  (`.github/rulesets/`) block direct and force pushes to `develop` and `main`, require PR Checks, and
+  only let `release/*` / `hotfix/*` into `main`.
+
 ## Code Quality
 
 - ALWAYS refactor code opportunistically when touching a file — improve naming, reduce duplication, simplify logic, and clean up dead code. Leave every file cleaner than you found it.
