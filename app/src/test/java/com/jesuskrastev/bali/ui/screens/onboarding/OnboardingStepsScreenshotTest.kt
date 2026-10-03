@@ -84,17 +84,28 @@ class OnboardingStepsScreenshotTest {
     }
 
     @Test
-    fun capturePersonalisedEmpathy() {
-        answerQuiz()
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
-        capture("empathy")
+    fun captureIntroChest() {
+        capture("intro")
     }
 
     @Test
-    fun capturePersonalisedLoss() {
+    fun capturePain() {
+        answerDiagnosisUpTo(OnboardingStep.Pain)
+        capture("pain")
+    }
+
+    @Test
+    fun captureRoadToTheExam() {
         answerQuiz()
-        repeat(4) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
-        capture("loss_autonomy")
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        capture("method")
+    }
+
+    @Test
+    fun captureGain() {
+        answerQuiz()
+        repeat(2) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+        capture("gain")
     }
 
     @Test
@@ -175,8 +186,11 @@ class OnboardingStepsScreenshotTest {
      */
     private fun answerDiagnosisUpTo(stop: OnboardingStep) {
         with(viewModel) {
+            onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.MOTIVATION_WORK))
             onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.BLOCKER_NO_PROGRESS))
+            if (stop == OnboardingStep.Pain) return
+            onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectExperience(OnboardingConfig.EXPERIENCE_FIRST_TIME))
             if (stop == OnboardingStep.Comparison) return
             onEvent(OnboardingEvent.GoToNextStep)
@@ -194,10 +208,10 @@ class OnboardingStepsScreenshotTest {
         }
     }
 
-    /** Takes the test and taps through the emotional arc, landing on the name. */
+    /** Takes the test and taps through the road and the gain, landing on the name. */
     private fun answerUpToName() {
         answerQuiz()
-        repeat(9) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+        repeat(3) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
     }
 
     /**

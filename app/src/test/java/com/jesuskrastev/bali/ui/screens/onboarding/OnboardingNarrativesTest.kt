@@ -5,15 +5,7 @@ import org.junit.Test
 
 class OnboardingNarrativesTest {
 
-    private val arc = listOf(
-        OnboardingStep.Empathy,
-        OnboardingStep.LossTime,
-        OnboardingStep.LossOpportunity,
-        OnboardingStep.LossAutonomy,
-        OnboardingStep.GainFreedom,
-        OnboardingStep.GainExperiences,
-        OnboardingStep.GainLevelUp
-    )
+    private val arc = listOf(OnboardingStep.Pain, OnboardingStep.Gain)
 
     /** Every combination of the answers the arc reads, plus all of them unanswered. */
     private val profiles: List<OnboardingData> = buildList {
@@ -57,13 +49,27 @@ class OnboardingNarrativesTest {
     }
 
     @Test
-    fun `the time lost speaks to why the user wants the licence`() {
-        val work = OnboardingNarratives.forStep(
-            OnboardingStep.LossTime,
-            OnboardingData(motivation = OnboardingConfig.MOTIVATION_WORK)
+    fun `the pain names the blocker and the cost of the user's own reason`() {
+        val pain = OnboardingNarratives.forStep(
+            OnboardingStep.Pain,
+            OnboardingData(
+                motivation = OnboardingConfig.MOTIVATION_WORK,
+                theoryBlocker = OnboardingConfig.BLOCKER_NO_START
+            )
         )!!
 
-        assertThat(work.headline).contains("trabajo")
+        assertThat(pain.headline).contains("por dónde empezar")
+        assertThat(pain.content.body).contains("trabajo")
+    }
+
+    @Test
+    fun `the gain shows what the user's reason looks like with the licence`() {
+        val gain = OnboardingNarratives.forStep(
+            OnboardingStep.Gain,
+            OnboardingData(motivation = OnboardingConfig.MOTIVATION_FREEDOM)
+        )!!
+
+        assertThat(gain.content.body).contains("escapada")
     }
 
     @Test
@@ -77,6 +83,15 @@ class OnboardingNarrativesTest {
                 val text = (narrative.headline + " " + narrative.content.body).lowercase()
                 gendered.forEach { word -> assertThat(text).doesNotContain(word) }
             }
+        }
+    }
+
+    @Test
+    fun `the pain and the gain never show the same picture`() {
+        profiles.forEach { data ->
+            val pain = OnboardingNarratives.forStep(OnboardingStep.Pain, data)!!.content.animation
+            val gain = OnboardingNarratives.forStep(OnboardingStep.Gain, data)!!.content.animation
+            assertThat(pain).isNotEqualTo(gain)
         }
     }
 
