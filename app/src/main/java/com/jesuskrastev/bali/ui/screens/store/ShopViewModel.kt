@@ -55,6 +55,9 @@ object ShopCatalog {
 private const val PURCHASE_FAILED_MESSAGE =
     "No se ha podido completar la compra. Comprueba tu conexión e inténtalo de nuevo."
 
+/** One-shot visual confirmation or error emitted after a shop purchase attempt. */
+data class ShopFeedback(val message: String, val isSuccess: Boolean)
+
 /**
  * What the shop shows.
  *
@@ -71,7 +74,7 @@ private const val PURCHASE_FAILED_MESSAGE =
  * @property hasActiveStreakBet true while a streak bet is running and not lost
  * @property streakBetDaysDone study days completed since the bet was placed, 0 without a bet
  * @property canBetOnStreak true when a bet could be placed now: no bet running and a streak to bet on
- * @property purchaseFeedback one-time message about a purchase that failed
+ * @property purchaseFeedback one-time success or error shown after a purchase attempt
  * @property chestReward reward granted by a paid surprise chest while its opening animation is on
  *   screen; null when no chest is being opened
  */
@@ -88,7 +91,7 @@ data class ShopUiState(
     val hasActiveStreakBet: Boolean = false,
     val streakBetDaysDone: Int = 0,
     val canBetOnStreak: Boolean = false,
-    val purchaseFeedback: String? = null,
+    val purchaseFeedback: ShopFeedback? = null,
     val chestReward: ChestReward? = null
 )
 
@@ -101,7 +104,7 @@ class ShopViewModel @Inject constructor(
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
     private val _isProcessing = MutableStateFlow(false)
-    private val _purchaseFeedback = MutableStateFlow<String?>(null)
+    private val _purchaseFeedback = MutableStateFlow<ShopFeedback?>(null)
     private val _chestReward = MutableStateFlow<ChestReward?>(null)
 
     val uiState: StateFlow<ShopUiState> = combine(
@@ -186,7 +189,7 @@ class ShopViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                _purchaseFeedback.value = PURCHASE_FAILED_MESSAGE
+                _purchaseFeedback.value = ShopFeedback(PURCHASE_FAILED_MESSAGE, isSuccess = false)
             } finally {
                 _isProcessing.value = false
             }
@@ -195,7 +198,10 @@ class ShopViewModel @Inject constructor(
 
     /** Charges [cost] and adds [item] to the user's synchronized inventory. */
     private fun purchaseInventory(item: ShopInventoryItem, cost: Int) = runPurchase {
-        if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
+        if (userRepository.purchaseInventoryItem(item, cost)) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = inventoryPurchaseFeedback(item)
+        }
     }
 
     /**
@@ -225,6 +231,10 @@ class ShopViewModel @Inject constructor(
         }
         if (userRepository.placeStreakBet(StreakBet.COST_COINS, StreakBet.targetFor(settledStreak))) {
             _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Apuesta activada! Estudia ${StreakBet.DAYS} días más y gana ${StreakBet.PAYOUT_COINS} monedas 🎯",
+                isSuccess = true
+            )
         }
     }
 
@@ -233,7 +243,13 @@ class ShopViewModel @Inject constructor(
      * purchase, so a second tap cannot charge twice.
      */
     private fun purchaseStreakRecovery() = runPurchase {
-        if (recoverStreakUseCase() != null) _selectedItem.value = null
+        if (recoverStreakUseCase() != null) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Racha recuperada! Ya puedes seguir sumando días 🔥",
+                isSuccess = true
+            )
+        }
     }
 
     /**
@@ -251,6 +267,21 @@ class ShopViewModel @Inject constructor(
         if (decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)) {
             userRepository.updateStreakFreezes(user.streakFreezes + 1)
             _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Congelador conseguido! Ya está listo para proteger tu racha 🧊",
+                isSuccess = true
+            )
         }
+    }
+
+    /** Returns the celebratory confirmation shown after buying inventory [item]. */
+    private fun inventoryPurchaseFeedback(item: ShopInventoryItem): ShopFeedback {
+        val message = when (item) {
+            ShopInventoryItem.HINT -> "¡Pista conseguida! Ya está en tu inventario 💡"
+            ShopInventoryItem.FIFTY_FIFTY -> "¡50/50 conseguido! Ya puedes usarlo en práctica ✨"
+            ShopInventoryItem.DOUBLE_XP -> "¡Doble XP conseguido! Se activará en tu próxima actividad ⚡"
+            ShopInventoryItem.DOUBLE_COINS -> "¡Doble moneda conseguido! Tu próxima recompensa valdrá el doble 🪙"
+        }
+        return ShopFeedback(message, isSuccess = true)
     }
 }
