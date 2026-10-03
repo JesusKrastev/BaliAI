@@ -310,16 +310,32 @@ class ExamViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Counts the clock down to [examEndAtMillis] once a second and flags [ExamUiState.isTimeUp]
+     * when it runs out. The reading comes from the wall clock rather than from counting ticks,
+     * so a delayed tick (the phone dozing, the app in the background) cannot hand out extra time.
+     */
     private fun startTimer() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            while (_uiState.value.timeLeftSeconds > 0) {
+            while (true) {
+                val secondsLeft = secondsUntilDeadline()
+                _uiState.update { it.copy(timeLeftSeconds = secondsLeft) }
+                if (secondsLeft == 0) break
                 delay(1000)
-                _uiState.update { it.copy(timeLeftSeconds = it.timeLeftSeconds - 1) }
             }
             _uiState.update { it.copy(isTimeUp = true) }
         }
     }
+
+    /**
+     * Whole seconds left until [examEndAtMillis], rounded up so the clock shows 00:00 only when
+     * the time is really over.
+     *
+     * @return the seconds left, never negative
+     */
+    private fun secondsUntilDeadline(): Int =
+        ((examEndAtMillis - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0)
 
     private fun selectOption(optionIndex: Int) {
         if (_uiState.value.isAnswerChecked) return

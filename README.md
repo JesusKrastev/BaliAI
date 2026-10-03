@@ -9,17 +9,19 @@
 
 ## ✨ Características Principales
 
-*   **🤖 Integración con IA (Gemini):** Explicaciones detalladas de errores, asistencia personalizada y análisis de rendimiento apoyados por la API de Gemini.
+*   **🤖 Integración con IA (Gemini):** Tutor conversacional, tests y simulacros generados a medida y un camino de aprendizaje adaptado a cada alumno, servidos por Gemini a través de Firebase AI Logic.
 *   **🎮 Gamificación Completa:** 
-    *   **Niveles & XP:** Gana experiencia (XP) y sube de nivel con tu esfuerzo constante.
-    *   **Monedas & Energía:** Sistema de economía dentro de la app para gestionar las sesiones de estudio.
-    *   **Rachas (Streaks):** Mantén tu racha diaria de estudio y usa "congeladores" si necesitas un descanso.
+    *   **Niveles & XP:** Gana experiencia (XP) y sube de nivel con tu esfuerzo constante; el camino de rangos reparte premios en monedas.
+    *   **Monedas & Tienda:** Gasta monedas en pistas, 50/50, dobles de XP o monedas, cofres sorpresa y apuestas de racha.
+    *   **Rachas (Streaks):** Mantén tu racha diaria de estudio, protégela con "congeladores" o recupérala con monedas.
+    *   **Minijuegos:** Cinco juegos cortos de reflejos y señales con recompensas reales.
 *   **📚 Modos de Práctica:**
-    *   Exámenes simulados (Exams).
-    *   Pruebas de conocimiento.
-    *   Repaso inteligente enfocado en reparar fallos previos (Mistakes).
-*   **👤 Perfil Adaptativo (Onboarding):** Flujo detallado para capturar el tipo de licencia a examinar, tiempo de estudio disponible, metas diarias y temas que resultan más difíciles.
-*   **🔔 Retención y Notificaciones:** Integración con Firebase Cloud Messaging y OneSignal para enviar recordatorios inteligentes y mantener la motivación alta.
+    *   Lecciones y repasos del camino de aprendizaje.
+    *   Simulacros de examen oficial de 30 preguntas con cronómetro y veredicto de preparación.
+    *   Estadísticas por tema y cuenta atrás hasta el examen.
+*   **👤 Perfil Adaptativo (Onboarding):** Flujo narrativo que captura la experiencia previa, la fecha del examen y el ritmo de estudio para generar el plan.
+*   **🔔 Retención y Notificaciones:** OneSignal y Firebase Cloud Messaging con un canal de Android por tipo de aviso.
+*   **💳 Suscripción:** Acceso de pago gestionado con RevenueCat.
 
 ## 🛠️ Tecnologías y Arquitectura
 
@@ -37,7 +39,9 @@ El proyecto está desarrollado utilizando los estándares modernos de desarrollo
     *   Base de datos en la Nube (Firestore)
     *   Métricas de Uso (Google Analytics)
     *   Reportes de Fallos (Crashlytics)
-*   **Inteligencia Artificial:** [Google Generative AI SDK](https://ai.google.dev/docs)
+*   **Inteligencia Artificial:** [Firebase AI Logic](https://firebase.google.com/docs/ai-logic) contra la API de Gemini (sin clave en la app; App Check protege las llamadas)
+*   **Pagos:** [RevenueCat](https://www.revenuecat.com/)
+*   **Analítica:** PostHog y Firebase Analytics, siempre a través de `AnalyticsTracker`
 *   **Notificaciones Push:** [OneSignal](https://onesignal.com/)
 *   **Multimedia:** [Coil](https://coil-kt.github.io/coil/) (Manejo asíncrono de imágenes SVG/PNG) y [Lottie](https://airbnb.design/lottie/) (Animaciones vectoriales y microinteracciones).
 
@@ -45,10 +49,10 @@ El proyecto está desarrollado utilizando los estándares modernos de desarrollo
 
 El código fuente (ubicado en `app/src/main/java/com/jesuskrastev/bali/`) se encuentra estrictamente dividido en las siguientes capas:
 
-*   `domain/`: Casos de Uso independientes del framework (ej. `IncrementCoinsUseCase`, `CalculateLevelUseCase`) y Modelos de datos del negocio (ej. `User`, `TestResult`).
+*   `domain/`: Casos de Uso independientes del framework (ej. `IncrementCoinsUseCase`, `CalculateReadinessUseCase`) y Modelos de datos del negocio (ej. `User`, `TestResult`).
 *   `data/`: Implementaciones de repositorios, manejo de fuentes de datos locales (BBDD Room) y remotas (API Gemini, Firebase Firestore), y mappers.
 *   `ui/`: Toda la capa de presentación utilizando Jetpack Compose, organizada por flujos y pantallas (`screens`), junto a las definiciones de diseño (`theme`).
-*   `di/`: Módulos de provisión de Hilt marcando el ciclo de vida de los diferentes repositorios y servicios (`RemoteModule`, `RoomModule`, `AuthModule`, etc.).
+*   `di/`: Módulos de provisión de Hilt marcando el ciclo de vida de los diferentes repositorios y servicios (`RepositoryModule`, `RoomModule`, `FirebaseModule`, `GeminiModule`, etc.).
 
 ## 🚀 Instalación y Configuración
 
@@ -67,9 +71,11 @@ Pasos para compilar y ejecutar el proyecto en tu máquina local:
    El sistema de build (Gradle) espera la existencia de un archivo llamado `local.properties` en la raíz del proyecto para leer claves de API importantes que **no deben** subirse a control de versiones. 
    Deberás agregar las siguientes líneas a tu `local.properties`:
    ```properties
-   GEMINI_API_KEY="tu_clave_api_de_google_ai_studio"
-   ONE_SIGNAL_APP_ID="tu_app_id_de_onesignal"
+   ONE_SIGNAL_APP_ID=tu_app_id_de_onesignal
+   REVENUECAT_API_KEY=tu_clave_publica_de_revenuecat
+   POSTHOG_API_KEY=tu_clave_de_posthog
    ```
+   Sin ellas la app compila, pero las claves de esos SDK quedan vacías. **No hay clave de Gemini en la app**: las llamadas pasan por Firebase AI Logic. En compilaciones de depuración, registra el token de depuración de App Check (Consola de Firebase → App Check → Apps → Tokens de depuración; se imprime en Logcat la primera vez) o las peticiones de IA serán rechazadas.
 
 4. **Configuración de Firebase:**
    Asegúrate de tener un proyecto creado en la Consola de Firebase. Descarga y añade el archivo `google-services.json` correspondiente dentro del directorio `app/`.
