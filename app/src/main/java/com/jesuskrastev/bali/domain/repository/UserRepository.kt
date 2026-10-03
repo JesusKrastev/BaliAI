@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.domain.repository
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
@@ -75,11 +76,11 @@ interface UserRepository {
     suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean
 
     /**
-     * Atomically spends [cost] and grants the random coin [reward] from a surprise chest.
+     * Atomically spends [cost] and grants [reward] from a surprise chest.
      *
      * @return true when the chest was opened; false when the balance is insufficient.
      */
-    suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean
+    suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean
 
     /**
      * Consumes one owned [item].

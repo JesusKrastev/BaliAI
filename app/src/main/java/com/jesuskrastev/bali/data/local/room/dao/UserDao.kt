@@ -72,12 +72,20 @@ interface UserDao {
     suspend fun purchaseInventoryItem(item: String, cost: Int): Int
 
     /**
-     * Opens a surprise chest by applying both its cost and [reward] in one statement.
+     * Opens a surprise chest by charging [cost] and granting either coins or one inventory item
+     * in the same SQLite statement.
      *
      * @return 1 if the chest opened, otherwise 0 when the balance was insufficient.
      */
-    @Query("UPDATE users SET coins = coins - :cost + :reward WHERE coins >= :cost")
-    suspend fun openSurpriseChest(cost: Int, reward: Int): Int
+    @Query(
+        "UPDATE users SET coins = coins - :cost + :coinReward, " +
+            "hints = hints + CASE WHEN :item = 'HINT' THEN :quantity ELSE 0 END, " +
+            "fiftyFifties = fiftyFifties + CASE WHEN :item = 'FIFTY_FIFTY' THEN :quantity ELSE 0 END, " +
+            "doubleXpBoosts = doubleXpBoosts + CASE WHEN :item = 'DOUBLE_XP' THEN :quantity ELSE 0 END, " +
+            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN :quantity ELSE 0 END " +
+            "WHERE coins >= :cost"
+    )
+    suspend fun openSurpriseChest(cost: Int, coinReward: Int, item: String?, quantity: Int): Int
 
     /**
      * Removes exactly one consumable [item] only when it is available.

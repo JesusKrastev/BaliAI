@@ -223,8 +223,8 @@ fun ShopScreen(
             ShopItemInfoDialog(item = item, onDismiss = { infoItem = null })
         }
 
-        uiState.chestPrize?.let { prize ->
-            ChestOpeningOverlay(prize = prize, onDismiss = { viewModel.onEvent(ShopEvent.DismissChest) })
+        uiState.chestReward?.let { reward ->
+            ChestOpeningOverlay(reward = reward, onDismiss = { viewModel.onEvent(ShopEvent.DismissChest) })
         }
 
         uiState.selectedItem?.let { selected ->
@@ -429,8 +429,7 @@ private fun FeaturedChest(coins: Int, onClick: () -> Unit, onInfoClick: () -> Un
                         color = Color.White
                     )
                     Text(
-                        text = "¡Prueba tu suerte! Entre ${ShopCatalog.CHEST_MIN_REWARD} y " +
-                            "${ShopCatalog.CHEST_MAX_REWARD} monedas",
+                        text = "¡Prueba tu suerte! Monedas, ayudas o potenciadores",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.75f)
                     )
@@ -1153,9 +1152,8 @@ fun shopItemEffect(item: ShopItem): String = when (item) {
         "En un test de práctica, deja solo dos opciones de la pregunta: la correcta y una " +
             "incorrecta. Gasta un 50/50 por pregunta y no se puede usar en el simulacro."
     ShopItem.SurpriseChest ->
-        "Al abrirlo recibes entre ${ShopCatalog.CHEST_MIN_REWARD} y ${ShopCatalog.CHEST_MAX_REWARD} " +
-            "monedas al azar. Cuesta ${ShopCatalog.SURPRISE_CHEST_COST}, así que según la suerte " +
-            "sales ganando o perdiendo."
+        "Puede contener 20, 40 u 80 monedas (65 %), una pista (14 %), un 50/50 (10 %), " +
+            "doble XP (6 %) o doble de monedas (5 %). Cada apertura concede exactamente una recompensa."
     ShopItem.DoubleXp ->
         "El próximo test, simulacro o minijuego que termines da el doble de XP, con sus bonus " +
             "incluidos. Se gasta al terminarlo y cada uno vale para una sola actividad."
