@@ -189,19 +189,19 @@ class OnboardingViewModel @Inject constructor(
     private val stepsOrder = listOf(
         // Qué es Bali, before any question
         OnboardingStep.Intro,
-        // El porqué, and what it costs: the pain answers the blocker just named
-        OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Pain,
+        // El porqué
+        OnboardingStep.Motivation, OnboardingStep.TheoryBlocker,
         // Diagnóstico: the experience comes first because the real failure rate and the test
-        // result both speak to it.
+        // result both speak to it. The pain closes it, once enough is known to make it personal.
         OnboardingStep.Experience, OnboardingStep.Comparison, OnboardingStep.Readiness,
-        OnboardingStep.Concern,
-        // La prueba, then the road from its score to the exam, and the life at the end of it
+        OnboardingStep.Concern, OnboardingStep.Pain,
+        // La prueba, then the road from its score to the exam
         OnboardingStep.Quiz, OnboardingStep.QuizResult,
-        OnboardingStep.MethodComparison, OnboardingStep.Gain,
-        // El plan
+        OnboardingStep.MethodComparison,
+        // El plan; the gain comes once name, date and pace are in, so it speaks of their own day
         OnboardingStep.Name, OnboardingStep.ExamDate, OnboardingStep.Province,
-        OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime, OnboardingStep.Notifications,
-        OnboardingStep.LearningPreference,
+        OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime, OnboardingStep.Gain,
+        OnboardingStep.Notifications, OnboardingStep.LearningPreference,
         // Cierre
         OnboardingStep.SocialProof, OnboardingStep.Processing, OnboardingStep.PlanReveal,
         OnboardingStep.Pact

@@ -139,6 +139,26 @@ fun StepNarrative(
 private fun NarrativeVisual(content: NarrativeContent, appear: Float) {
     val glowColor = MaterialTheme.colorScheme.primary
 
+    if (content.scene != null) {
+        NarrativeSceneView(
+            scene = content.scene,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .graphicsLayer {
+                    alpha = appear
+                    scaleX = 0.88f + 0.12f * appear
+                    scaleY = 0.88f + 0.12f * appear
+                }
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(glowColor.copy(alpha = 0.18f), Color.Transparent)
+                    )
+                )
+        )
+        return
+    }
+
     Box(
         modifier = Modifier
             .size(220.dp)
