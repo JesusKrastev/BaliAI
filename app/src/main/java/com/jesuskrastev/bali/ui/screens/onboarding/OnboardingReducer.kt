@@ -73,7 +73,7 @@ class OnboardingReducer {
 
         val name = data.name ?: ""
         return when (step) {
-            // StepIntro oculta la mascota: el cofre es la imagen.
+            // StepIntro oculta la mascota: las capturas son la imagen.
             OnboardingStep.Intro -> ""
 
             // El porqué

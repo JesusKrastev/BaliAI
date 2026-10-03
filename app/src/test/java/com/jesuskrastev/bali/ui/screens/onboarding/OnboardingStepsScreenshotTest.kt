@@ -86,20 +86,24 @@ class OnboardingStepsScreenshotTest {
     }
 
     @Test
-    fun captureIntroChestClosed() {
-        capture("intro_closed")
-        // The cards stay inside until the user opens the chest.
-        composeTestRule.onNodeWithText("Aprueba a la primera").assertDoesNotExist()
+    fun captureIntro() {
+        capture("intro")
+        // The cards are there from the first frame; there is no chest to open.
+        composeTestRule.onNodeWithText("Aprueba a la primera").assertExists()
     }
 
     @Test
-    fun captureIntroChestOpened() {
-        capture("intro_closed_before_tap")
-        composeTestRule.onNodeWithText("Abrir el cofre 🎁").performClick()
-        composeTestRule.mainClock.advanceTimeBy(3_000L)
+    fun captureIntroDark() = capture("intro_dark", darkTheme = true)
 
-        composeTestRule.onNodeWithText("Aprueba a la primera").assertExists()
-        composeTestRule.onRoot().captureRoboImage("build/onboarding-steps/intro_open.png")
+    /** The other three intro cards, reached with the button, in the dark theme. */
+    @Test
+    fun captureIntroCardsDark() {
+        capture("intro_dark", darkTheme = true)
+        repeat(3) { page ->
+            composeTestRule.onNodeWithText("Siguiente →").performClick()
+            composeTestRule.mainClock.advanceTimeBy(2_000L)
+            composeTestRule.onRoot().captureRoboImage("build/onboarding-steps/intro_dark_${page + 2}.png")
+        }
     }
 
     @Test
@@ -233,9 +237,9 @@ class OnboardingStepsScreenshotTest {
      *
      * @param name file name without extension
      */
-    private fun capture(name: String) {
+    private fun capture(name: String, darkTheme: Boolean = false) {
         composeTestRule.setContent {
-            BaliTheme(darkTheme = false) {
+            BaliTheme(darkTheme = darkTheme) {
                 SharedTransitionLayout {
                     AnimatedVisibility(visible = true) {
                         OnboardingScreen(

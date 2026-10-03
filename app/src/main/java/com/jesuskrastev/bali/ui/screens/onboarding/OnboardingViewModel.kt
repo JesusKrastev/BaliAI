@@ -103,7 +103,7 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     sealed class Informational(analyticsName: String) : OnboardingStep(analyticsName)
 
     // ── Qué es Bali ────────────────────────────────────────────────────────
-    // The chest and its four cards. It owns its controls (the cards swipe and the button walks
+    // The four cards. It owns its controls (the cards swipe and the button walks
     // through them), so it is not informational.
     data object Intro : OnboardingStep("intro")
 

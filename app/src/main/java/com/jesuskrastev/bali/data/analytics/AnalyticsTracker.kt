@@ -216,7 +216,7 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Tracks that a card of the onboarding intro (the chest) came on screen.
+     * Tracks that a card of the onboarding intro came on screen.
      *
      * @param position the card, from 1
      */
