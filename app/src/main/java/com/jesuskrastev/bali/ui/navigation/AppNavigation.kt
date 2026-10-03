@@ -76,6 +76,7 @@ import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
 import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
+import com.jesuskrastev.bali.ui.screens.subscription.ManageSubscriptionScreen
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
@@ -141,7 +142,11 @@ object SuggestionsRoute
 @Serializable
 object ChatRoute
 
-/** RevenueCat's Customer Center, opened from settings to manage or cancel the subscription. */
+/** Plan status and subscription actions, opened from settings. */
+@Serializable
+object ManageSubscriptionRoute
+
+/** RevenueCat's Customer Center, opened from the subscription screen to change or cancel the plan. */
 @Serializable
 object CustomerCenterRoute
 
@@ -353,8 +358,15 @@ fun AppNavigation(
                         navController.navigate(SuggestionsRoute)
                     },
                     onManageSubscriptionClick = {
-                        navController.navigate(CustomerCenterRoute)
+                        navController.navigate(ManageSubscriptionRoute)
                     }
+                )
+            }
+
+            composable<ManageSubscriptionRoute> {
+                ManageSubscriptionScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onOpenCustomerCenter = { navController.navigate(CustomerCenterRoute) }
                 )
             }
 
