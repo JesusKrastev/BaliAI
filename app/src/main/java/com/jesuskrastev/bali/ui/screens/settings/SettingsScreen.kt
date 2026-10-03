@@ -97,7 +97,7 @@ private fun Context.openLink(url: String) {
  * @param viewModel supplies the signed-in profile and the sign-out action
  * @param onAuthClick navigates to sign-in when the viewer is signed out
  * @param onFeedbackClick navigates to the "send feedback" destination
- * @param onManageSubscriptionClick opens RevenueCat's Customer Center to manage or cancel
+ * @param onManageSubscriptionClick opens the "Tu suscripción" screen
  */
 @Composable
 fun SettingsScreen(

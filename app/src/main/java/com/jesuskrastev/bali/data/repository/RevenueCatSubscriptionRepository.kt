@@ -100,7 +100,8 @@ class RevenueCatSubscriptionRepository @Inject constructor() : SubscriptionRepos
                 willRenew = entitlement.willRenew,
                 isTrial = entitlement.periodType == PeriodType.TRIAL,
                 endsAtMillis = entitlement.expirationDate?.time,
-                sinceMillis = entitlement.originalPurchaseDate?.time
+                sinceMillis = entitlement.originalPurchaseDate?.time,
+                productId = entitlement.productIdentifier
             )
         }
 

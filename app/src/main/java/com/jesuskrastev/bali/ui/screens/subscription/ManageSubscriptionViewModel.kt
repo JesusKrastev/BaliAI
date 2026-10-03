@@ -21,21 +21,26 @@ import javax.inject.Inject
 sealed interface ManageSubscriptionUiState {
     data object Loading : ManageSubscriptionUiState
 
-    /** Premium is active; [headline] is the status chip and [detail] the line under it. */
-    data class Active(val headline: String, val detail: String, val isCancelled: Boolean) :
-        ManageSubscriptionUiState
+    /**
+     * Premium is active; [headline] is the status chip, [detail] the line under it and
+     * [productId] the store product, used to reopen it in Google Play.
+     */
+    data class Active(
+        val headline: String,
+        val detail: String,
+        val isCancelled: Boolean,
+        val productId: String? = null
+    ) : ManageSubscriptionUiState
 
     data object Inactive : ManageSubscriptionUiState
 
-    /** The status couldn't be read (offline); the user can still open the Customer Center. */
+    /** The status couldn't be read (offline); the user can still start the cancellation flow. */
     data object Unavailable : ManageSubscriptionUiState
 }
 
 /**
- * Backs the "Gestionar suscripción" screen: reads the plan's status from RevenueCat, keeps it
- * live as the customer info changes and restores purchases on request. Cancelling or changing the
- * plan is delegated to the Customer Center (see [com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel])
- * so the cancellation survey keeps working.
+ * Backs the "Gestionar suscripción" screen: reads the plan's status from RevenueCat and keeps it
+ * live as the customer info changes. Cancelling goes through [CancelSubscriptionViewModel].
  */
 @HiltViewModel
 class ManageSubscriptionViewModel @Inject constructor(
@@ -44,12 +49,6 @@ class ManageSubscriptionViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<ManageSubscriptionUiState>(ManageSubscriptionUiState.Loading)
     val uiState: StateFlow<ManageSubscriptionUiState> = _uiState.asStateFlow()
-
-    private val _isRestoring = MutableStateFlow(false)
-    val isRestoring: StateFlow<Boolean> = _isRestoring.asStateFlow()
-
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -63,30 +62,6 @@ class ManageSubscriptionViewModel @Inject constructor(
                 .catch { }
                 .collect(::publish)
         }
-    }
-
-    /** Restores previous purchases and reports the outcome through [message]. */
-    fun restorePurchases() {
-        viewModelScope.launch {
-            _isRestoring.value = true
-            subscriptionRepository.restorePurchases().fold(
-                onSuccess = { customerInfo ->
-                    publish(customerInfo)
-                    _message.value = if (subscriptionRepository.hasPremiumEntitlement(customerInfo)) {
-                        "Compras restauradas. Tu suscripción está activa."
-                    } else {
-                        "No hemos encontrado compras anteriores en esta cuenta de Google."
-                    }
-                },
-                onFailure = { _message.value = "No se pudo restaurar. Revisa tu conexión e inténtalo de nuevo." }
-            )
-            _isRestoring.value = false
-        }
-    }
-
-    /** Marks the current [message] as shown. */
-    fun messageShown() {
-        _message.value = null
     }
 
     private fun publish(customerInfo: CustomerInfo) {
@@ -109,19 +84,22 @@ internal fun describeSubscription(
     zone: ZoneId = ZoneId.systemDefault()
 ): ManageSubscriptionUiState {
     if (subscription == null) return ManageSubscriptionUiState.Inactive
+    val productId = subscription.productId
     val date = subscription.endsAtMillis?.let { DATE_FORMAT.format(Instant.ofEpochMilli(it).atZone(zone)) }
     return when {
-        date == null -> ManageSubscriptionUiState.Active("Activa", "Tu acceso a Bali no caduca.", false)
+        date == null -> ManageSubscriptionUiState.Active("Activa", "Tu acceso a Bali no caduca.", false, productId)
         !subscription.willRenew -> ManageSubscriptionUiState.Active(
             "Cancelada",
             "Seguirás teniendo acceso completo hasta el $date. No se te volverá a cobrar.",
-            true
+            true,
+            productId
         )
         subscription.isTrial -> ManageSubscriptionUiState.Active(
             "Prueba gratis",
             "Tu prueba termina el $date y después empieza el cobro. Cancela antes si no quieres seguir.",
-            false
+            false,
+            productId
         )
-        else -> ManageSubscriptionUiState.Active("Activa", "Se renueva el $date.", false)
+        else -> ManageSubscriptionUiState.Active("Activa", "Se renueva el $date.", false, productId)
     }
 }

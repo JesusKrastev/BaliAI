@@ -58,7 +58,7 @@ class HomePlanViewModelTest {
 
         val state = viewModel.uiState.first { it.plan.targetMillis != null }
 
-        assertThat(state.copy?.chipLabel).isEqualTo("21 d")
+        assertThat(state.copy?.chipLabel).isEqualTo("21 días")
         assertThat(state.copy?.showsPendingDot).isTrue()
     }
 
