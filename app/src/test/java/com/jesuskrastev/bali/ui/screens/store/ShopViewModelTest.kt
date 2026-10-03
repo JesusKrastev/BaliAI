@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.ui.screens.store
 
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.domain.model.ChestReward
@@ -26,6 +27,8 @@ class ShopViewModelTest {
     private val fakeUserRepository = FakeUserRepository()
     private val fakeDecrementCoinsUseCase = DecrementCoinsUseCase(fakeUserRepository)
 
+    private val fakeSoundEffects = FakeSoundEffects()
+
     private lateinit var viewModel: ShopViewModel
 
     @Before
@@ -33,7 +36,8 @@ class ShopViewModelTest {
         viewModel = ShopViewModel(
             userRepository = fakeUserRepository,
             decrementCoinsUseCase = fakeDecrementCoinsUseCase,
-            recoverStreakUseCase = RecoverStreakUseCase(fakeUserRepository, fakeDecrementCoinsUseCase)
+            recoverStreakUseCase = RecoverStreakUseCase(fakeUserRepository, fakeDecrementCoinsUseCase),
+            soundEffects = fakeSoundEffects
         )
     }
 
@@ -193,6 +197,17 @@ class ShopViewModelTest {
         assertThat(state.canBetOnStreak).isFalse()
     }
 
+    /** Verifies the chest sound plays when the lid opens, not when the chest is bought. */
+    @Test
+    fun `the chest sound plays only when the overlay reports the lid opening`() = runTest {
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        assertThat(fakeSoundEffects.chestOpenPlays).isEqualTo(0)
+
+        viewModel.onEvent(ShopEvent.ChestOpening)
+
+        assertThat(fakeSoundEffects.chestOpenPlays).isEqualTo(1)
+    }
+
     /** Verifies one chest purchase charges once and persists whichever weighted reward was rolled. */
     @Test
     fun `opening the surprise chest charges its price and grants its reward once`() = runTest {
@@ -256,7 +271,8 @@ class ShopViewModelTest {
         val offlineViewModel = ShopViewModel(
             userRepository = offline,
             decrementCoinsUseCase = fakeDecrementCoinsUseCase,
-            recoverStreakUseCase = RecoverStreakUseCase(offline, fakeDecrementCoinsUseCase)
+            recoverStreakUseCase = RecoverStreakUseCase(offline, fakeDecrementCoinsUseCase),
+            soundEffects = fakeSoundEffects
         )
 
         offlineViewModel.onEvent(ShopEvent.SelectItem(ShopItem.Hint))

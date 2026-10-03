@@ -35,4 +35,7 @@ interface SoundEffects {
      * score): it marks the end of the session without a fanfare that would contradict the result.
      */
     fun playSoftFinish()
+
+    /** Plays the creak and shimmer of a surprise chest as its lid opens. */
+    fun playChestOpen()
 }

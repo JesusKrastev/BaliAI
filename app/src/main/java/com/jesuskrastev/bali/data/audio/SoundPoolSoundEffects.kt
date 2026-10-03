@@ -55,6 +55,7 @@ class SoundPoolSoundEffects @Inject constructor(
     private val wrongSoundId = load(R.raw.sfx_wrong)
     private val lessonCompleteSoundId = load(R.raw.sfx_lesson_complete)
     private val softFinishSoundId = load(R.raw.sfx_soft_finish)
+    private val chestOpenSoundId = load(R.raw.sfx_chest_open)
 
     override val isEnabled: Flow<Boolean> = context.soundDataStore.data
         .map { preferences -> preferences[KEY_ENABLED] ?: true }
@@ -76,6 +77,8 @@ class SoundPoolSoundEffects @Inject constructor(
     override fun playLessonComplete() = play(lessonCompleteSoundId)
 
     override fun playSoftFinish() = play(softFinishSoundId)
+
+    override fun playChestOpen() = play(chestOpenSoundId)
 
     /**
      * Starts loading a raw sound resource into the pool. Loading is asynchronous: a sound asked
