@@ -103,9 +103,10 @@ private enum class ChestPhase { Closed, Opening, Opened }
  *
  * @param reward coins or a consumable item granted by the chest
  * @param onDismiss invoked when the user closes the reveal
+ * @param onOpening invoked once, as the lid starts to open, so the chest's sound plays with it
  */
 @Composable
-fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
+fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit, onOpening: () -> Unit = {}) {
     val compositionResult = rememberLottieComposition(
         LottieCompositionSpec.RawRes(R.raw.bali_chest_opening)
     )
@@ -145,6 +146,7 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
         when (phase) {
             ChestPhase.Closed -> Unit
             ChestPhase.Opening -> {
+                onOpening()
                 shake.snapTo(0f)
                 squash.snapTo(1f)
                 composition?.let {

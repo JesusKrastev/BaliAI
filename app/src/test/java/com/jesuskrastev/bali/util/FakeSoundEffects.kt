@@ -19,6 +19,8 @@ class FakeSoundEffects(enabled: Boolean = true) : SoundEffects {
         private set
     var softFinishPlays = 0
         private set
+    var chestOpenPlays = 0
+        private set
 
     override val isEnabled: Flow<Boolean> = enabledState
 
@@ -40,5 +42,9 @@ class FakeSoundEffects(enabled: Boolean = true) : SoundEffects {
 
     override fun playSoftFinish() {
         softFinishPlays++
+    }
+
+    override fun playChestOpen() {
+        chestOpenPlays++
     }
 }

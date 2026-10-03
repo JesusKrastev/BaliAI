@@ -2,6 +2,7 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.ChestRewardTable
 import com.jesuskrastev.bali.domain.model.DailyStreak
@@ -35,6 +36,9 @@ sealed class ShopEvent {
     data object ConfirmPurchase : ShopEvent()
     data object DismissFeedback : ShopEvent()
     data object DismissChest : ShopEvent()
+
+    /** The lid of the revealed chest started to open: time for its sound. */
+    data object ChestOpening : ShopEvent()
 }
 
 /**
@@ -99,7 +103,8 @@ data class ShopUiState(
 class ShopViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
-    private val recoverStreakUseCase: RecoverStreakUseCase
+    private val recoverStreakUseCase: RecoverStreakUseCase,
+    private val soundEffects: SoundEffects
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
@@ -155,6 +160,7 @@ class ShopViewModel @Inject constructor(
             ShopEvent.ConfirmPurchase -> purchaseSelectedItem()
             ShopEvent.DismissFeedback -> _purchaseFeedback.value = null
             ShopEvent.DismissChest -> _chestReward.value = null
+            ShopEvent.ChestOpening -> soundEffects.playChestOpen()
         }
     }
 

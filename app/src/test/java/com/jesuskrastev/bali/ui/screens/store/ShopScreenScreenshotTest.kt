@@ -12,6 +12,7 @@ import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
@@ -38,7 +39,7 @@ class ShopScreenScreenshotTest {
     private fun captureShop(user: User, darkTheme: Boolean = false, openInfoOf: String? = null) {
         val users = FakeUserRepository().apply { runBlocking { insert(user) } }
         val decrement = DecrementCoinsUseCase(users)
-        val viewModel = ShopViewModel(users, decrement, RecoverStreakUseCase(users, decrement))
+        val viewModel = ShopViewModel(users, decrement, RecoverStreakUseCase(users, decrement), FakeSoundEffects())
         composeTestRule.setContent {
             BaliTheme(darkTheme = darkTheme) {
                 ShopScreen(onBackClick = {}, viewModel = viewModel)
