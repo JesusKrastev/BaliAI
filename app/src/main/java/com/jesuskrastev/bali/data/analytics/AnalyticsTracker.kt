@@ -215,6 +215,15 @@ open class AnalyticsTracker @Inject constructor(
         concern?.let { putString("concern", it) }
     }
 
+    /**
+     * Tracks that a card of the onboarding intro (the chest) came on screen.
+     *
+     * @param position the card, from 1
+     */
+    open fun onboardingIntroCardShown(position: Int) = log("onboarding_intro_card_shown") {
+        putInt("position", position)
+    }
+
     /** Tracks that the user skipped the onboarding mini-test without answering. */
     open fun onboardingQuizSkipped() = log("onboarding_quiz_skipped")
 

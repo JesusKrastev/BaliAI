@@ -72,8 +72,13 @@ class OnboardingBackNavigationScreenshotTest {
         }
     }
 
-    /** Taps the first answer of the first question, which moves the flow to the second screen. */
+    /**
+     * Leaves the intro and taps the first answer of the first question, which moves the flow to
+     * the second question.
+     */
     private fun answerFirstQuestion() {
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        composeTestRule.waitForIdle()
         // The card shows the label without the emoji that opens the option's text.
         composeTestRule.onNodeWithText(OnboardingConfig.MOTIVATION_INDEPENDENCE.substringAfter(' ')).performClick()
         composeTestRule.waitForIdle()
@@ -90,16 +95,18 @@ class OnboardingBackNavigationScreenshotTest {
      */
     private fun answerUpToTheBuildingScreen() {
         with(viewModel) {
+            onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
             onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.theoryBlockers.first()))
+            onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectExperience(OnboardingConfig.experiences.first()))
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectReadiness(OnboardingConfig.readinessLevels.first()))
             onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
             // The mini-test is skipped, and its result with it.
             onEvent(OnboardingEvent.SkipQuiz)
-            // Empathy, the three losses, the method and the three gains lead to the name.
-            repeat(8) { onEvent(OnboardingEvent.GoToNextStep) }
+            // The road to the exam and the gain lead to the name.
+            repeat(2) { onEvent(OnboardingEvent.GoToNextStep) }
             onEvent(OnboardingEvent.SetName("Jesus"))
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SetExamDate(null))
@@ -131,7 +138,8 @@ class OnboardingBackNavigationScreenshotTest {
         composeTestRule.waitForIdle()
 
         assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Motivation)
-        composeTestRule.onNodeWithContentDescription(BACK_ARROW).assertDoesNotExist()
+        // The intro is still behind the first question.
+        composeTestRule.onNodeWithContentDescription(BACK_ARROW).assertExists()
     }
 
     @Test

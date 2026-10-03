@@ -57,8 +57,29 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `the flow opens on a tappable question, not on the keyboard`() = runTest {
+    fun `the flow opens on what Bali is, before any question`() = runTest {
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Intro)
+
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+
         assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Motivation)
+    }
+
+    @Test
+    fun `each intro card shown is reported by its position from 1`() = runTest {
+        viewModel.onEvent(OnboardingEvent.IntroCardShown(0))
+        viewModel.onEvent(OnboardingEvent.IntroCardShown(3))
+
+        assertThat(fakeAnalyticsTracker.introCards).containsExactly(1, 4).inOrder()
+    }
+
+    @Test
+    fun `the pain answers the blocker right after it is named`() = runTest {
+        startQuestions()
+        viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
+        viewModel.onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.theoryBlockers.first()))
+
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Pain)
     }
 
     @Test
@@ -91,22 +112,15 @@ class OnboardingViewModelTest {
     }
 
     @Test
-    fun `the loss block leads into the method comparison`() = runTest {
+    fun `after the test result come the road to the exam and the gain, then the name`() = runTest {
         advanceThroughQuiz()
-        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Empathy)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.MethodComparison)
 
-        val expectedArc = listOf(
-            OnboardingStep.LossTime,
-            OnboardingStep.LossOpportunity,
-            OnboardingStep.LossAutonomy,
-            OnboardingStep.MethodComparison,
-            OnboardingStep.GainFreedom
-        )
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Gain)
 
-        expectedArc.forEach { expectedStep ->
-            viewModel.onEvent(OnboardingEvent.GoToNextStep)
-            assertThat(viewModel.uiState.value.currentStep).isEqualTo(expectedStep)
-        }
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Name)
     }
 
     @Test
@@ -189,7 +203,7 @@ class OnboardingViewModelTest {
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
 
         viewModel.onEvent(OnboardingEvent.SkipQuiz)
-        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Empathy)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.MethodComparison)
         assertThat(fakeAnalyticsTracker.quizSkips).isEqualTo(1)
 
         viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
@@ -265,7 +279,7 @@ class OnboardingViewModelTest {
 
     @Test
     fun `the first screen is counted before the user does anything`() = runTest {
-        assertThat(fakeAnalyticsTracker.onboardingSteps).containsExactly("o01_motivation")
+        assertThat(fakeAnalyticsTracker.onboardingSteps).containsExactly("o01_intro")
     }
 
     @Test
@@ -274,12 +288,14 @@ class OnboardingViewModelTest {
 
         assertThat(fakeAnalyticsTracker.onboardingSteps)
             .containsExactly(
-                "o01_motivation",
-                "o02_reasons",
-                "o03_experience",
-                "o04_comparison",
-                "o05_readiness",
-                "o06_concern"
+                "o01_intro",
+                "o02_motivation",
+                "o03_reasons",
+                "o04_pain",
+                "o05_experience",
+                "o06_comparison",
+                "o07_readiness",
+                "o08_concern"
             )
             .inOrder()
     }
@@ -290,7 +306,7 @@ class OnboardingViewModelTest {
 
         // The user goes no further: the screen must appear even though it was never answered.
         assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Concern)
-        assertThat(fakeAnalyticsTracker.onboardingSteps).contains("o06_concern")
+        assertThat(fakeAnalyticsTracker.onboardingSteps).contains("o08_concern")
     }
 
     @Test
@@ -327,7 +343,7 @@ class OnboardingViewModelTest {
         advanceToNotifications()
 
         assertThat(fakeAnalyticsTracker.onboardingSteps.takeLast(3))
-            .containsExactly("o20_weekly_study", "o21_study_time", "o22_notifications")
+            .containsExactly("o16_weekly_study", "o17_study_time", "o18_notifications")
             .inOrder()
     }
 
@@ -406,11 +422,12 @@ class OnboardingViewModelTest {
 
         viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
 
-        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Motivation)
+        assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.Intro)
     }
 
     @Test
     fun `going back returns to the previous question and keeps its answer`() = runTest {
+        startQuestions()
         val motivation = OnboardingConfig.motivations.first()
         viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
         assertThat(viewModel.uiState.value.currentStep).isEqualTo(OnboardingStep.TheoryBlocker)
@@ -421,14 +438,15 @@ class OnboardingViewModelTest {
         val state = viewModel.uiState.value
         assertThat(state.currentStep).isEqualTo(OnboardingStep.Motivation)
         assertThat(state.data.motivation).isEqualTo(motivation)
-        assertThat(state.canGoBack).isFalse()
-        assertThat(state.progress).isEqualTo(0f)
+        // The intro is still behind it.
+        assertThat(state.canGoBack).isTrue()
         assertThat(state.mascotMessage)
             .isEqualTo(OnboardingReducer().updateMascotMessage(OnboardingStep.Motivation, state.data))
     }
 
     @Test
     fun `answering again after going back replaces the earlier answer`() = runTest {
+        startQuestions()
         viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
         viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
 
@@ -440,6 +458,7 @@ class OnboardingViewModelTest {
 
     @Test
     fun `the screens slide backwards only while going back`() = runTest {
+        startQuestions()
         viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
         assertThat(viewModel.uiState.value.isMovingBack).isFalse()
 
@@ -452,12 +471,13 @@ class OnboardingViewModelTest {
 
     @Test
     fun `coming back to a screen does not count it twice in the funnel`() = runTest {
+        startQuestions()
         viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
         viewModel.onEvent(OnboardingEvent.GoToPreviousStep)
         viewModel.onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.last()))
 
         assertThat(fakeAnalyticsTracker.onboardingSteps)
-            .containsExactly("o01_motivation", "o02_reasons")
+            .containsExactly("o01_intro", "o02_motivation", "o03_reasons")
             .inOrder()
     }
 
@@ -594,15 +614,21 @@ class OnboardingViewModelTest {
      * @param motivation the answer to the first question
      */
     private fun advanceThroughDiagnosis(motivation: String = OnboardingConfig.motivations.first()) {
+        startQuestions()
         viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
         viewModel.onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.theoryBlockers.first()))
+        // The pain is informational and needs the bottom button.
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.onEvent(OnboardingEvent.SelectExperience(OnboardingConfig.experiences.first()))
         // Comparison is informational and needs the bottom button.
         viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.onEvent(OnboardingEvent.SelectReadiness(OnboardingConfig.readinessLevels.first()))
     }
 
-    /** Picks a worry and answers its mini-test right, leaving the flow on [OnboardingStep.Empathy]. */
+    /**
+     * Picks a worry and answers its mini-test right, leaving the flow on
+     * [OnboardingStep.MethodComparison].
+     */
     private fun advanceThroughQuiz() {
         advanceThroughDiagnosis()
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
@@ -617,8 +643,13 @@ class OnboardingViewModelTest {
      */
     private fun advanceThroughArc() {
         advanceThroughQuiz()
-        // Empathy, the three losses, the method and the three gains are all tap-to-continue.
-        repeat(8) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+        // The road to the exam and the gain are tap-to-continue.
+        repeat(2) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+    }
+
+    /** Leaves the intro, landing on the first question. */
+    private fun startQuestions() {
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
     }
 
     private companion object {

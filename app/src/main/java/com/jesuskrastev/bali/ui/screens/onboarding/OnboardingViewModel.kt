@@ -86,8 +86,9 @@ data class OnboardingData(
  * A single screen of the onboarding flow.
  *
  * The flow is deliberately built as an emotional arc rather than a questionnaire:
- * the user's "why" → diagnosis → a three-question test of their own worry → what not having
- * the licence costs them → the method → the life the licence unlocks → the concrete plan → close.
+ * what Bali is → the user's "why" and what it costs → diagnosis → a three-question test of their
+ * own worry → the road from that score to the exam → the life the licence unlocks → the concrete
+ * plan → close.
  *
  * @param analyticsName slug of the step in analytics; empty for terminal states that are
  *   not part of the funnel. The position prefix is added when the event is logged, so
@@ -100,6 +101,11 @@ sealed class OnboardingStep(val analyticsName: String = "") {
      * button is always shown and always enabled.
      */
     sealed class Informational(analyticsName: String) : OnboardingStep(analyticsName)
+
+    // ── Qué es Bali ────────────────────────────────────────────────────────
+    // The chest and its four cards. It owns its controls (the cards swipe and the button walks
+    // through them), so it is not informational.
+    data object Intro : OnboardingStep("intro")
 
     // ── El porqué ──────────────────────────────────────────────────────────
     data object Motivation : OnboardingStep("motivation")
@@ -116,20 +122,10 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object Quiz : OnboardingStep("quiz")
     data object QuizResult : Informational("quiz_result")
 
-    data object Empathy : Informational("empathy")
-
-    // ── Lo que cuesta no tenerlo ───────────────────────────────────────────
-    data object LossTime : Informational("loss_time")
-    data object LossOpportunity : Informational("loss_opportunity")
-    data object LossAutonomy : Informational("loss_autonomy")
-
-    // ── La solución ────────────────────────────────────────────────────────
+    // ── El arco: what blocks the user and what it costs, the way out, and the life after ──
+    data object Pain : Informational("pain")
     data object MethodComparison : Informational("method_comparison")
-
-    // ── Lo que ganas ───────────────────────────────────────────────────────
-    data object GainFreedom : Informational("gain_freedom")
-    data object GainExperiences : Informational("gain_experiences")
-    data object GainLevelUp : Informational("gain_level_up")
+    data object Gain : Informational("gain")
 
     // ── El plan ────────────────────────────────────────────────────────────
     // The name opens this block: the whole emotional arc is answered with taps, and the
@@ -164,7 +160,7 @@ sealed class OnboardingStep(val analyticsName: String = "") {
  * @property quizIndex the mini-test question on screen, counted from 0
  */
 data class OnboardingUiState(
-    val currentStep: OnboardingStep = OnboardingStep.Motivation,
+    val currentStep: OnboardingStep = OnboardingStep.Intro,
     val data: OnboardingData = OnboardingData(),
     val progress: Float = 0f,
     val processingProgress: Float = 0f,
@@ -191,20 +187,17 @@ class OnboardingViewModel @Inject constructor(
     private val reducer = OnboardingReducer()
 
     private val stepsOrder = listOf(
-        // El porqué
-        OnboardingStep.Motivation, OnboardingStep.TheoryBlocker,
+        // Qué es Bali, before any question
+        OnboardingStep.Intro,
+        // El porqué, and what it costs: the pain answers the blocker just named
+        OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Pain,
         // Diagnóstico: the experience comes first because the real failure rate and the test
         // result both speak to it.
         OnboardingStep.Experience, OnboardingStep.Comparison, OnboardingStep.Readiness,
         OnboardingStep.Concern,
-        // La prueba
+        // La prueba, then the road from its score to the exam, and the life at the end of it
         OnboardingStep.Quiz, OnboardingStep.QuizResult,
-        OnboardingStep.Empathy,
-        // Lo que cuesta no tenerlo
-        OnboardingStep.LossTime, OnboardingStep.LossOpportunity, OnboardingStep.LossAutonomy,
-        // La solución y lo que ganas
-        OnboardingStep.MethodComparison,
-        OnboardingStep.GainFreedom, OnboardingStep.GainExperiences, OnboardingStep.GainLevelUp,
+        OnboardingStep.MethodComparison, OnboardingStep.Gain,
         // El plan
         OnboardingStep.Name, OnboardingStep.ExamDate, OnboardingStep.Province,
         OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime, OnboardingStep.Notifications,
@@ -278,6 +271,7 @@ class OnboardingViewModel @Inject constructor(
             is OnboardingEvent.SelectStudyTime -> selectStudyTime(event.studyTime)
             is OnboardingEvent.AnswerNotifications -> answerNotifications(event.accepted)
             is OnboardingEvent.SelectLearningPreference -> selectStepItem { it.copy(learningPreference = event.key) }
+            is OnboardingEvent.IntroCardShown -> analyticsTracker.onboardingIntroCardShown(event.position + 1)
             is OnboardingEvent.AnswerQuiz -> answerQuiz(event.optionIndex)
             OnboardingEvent.NextQuizQuestion -> nextQuizQuestion()
             OnboardingEvent.SkipQuiz -> skipQuiz()
