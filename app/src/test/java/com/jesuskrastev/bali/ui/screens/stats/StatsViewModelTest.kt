@@ -37,7 +37,7 @@ class StatsViewModelTest {
         override suspend fun clear() {}
     }
 
-    private class RecordingTracker : AnalyticsTracker(mock(), mock(), mock()) {
+    private class RecordingTracker : AnalyticsTracker(mock(), mock()) {
         val views = mutableListOf<Triple<String, Int, Int?>>()
         val examDates = mutableListOf<Pair<Int, Boolean>>()
         val examDateSources = mutableListOf<String>()

@@ -72,7 +72,6 @@ android {
 
         testInstrumentationRunner = "com.jesuskrastev.bali.HiltTestRunner"
         buildConfigField("String", "ONE_SIGNAL_APP_ID", "\"${secret("ONE_SIGNAL_APP_ID")}\"")
-        buildConfigField("String", "MIXPANEL_TOKEN", "\"${secret("MIXPANEL_TOKEN")}\"")
         buildConfigField("String", "REVENUECAT_API_KEY", "\"${secret("REVENUECAT_API_KEY")}\"")
         buildConfigField("String", "POSTHOG_API_KEY", "\"${secret("POSTHOG_API_KEY")}\"")
         buildConfigField("String", "POSTHOG_HOST", "\"${secret("POSTHOG_HOST", "https://us.i.posthog.com")}\"")
@@ -208,8 +207,6 @@ dependencies {
     // In-App reviews
     implementation(libs.app.review)
 
-    // Mixpanel
-    implementation(libs.mixpanel.android)
 
     // PostHog
     implementation(libs.posthog.android)

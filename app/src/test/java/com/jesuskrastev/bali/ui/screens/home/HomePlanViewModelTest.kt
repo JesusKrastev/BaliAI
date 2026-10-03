@@ -26,7 +26,7 @@ class HomePlanViewModelTest {
     /** An exam date as analytics received it. */
     private data class ExamDate(val daysUntil: Int, val hadPlanDate: Boolean, val source: String)
 
-    private class RecordingTracker : AnalyticsTracker(mock(), mock(), mock()) {
+    private class RecordingTracker : AnalyticsTracker(mock(), mock()) {
         val chipClicks = mutableListOf<ChipClick>()
         val actionClicks = mutableListOf<ActionClick>()
         val examDates = mutableListOf<ExamDate>()

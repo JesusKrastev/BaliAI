@@ -53,7 +53,7 @@ class OnboardingStepsScreenshotTest {
     fun setUp() {
         viewModel = OnboardingViewModel(
             userRepository = FakeUserRepository(),
-            analyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock()),
+            analyticsTracker = FakeAnalyticsTracker(mock(), mock()),
             notificationsRepository = FakeNotificationsRepository(),
             soundEffects = FakeSoundEffects()
         )
