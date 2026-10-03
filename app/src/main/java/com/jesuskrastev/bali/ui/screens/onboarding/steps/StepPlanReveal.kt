@@ -1,18 +1,28 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,32 +30,41 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.airbnb.lottie.compose.LottieAnimation
-import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.LottieConstants
-import com.airbnb.lottie.compose.animateLottieCompositionAsState
-import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.ui.screens.onboarding.NotificationsAnswer
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
+import com.jesuskrastev.bali.ui.screens.onboarding.PlanBlock
+import com.jesuskrastev.bali.ui.screens.onboarding.StudyPlan
+import com.jesuskrastev.bali.ui.screens.onboarding.StudyPlanBuilder
 import com.jesuskrastev.bali.ui.screens.onboarding.Testimonial
 import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
-import com.jesuskrastev.bali.ui.screens.onboarding.optionLabel
+import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
+import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import com.jesuskrastev.bali.ui.util.replayMask
 import java.text.SimpleDateFormat
@@ -53,46 +72,73 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-private val SUCCESS_GREEN = Color(0xFF10B981)
-private val FAILURE_RED = Color(0xFFF44336)
+private val SPANISH = Locale("es", "ES")
+
+/** Width of a phone in the "así vas a estudiar" carousel. */
+private val SHOT_WIDTH = 176.dp
 
 /**
- * Reveals the personalised plan, right before the product preview and the pact.
+ * Reveals the plan built from the user's answers, right before the social proof and the pact.
  *
- * It is deliberately a long scroll: it promises a date, shows the life behind that date,
- * explains how it will be reached, contrasts it with doing nothing and closes with proof
- * that other people already did it. Every block answers something the user typed earlier,
- * so the page reads as *their* plan rather than as a feature list.
+ * The top fits on one screen: the date, the daily rhythm and the user's own answers as chips, so
+ * the page is personal before any scroll. Below, the plan week by week, each stretch a card that
+ * opens on tap — the first one open, the rest inviting a look at what comes — with the topics the
+ * mini-test caught flagged where they come up. Then real screens of the app, the user's favourite
+ * way of practising first, and the comparison and proof that close it.
  *
  * @param data the answers collected during the onboarding flow
+ * @param modifier modifier applied to the scrolling column
  */
 @Composable
-fun StepPlanReveal(data: OnboardingData) {
-    val targetDate = remember(data) {
-        Date(OnboardingConfig.planTargetMillis(data.examDate, data.weeklyStudy))
+fun StepPlanReveal(data: OnboardingData, modifier: Modifier = Modifier) {
+    val targetMillis = remember(data) { OnboardingConfig.planTargetMillis(data.examDate, data.weeklyStudy) }
+    val plan = remember(data) {
+        StudyPlanBuilder.build(
+            now = System.currentTimeMillis(),
+            targetMillis = targetMillis,
+            failed = data.failedQuizQuestions()
+        )
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        PlanHero(name = data.name, targetDate = targetDate)
+        PlanHero(name = data.name, targetDate = Date(targetMillis))
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        ProfileChips(data)
 
         SectionDivider()
 
-        LifeChangeSection()
+        SectionTitle("Tu plan semana a semana")
+        Text(
+            text = "Toca cada etapa para ver qué toca",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+        PlanTimeline(plan = plan, examDate = data.examDate)
+
+        SectionDivider()
+
+        SectionTitle("Así vas a estudiar")
+        Text(
+            text = "Pantallas reales de Bali",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+        )
+        ShowcaseCarousel(favouriteKey = data.learningPreference)
 
         SectionDivider()
 
         OnboardingConfig.testimonials.getOrNull(OnboardingConfig.SOCIAL_PROOF_TESTIMONIALS)
             ?.let { QuoteBlock(it) }
-
-        SectionDivider()
-
-        HowSection(data)
 
         SectionDivider()
 
@@ -105,16 +151,17 @@ fun StepPlanReveal(data: OnboardingData) {
 }
 
 /**
- * Announces the plan and puts a date on it, which is the one thing the user is buying.
+ * Announces the plan and puts a date on it, which is the one thing the user is buying, with the
+ * daily rhythm that gets there right under it.
  *
  * @param name the user's name, or null if it was skipped
- * @param targetDate the day the plan aims to have the licence in hand
+ * @param targetDate the day the plan aims to have the theory exam passed by
  */
 @Composable
 private fun PlanHero(name: String?, targetDate: Date) {
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(56.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape),
         contentAlignment = Alignment.Center
     ) {
@@ -122,11 +169,11 @@ private fun PlanHero(name: String?, targetDate: Date) {
             imageVector = Icons.Default.Check,
             contentDescription = null,
             tint = Color.White,
-            modifier = Modifier.size(36.dp)
+            modifier = Modifier.size(32.dp)
         )
     }
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(14.dp))
 
     Text(
         text = name?.let { "$it, tu plan está listo" } ?: "Tu plan está listo",
@@ -137,10 +184,10 @@ private fun PlanHero(name: String?, targetDate: Date) {
         textAlign = TextAlign.Center
     )
 
-    Spacer(modifier = Modifier.height(20.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     Text(
-        text = "Puedes tener tu carnet antes del:",
+        text = "Puedes aprobar el teórico antes del:",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center
@@ -154,7 +201,7 @@ private fun PlanHero(name: String?, targetDate: Date) {
         border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
     ) {
         Text(
-            text = longDateLabel(targetDate),
+            text = SimpleDateFormat("d 'de' MMMM 'de' yyyy", SPANISH).format(targetDate),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.primary,
@@ -162,67 +209,343 @@ private fun PlanHero(name: String?, targetDate: Date) {
         )
     }
 
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(14.dp))
 
-    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.car))
-    val progress by animateLottieCompositionAsState(
-        composition = composition,
-        iterations = LottieConstants.IterateForever
-    )
-    LottieAnimation(
-        composition = composition,
-        progress = { progress },
-        modifier = Modifier.size(200.dp)
+    Text(
+        text = ("|${StudyPlanBuilder.DAILY_QUESTIONS} preguntas al día| y " +
+            "|${StudyPlanBuilder.WEEKLY_MOCK_EXAMS} simulacros por semana|")
+            .highlightPipes(MaterialTheme.colorScheme.primary),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        textAlign = TextAlign.Center
     )
 }
 
-/** What the licence actually buys, in the same terms the emotional arc used earlier. */
+/**
+ * The user's own answers, as chips under the date: proof at a glance that the plan is theirs.
+ *
+ * @param data the answers collected during the onboarding flow
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LifeChangeSection() {
-    SectionTitle("Esto es lo que cambiará en tu vida")
+private fun ProfileChips(data: OnboardingData) {
+    val chips = buildList {
+        add(data.examDate?.let { "📅 Examen: ${shortDate(it)}" } ?: "📝 Sin fecha aún")
+        OnboardingConfig.weeklyStudyShortLabel(data.weeklyStudy)?.let { add("⏱️ $it") }
+        if (data.notifications == NotificationsAnswer.GRANTED) {
+            data.studySlot()?.let { add("🔔 Aviso a las ${OnboardingConfig.reminderTimeLabel(it)}") }
+        }
+        OnboardingConfig.learningStyle(data.learningPreference)?.let { add("${it.emoji} ${it.label}") }
+        data.province?.let { add("📍 $it") }
+        data.failedQuizQuestions().map { it.topic }.distinct().takeIf { it.isNotEmpty() }
+            ?.let { add("🎯 Reforzar: ${it.joinToString(", ")}") }
+    }
 
-    Spacer(modifier = Modifier.height(16.dp))
-
-    val changes = listOf(
-        "💪" to "Dejarás de |depender de los demás|",
-        "🕊️" to "Ganarás |independencia total|",
-        "🌍" to "|Viajarás| a donde quieras, cuando quieras",
-        "⏱️" to "|No perderás más tiempo| esperando el autobús"
-    )
-
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        changes.forEach { (emoji, text) -> BulletRow(emoji = emoji, text = text) }
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        chips.forEach { chip ->
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    text = chip,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                )
+            }
+        }
     }
 }
 
 /**
- * How the plan gets there, using the method the user said they preferred.
+ * The plan as a vertical timeline of stretches. The first one starts open; the others show a
+ * one-line summary and open on tap.
  *
- * @param data the answers collected during the onboarding flow
+ * @param plan the plan to draw
+ * @param examDate the exam day, named on the final stretch, or null when there is none
  */
 @Composable
-private fun HowSection(data: OnboardingData) {
-    SectionTitle("Cómo lo vas a conseguir")
+private fun PlanTimeline(plan: StudyPlan, examDate: Long?) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        plan.blocks.forEachIndexed { index, block ->
+            PlanBlockCard(
+                block = block,
+                isFirst = index == 0,
+                isDayBased = block.title.startsWith("Día"),
+                examDate = examDate
+            )
+        }
+    }
+}
 
-    Spacer(modifier = Modifier.height(16.dp))
+/**
+ * One stretch of the plan: its name and dates, and what it holds once opened.
+ *
+ * @param block the stretch
+ * @param isFirst whether it is the first one, which starts open and is marked "Empiezas hoy"
+ * @param isDayBased whether the plan is told in days, which changes the mock exam line
+ * @param examDate the exam day, named on the final stretch, or null when there is none
+ */
+@Composable
+private fun PlanBlockCard(block: PlanBlock, isFirst: Boolean, isDayBased: Boolean, examDate: Long?) {
+    var expanded by rememberSaveable(block.title) { mutableStateOf(isFirst) }
+    val arrowRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "plan_block_arrow")
+    val accent = if (block.isFinalStretch) BaliAccentGreen else MaterialTheme.colorScheme.primary
 
-    val steps = buildList {
-        add(
-            "🎯" to (data.learningPreference
-                ?.let { optionLabel(it) }
-                ?: "Tests adaptados a tus fallos")
-        )
-        add("🤖" to "Pregúntale a Bali cualquier duda del teórico, a cualquier hora")
-        add("📚" to "Repasa la teoría de cada tema, explicada en corto")
-        add(
-            "🎓" to (data.province
-                ?.let { "Haz simulacros con las preguntas que se usan en $it" }
-                ?: "Haz simulacros con las preguntas oficiales de la DGT")
-        )
+    Surface(
+        onClick = { expanded = !expanded },
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(if (expanded) 2.dp else 1.dp, if (expanded) accent else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .background(accent, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (block.isFinalStretch) "${block.title} · Recta final" else block.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = dateRange(block.startMillis, block.endMillis),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (isFirst) {
+                    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.14f)) {
+                        Text(
+                            text = "Empiezas hoy",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = accent,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Icon(
+                    imageVector = Icons.Rounded.ExpandMore,
+                    contentDescription = if (expanded) "Cerrar" else "Abrir",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(arrowRotation)
+                )
+            }
+
+            if (!expanded) {
+                Text(
+                    text = blockTeaser(block),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 24.dp, top = 8.dp)
+                )
+            } else {
+                Column(
+                    modifier = Modifier.padding(start = 24.dp, top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    blockLines(block, isDayBased, examDate).forEach { (emoji, text) ->
+                        PlanLine(emoji = emoji, text = text)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The one line a closed stretch shows, enough to want to open it.
+ *
+ * @param block the stretch
+ * @return the summary
+ */
+private fun blockTeaser(block: PlanBlock): String {
+    if (block.isFinalStretch) return "Simulacros completos y repaso final"
+    val first = block.sections.first().substringBefore(':')
+    val others = block.sections.size - 1
+    val topics = if (others == 0) first else "$first y $others ${if (others == 1) "tema" else "temas"} más"
+    return if (block.reinforce.isEmpty()) topics else "$topics · refuerzas ${block.reinforce.joinToString(" y ")}"
+}
+
+/**
+ * The lines of an open stretch: its sections, the topics to reinforce and the daily work; the
+ * final stretch is mock exams and review, ending on the exam day or on the readiness check.
+ *
+ * @param block the stretch
+ * @param isDayBased whether the plan is told in days
+ * @param examDate the exam day, or null when there is none
+ * @return each line as emoji and text, `|` pairs marking the words to highlight
+ */
+private fun blockLines(block: PlanBlock, isDayBased: Boolean, examDate: Long?): List<Pair<String, String>> =
+    buildList {
+        if (block.isFinalStretch) {
+            add("🎓" to "Simulacros completos: apunta a |${ExamRules.PASS_SCORE} de ${ExamRules.QUESTION_COUNT}| o más")
+            add(
+                "🔁" to (block.reinforce.takeIf { it.isNotEmpty() }
+                    ?.let { "Repasa |${it.joinToString(" y ")}|, lo que fallaste en la prueba" }
+                    ?: "Repasa |tus fallos| de los tests y simulacros")
+            )
+            add(
+                "🏁" to (examDate?.let { "|${shortDate(it)}|: tu examen" }
+                    ?: "Bali te dirá cuándo estás |a punto para pedir fecha|")
+            )
+        } else {
+            block.sections.forEach { add("📚" to it) }
+            if (block.reinforce.isNotEmpty()) {
+                add("⚠️" to "Refuerza |${block.reinforce.joinToString(" y ")}|: lo fallaste en la prueba")
+            }
+            add("🎯" to "|${StudyPlanBuilder.DAILY_QUESTIONS} preguntas| al día")
+            add(
+                "📝" to if (isDayBased) "|1 simulacro| en estos días"
+                else "|${StudyPlanBuilder.WEEKLY_MOCK_EXAMS} simulacros| por semana"
+            )
+        }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        steps.forEach { (emoji, text) -> StepCard(emoji = emoji, text = text) }
+/**
+ * One line inside an open stretch.
+ *
+ * @param emoji the symbol on the left
+ * @param text the line; `|` pairs mark the words to highlight
+ */
+@Composable
+private fun PlanLine(emoji: String, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Text(text = emoji, fontSize = 16.sp, modifier = Modifier.width(26.dp))
+        Text(
+            text = text.highlightPipes(MaterialTheme.colorScheme.primary),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+/**
+ * A real screen of the app with what it is for.
+ *
+ * @property image the screenshot, rendered from the app by `OnboardingShowcaseScreenshotTest`
+ * @property caption one line on what the user does there
+ * @property styleKey the [com.jesuskrastev.bali.ui.screens.onboarding.LearningStyle.key] it shows best
+ */
+private data class Showcase(@DrawableRes val image: Int, val caption: String, val styleKey: String?)
+
+private val SHOWCASES = listOf(
+    Showcase(
+        R.drawable.onboarding_shot_exam,
+        "Simulacros como el examen real: ${ExamRules.QUESTION_COUNT} preguntas, 30 minutos, máximo ${ExamRules.MAX_MISTAKES} fallos",
+        OnboardingConfig.STYLE_MOCK_EXAMS.key
+    ),
+    Showcase(
+        R.drawable.onboarding_shot_practice,
+        "Tests cortos, con cada fallo explicado al momento",
+        OnboardingConfig.STYLE_QUICK_TESTS.key
+    ),
+    Showcase(
+        R.drawable.onboarding_shot_chat,
+        "¿Una duda? Pregúntale a Bali y te la explica, a cualquier hora",
+        OnboardingConfig.STYLE_EXPLANATIONS.key
+    ),
+    Showcase(
+        R.drawable.onboarding_shot_games,
+        "Minijuegos de señales y normas para cuando no te apetece un test",
+        OnboardingConfig.STYLE_GAMES.key
+    ),
+    Showcase(
+        R.drawable.onboarding_shot_stats,
+        "Tu probabilidad de aprobar, para saber cuándo estás a punto",
+        null
+    )
+)
+
+/**
+ * Real screens of the app in a horizontal carousel, the one for the user's favourite way of
+ * practising first and marked as such.
+ *
+ * @param favouriteKey the learning style the user picked, or null
+ */
+@Composable
+private fun ShowcaseCarousel(favouriteKey: String?) {
+    val ordered = remember(favouriteKey) { SHOWCASES.sortedByDescending { it.styleKey == favouriteKey } }
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        items(ordered, key = { it.image }) { showcase ->
+            ShowcaseCard(showcase = showcase, isFavourite = favouriteKey != null && showcase.styleKey == favouriteKey)
+        }
+    }
+}
+
+/**
+ * One screen of the carousel: the screenshot in a phone-like frame and its caption.
+ *
+ * @param showcase the screen
+ * @param isFavourite whether it shows the user's favourite way of practising
+ */
+@Composable
+private fun ShowcaseCard(showcase: Showcase, isFavourite: Boolean) {
+    Column(modifier = Modifier.width(SHOT_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Every card keeps the badge's slot, so the phones stay aligned whichever one wears it.
+        Box(modifier = Modifier.height(30.dp), contentAlignment = Alignment.Center) {
+            if (isFavourite) {
+                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary) {
+                    Text(
+                        text = "⭐ Tu favorita",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Box {
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.onBackground,
+                shadowElevation = 4.dp
+            ) {
+                Image(
+                    painter = painterResource(showcase.image),
+                    contentDescription = showcase.caption,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.TopCenter,
+                    modifier = Modifier
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .fillMaxWidth()
+                        .aspectRatio(360f / 780f)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = showcase.caption,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -235,7 +558,7 @@ private fun WhyBaliSection() {
 
     ContrastCard(
         title = "Sin Bali",
-        accent = FAILURE_RED,
+        accent = BaliAccentRed,
         isPositive = false,
         items = listOf(
             "Leer el manual entero sin saber qué entra",
@@ -248,11 +571,11 @@ private fun WhyBaliSection() {
 
     ContrastCard(
         title = "Con Bali",
-        accent = SUCCESS_GREEN,
+        accent = BaliAccentGreen,
         isPositive = true,
         items = listOf(
-            "Un método probado por +${OnboardingConfig.USERS_HELPED} alumnos",
-            "Un profesor de teórico con IA disponible 24/7",
+            "Cada fallo, explicado al momento. Y tus dudas, resueltas a cualquier hora",
+            "Un plan con tu fecha y tu ritmo",
             "Practicarás como si fuera el examen real"
         )
     )
@@ -334,67 +657,6 @@ private fun SectionDivider() {
 }
 
 /**
- * One line of the "what will change" list.
- *
- * @param emoji symbol shown on the left
- * @param text the line, with the words to emphasise wrapped in pipes
- */
-@Composable
-private fun BulletRow(emoji: String, text: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = emoji, fontSize = 24.sp)
-        Spacer(modifier = Modifier.width(14.dp))
-        Text(
-            text = text.highlightPipes(MaterialTheme.colorScheme.primary),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-/**
- * One card of the "how you will get there" list.
- *
- * @param emoji symbol shown on the left
- * @param text what the user will be doing
- */
-@Composable
-private fun StepCard(emoji: String, text: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = emoji, fontSize = 22.sp)
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-/**
  * One half of the with/without comparison.
  *
  * @param title heading of the card
@@ -449,7 +711,7 @@ private fun ContrastCard(
 }
 
 /**
- * The single pulled-out quote that sits between the promise and the method.
+ * The single pulled-out quote that sits between the plan and the comparison.
  *
  * @param testimonial the review to show
  */
@@ -513,15 +775,32 @@ private fun ReviewCard(testimonial: Testimonial) {
 }
 
 /**
- * Formats the target date the way the promise reads out loud.
+ * Formats a day short, as the chips and the plan name it: "24 oct".
  *
- * @param date the target date
- * @return a label such as "2 de octubre de 2026"
+ * @param millis any instant of the day
+ * @return the day and abbreviated month
  */
-private fun longDateLabel(date: Date): String =
-    SimpleDateFormat("d 'de' MMMM 'de' yyyy", Locale("es", "ES")).format(date)
+private fun shortDate(millis: Long): String =
+    SimpleDateFormat("d MMM", SPANISH).format(Date(millis)).trimEnd('.')
 
-@Preview(showBackground = true)
+/**
+ * Names the days a stretch covers: "3–9 oct", "28 oct – 3 nov" or a single "5 oct".
+ *
+ * @param start local midnight of the first day
+ * @param end local midnight of the last day
+ * @return the range
+ */
+private fun dateRange(start: Long, end: Long): String {
+    if (start == end) return shortDate(start)
+    val sameMonth = SimpleDateFormat("MM", SPANISH).let { it.format(Date(start)) == it.format(Date(end)) }
+    return if (sameMonth) {
+        "${SimpleDateFormat("d", SPANISH).format(Date(start))}–${shortDate(end)}"
+    } else {
+        "${shortDate(start)} – ${shortDate(end)}"
+    }
+}
+
+@Preview(showBackground = true, heightDp = 2200)
 @Composable
 private fun StepPlanRevealPreview() {
     BaliTheme(darkTheme = true) {
@@ -533,10 +812,8 @@ private fun StepPlanRevealPreview() {
             StepPlanReveal(
                 data = OnboardingData(
                     name = "Jesús",
-                    motivation = OnboardingConfig.MOTIVATION_WORK,
-                    theoryBlocker = OnboardingConfig.BLOCKER_NO_METHOD,
                     weeklyStudy = OnboardingConfig.WEEKLY_STUDY_DAILY,
-                    learningPreference = OnboardingConfig.learningPreferences.first(),
+                    learningPreference = OnboardingConfig.STYLE_MOCK_EXAMS.key,
                     province = "Almería",
                     examDate = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(21)
                 )

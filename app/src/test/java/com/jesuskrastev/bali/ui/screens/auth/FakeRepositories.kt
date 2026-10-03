@@ -247,10 +247,34 @@ class FakeAnalyticsTracker(
     var firstStepsExamClicks = 0
         private set
     val notificationsAnswers = mutableListOf<Pair<String, String?>>()
+    /** Every mini-test answer reported, as question id and whether it was right. */
+    val quizAnswers = mutableListOf<Pair<String, Boolean>>()
+    var quizSkips = 0
+        private set
+    /** Every exam date reported, as days until it and the screen it was set from. */
+    val examDates = mutableListOf<Pair<Int, String>>()
+    /** The answers profile sent when the onboarding content was finished. */
+    var completedProfile: Map<String, String>? = null
+        private set
 
     override fun notificationsPermissionAnswered(result: String, studySlot: String?) {
         notificationsAnswers.add(result to studySlot)
     }
+    override fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) {
+        quizAnswers.add(questionId to isCorrect)
+    }
+    override fun onboardingQuizSkipped() { quizSkips++ }
+    override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String) {
+        examDates.add(daysUntil to source)
+    }
+    override fun onboardingFlowCompleted(profile: Map<String, String>) { completedProfile = profile }
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
     override fun signUp(method: String) { signUpEvents.add(method) }
@@ -288,6 +312,10 @@ class FakeAnalyticsTracker(
         firstStepsDismissedEvents.clear()
         firstStepsExamClicks = 0
         notificationsAnswers.clear()
+        quizAnswers.clear()
+        quizSkips = 0
+        examDates.clear()
+        completedProfile = null
     }
 }
 
