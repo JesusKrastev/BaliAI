@@ -10,13 +10,8 @@ class OnboardingReducerTest {
     @Test
     fun `informational steps always allow moving forward`() {
         val informationalSteps = listOf(
-            OnboardingStep.Empathy,
-            OnboardingStep.LossTime,
-            OnboardingStep.LossOpportunity,
-            OnboardingStep.LossAutonomy,
-            OnboardingStep.GainFreedom,
-            OnboardingStep.GainExperiences,
-            OnboardingStep.GainLevelUp,
+            OnboardingStep.Pain,
+            OnboardingStep.Gain,
             OnboardingStep.MethodComparison,
             OnboardingStep.Comparison,
             OnboardingStep.PlanReveal,
@@ -63,8 +58,8 @@ class OnboardingReducerTest {
     fun `the narrative headline is the one written for the answers given`() {
         val data = OnboardingData(motivation = OnboardingConfig.MOTIVATION_WORK)
 
-        assertThat(reducer.updateMascotMessage(OnboardingStep.LossTime, data))
-            .isEqualTo(OnboardingNarratives.forStep(OnboardingStep.LossTime, data)!!.headline)
+        assertThat(reducer.updateMascotMessage(OnboardingStep.Gain, data))
+            .isEqualTo(OnboardingNarratives.forStep(OnboardingStep.Gain, data)!!.headline)
     }
 
     @Test
@@ -88,11 +83,9 @@ class OnboardingReducerTest {
         // The name is asked at the start of the plan block, so everything from the "why"
         // through the whole emotional arc has to read without it.
         val beforeTheName = listOf(
-            OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Experience,
-            OnboardingStep.Readiness, OnboardingStep.Concern, OnboardingStep.Quiz,
-            OnboardingStep.QuizResult, OnboardingStep.Empathy, OnboardingStep.LossTime, OnboardingStep.LossOpportunity,
-            OnboardingStep.LossAutonomy, OnboardingStep.GainFreedom,
-            OnboardingStep.GainExperiences, OnboardingStep.GainLevelUp, OnboardingStep.Name
+            OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Pain,
+            OnboardingStep.Experience, OnboardingStep.Readiness, OnboardingStep.Concern,
+            OnboardingStep.Quiz, OnboardingStep.QuizResult, OnboardingStep.Gain, OnboardingStep.Name
         )
 
         beforeTheName.forEach { step ->
@@ -118,15 +111,7 @@ class OnboardingReducerTest {
         assertThat(reducer.calculateProgress(index = 24, totalSteps = 25)).isEqualTo(1f)
     }
 
-    private val narrativeSteps = listOf(
-        OnboardingStep.Empathy,
-        OnboardingStep.LossTime,
-        OnboardingStep.LossOpportunity,
-        OnboardingStep.LossAutonomy,
-        OnboardingStep.GainFreedom,
-        OnboardingStep.GainExperiences,
-        OnboardingStep.GainLevelUp
-    )
+    private val narrativeSteps = listOf(OnboardingStep.Pain, OnboardingStep.Gain)
 
     private val shortFlow = listOf(
         OnboardingStep.Motivation,
@@ -159,11 +144,11 @@ class OnboardingReducerTest {
 
     @Test
     fun `back jumps over a step left out of this run`() {
-        val flow = listOf(OnboardingStep.Quiz, OnboardingStep.QuizResult, OnboardingStep.Empathy)
+        val flow = listOf(OnboardingStep.Quiz, OnboardingStep.QuizResult, OnboardingStep.MethodComparison)
 
-        assertThat(reducer.previousStep(flow, OnboardingStep.Empathy) { it == OnboardingStep.QuizResult })
+        assertThat(reducer.previousStep(flow, OnboardingStep.MethodComparison) { it == OnboardingStep.QuizResult })
             .isEqualTo(OnboardingStep.Quiz)
-        assertThat(reducer.previousStep(flow, OnboardingStep.Empathy))
+        assertThat(reducer.previousStep(flow, OnboardingStep.MethodComparison))
             .isEqualTo(OnboardingStep.QuizResult)
     }
 

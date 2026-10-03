@@ -27,17 +27,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.jesuskrastev.bali.domain.model.ChatMessage
-import com.jesuskrastev.bali.domain.model.ChatRole
-import com.jesuskrastev.bali.domain.usecase.AskDrivingTutorUseCase
-import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
-import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
-import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
-import com.jesuskrastev.bali.ui.screens.chat.ChatScreen
-import com.jesuskrastev.bali.ui.screens.chat.ChatViewModel
-import com.jesuskrastev.bali.ui.screens.chat.FakeAiTutorRepository
-import com.jesuskrastev.bali.ui.screens.chat.FakeChatRepository
-import com.jesuskrastev.bali.ui.screens.chat.RecordingChatAnalytics
 import com.jesuskrastev.bali.ui.screens.exam.ExamBottomBar
 import com.jesuskrastev.bali.ui.screens.exam.ExamContent
 import com.jesuskrastev.bali.ui.screens.exam.ExamUiState
@@ -47,7 +36,6 @@ import com.jesuskrastev.bali.ui.screens.test.QuizProgressTitle
 import com.jesuskrastev.bali.ui.screens.test.TestContentView
 import com.jesuskrastev.bali.ui.screens.test.TestUiState
 import com.jesuskrastev.bali.ui.theme.BaliTheme
-import com.jesuskrastev.bali.util.MainDispatcherRule
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,7 +44,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Renders the real screens the onboarding plan shows as "this is how you will study", with sample
+ * Renders the real screens the onboarding intro (the chest) shows as "this is what you get", with sample
  * data, so the pictures in `res/drawable-nodpi/onboarding_shot_*.webp` come from the app itself.
  *
  * To refresh them after a redesign: `./gradlew recordRoborazziDebug --tests "*OnboardingShowcaseScreenshotTest"`
@@ -68,9 +56,6 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [34], qualifiers = "w360dp-h780dp-xhdpi")
 @RunWith(RobolectricTestRunner::class)
 class OnboardingShowcaseScreenshotTest {
-
-    @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
 
     @get:Rule
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
@@ -195,44 +180,6 @@ class OnboardingShowcaseScreenshotTest {
                 }
             }
         }
-    }
-
-    /** The tutor chat, answering the kind of doubt students bring. */
-    @Test
-    fun captureTutorChat() {
-        val history = listOf(
-            ChatMessage("1", "¿Puedo adelantar en un paso de peatones si no hay nadie cruzando?", ChatRole.USER, 1_000),
-            ChatMessage(
-                "2",
-                "**No.** Adelantar en un paso de peatones está prohibido siempre, haya peatones o no. " +
-                    "Lo que importa es el sitio, no si hay alguien: un coche parado delante puede " +
-                    "taparte a quien está cruzando.",
-                ChatRole.ASSISTANT,
-                2_000
-            ),
-            ChatMessage("3", "¿Y justo antes del paso?", ChatRole.USER, 3_000),
-            ChatMessage(
-                "4",
-                "Tampoco: la prohibición incluye el paso de peatones **y sus proximidades**. " +
-                    "Truco para el examen: cerca de un paso de peatones, no se adelanta.",
-                ChatRole.ASSISTANT,
-                4_000
-            )
-        )
-        val chatRepository = FakeChatRepository(history)
-        val userRepository = FakeUserRepository()
-        val viewModel = ChatViewModel(
-            chatRepository = chatRepository,
-            askDrivingTutorUseCase = AskDrivingTutorUseCase(
-                chatRepository = chatRepository,
-                aiTutorRepository = FakeAiTutorRepository(),
-                userRepository = userRepository
-            ),
-            completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
-            analytics = RecordingChatAnalytics()
-        )
-
-        capture("shot_chat") { ChatScreen(viewModel = viewModel) }
     }
 
     /** The mini-games list. */

@@ -25,6 +25,10 @@ sealed class OnboardingEvent {
     /** @property key the [LearningStyle.key] tapped */
     data class SelectLearningPreference(val key: String) : OnboardingEvent()
 
+    // Intro Events
+    /** @property position the intro card that came on screen, counted from 0 */
+    data class IntroCardShown(val position: Int) : OnboardingEvent()
+
     // Mini-test Events
     /** @property optionIndex the option tapped on the current question of the mini-test */
     data class AnswerQuiz(val optionIndex: Int) : OnboardingEvent()

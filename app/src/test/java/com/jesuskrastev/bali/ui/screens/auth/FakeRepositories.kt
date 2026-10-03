@@ -262,6 +262,8 @@ class FakeAnalyticsTracker(
     val notificationsAnswers = mutableListOf<Pair<String, String?>>()
     /** Every mini-test answer reported, as question id and whether it was right. */
     val quizAnswers = mutableListOf<Pair<String, Boolean>>()
+    /** Every intro card reported, by position from 1. */
+    val introCards = mutableListOf<Int>()
     var quizSkips = 0
         private set
     /** Every exam date reported, as days until it and the screen it was set from. */
@@ -284,6 +286,7 @@ class FakeAnalyticsTracker(
         quizAnswers.add(questionId to isCorrect)
     }
     override fun onboardingQuizSkipped() { quizSkips++ }
+    override fun onboardingIntroCardShown(position: Int) { introCards.add(position) }
     override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String) {
         examDates.add(daysUntil to source)
     }
@@ -326,6 +329,7 @@ class FakeAnalyticsTracker(
         firstStepsExamClicks = 0
         notificationsAnswers.clear()
         quizAnswers.clear()
+        introCards.clear()
         quizSkips = 0
         examDates.clear()
         completedProfile = null

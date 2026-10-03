@@ -256,6 +256,10 @@ private fun OnboardingStepContent(
         }
 
         when (step) {
+            OnboardingStep.Intro -> StepIntro(
+                onPageShown = { viewModel.onEvent(OnboardingEvent.IntroCardShown(it)) },
+                onFinish = { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+            )
             OnboardingStep.Motivation -> {
                 StepSelectorList(OnboardingConfig.motivations, viewModel) { motivation, _ ->
                     viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
@@ -296,7 +300,7 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.QuizResult -> StepQuizResult(state.data)
-            OnboardingStep.MethodComparison -> StepMethodComparison()
+            OnboardingStep.MethodComparison -> StepMethodComparison(state.data)
             OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
             OnboardingStep.ExamDate -> StepExamDate(
                 examDate = state.data.examDate,
@@ -350,6 +354,7 @@ private val FULL_WIDTH_STEPS = setOf(OnboardingStep.Processing, OnboardingStep.E
  * @return false for steps that own their full-height layout and carry their own title
  */
 private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
+    OnboardingStep.Intro,
     OnboardingStep.MethodComparison,
     OnboardingStep.Comparison,
     OnboardingStep.Processing,
@@ -378,14 +383,9 @@ private fun shouldShowBottomButton(step: OnboardingStep): Boolean =
  */
 private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.Name -> "Empezar mi plan 🚀"
-    OnboardingStep.Empathy -> "Sí, es justo eso →"
-    OnboardingStep.LossTime -> "Es verdad 😔"
-    OnboardingStep.LossOpportunity -> "No quiero eso →"
-    OnboardingStep.LossAutonomy -> "Se acabó 😤"
-    OnboardingStep.MethodComparison -> "Ese es mi camino 🕊️"
-    OnboardingStep.GainFreedom -> "Eso quiero ✨"
-    OnboardingStep.GainExperiences -> "Me lo estoy imaginando 🙌"
-    OnboardingStep.GainLevelUp -> "Ese es mi siguiente paso 🚀"
+    OnboardingStep.Pain -> "Sí, es justo eso →"
+    OnboardingStep.MethodComparison -> "Ese es mi camino 🚀"
+    OnboardingStep.Gain -> "Eso quiero ✨"
     OnboardingStep.Comparison -> "A por ello 💪"
     OnboardingStep.QuizResult -> "Seguir →"
     OnboardingStep.PlanReveal -> "Este es mi plan 🎯"

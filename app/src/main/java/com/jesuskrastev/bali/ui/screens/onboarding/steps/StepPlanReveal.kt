@@ -1,27 +1,22 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,17 +38,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.ui.screens.onboarding.NotificationsAnswer
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
@@ -74,17 +65,14 @@ import java.util.concurrent.TimeUnit
 
 private val SPANISH = Locale("es", "ES")
 
-/** Width of a phone in the "así vas a estudiar" carousel. */
-private val SHOT_WIDTH = 176.dp
-
 /**
  * Reveals the plan built from the user's answers, right before the social proof and the pact.
  *
  * The top fits on one screen: the date, the daily rhythm and the user's own answers as chips, so
  * the page is personal before any scroll. Below, the plan week by week, each stretch a card that
  * opens on tap — the first one open, the rest inviting a look at what comes — with the topics the
- * mini-test caught flagged where they come up. Then real screens of the app, the user's favourite
- * way of practising first, and the comparison and proof that close it.
+ * mini-test caught flagged where they come up. Then the comparison and proof that close it. The
+ * real screens of the app moved to the intro, where they tell a newcomer what Bali is.
  *
  * @param data the answers collected during the onboarding flow
  * @param modifier modifier applied to the scrolling column
@@ -123,17 +111,6 @@ fun StepPlanReveal(data: OnboardingData, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
         )
         PlanTimeline(plan = plan, examDate = data.examDate)
-
-        SectionDivider()
-
-        SectionTitle("Así vas a estudiar")
-        Text(
-            text = "Pantallas reales de Bali",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
-        )
-        ShowcaseCarousel(favouriteKey = data.learningPreference)
 
         SectionDivider()
 
@@ -432,118 +409,6 @@ private fun PlanLine(emoji: String, text: String) {
         Text(
             text = text.highlightPipes(MaterialTheme.colorScheme.primary),
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-/**
- * A real screen of the app with what it is for.
- *
- * @property image the screenshot, rendered from the app by `OnboardingShowcaseScreenshotTest`
- * @property caption one line on what the user does there
- * @property styleKey the [com.jesuskrastev.bali.ui.screens.onboarding.LearningStyle.key] it shows best
- */
-private data class Showcase(@DrawableRes val image: Int, val caption: String, val styleKey: String?)
-
-private val SHOWCASES = listOf(
-    Showcase(
-        R.drawable.onboarding_shot_exam,
-        "Simulacros como el examen real: ${ExamRules.QUESTION_COUNT} preguntas, 30 minutos, máximo ${ExamRules.MAX_MISTAKES} fallos",
-        OnboardingConfig.STYLE_MOCK_EXAMS.key
-    ),
-    Showcase(
-        R.drawable.onboarding_shot_practice,
-        "Tests cortos, con cada fallo explicado al momento",
-        OnboardingConfig.STYLE_QUICK_TESTS.key
-    ),
-    Showcase(
-        R.drawable.onboarding_shot_chat,
-        "¿Una duda? Pregúntale a Bali y te la explica, a cualquier hora",
-        OnboardingConfig.STYLE_EXPLANATIONS.key
-    ),
-    Showcase(
-        R.drawable.onboarding_shot_games,
-        "Minijuegos de señales y normas para cuando no te apetece un test",
-        OnboardingConfig.STYLE_GAMES.key
-    ),
-    Showcase(
-        R.drawable.onboarding_shot_stats,
-        "Tu probabilidad de aprobar, para saber cuándo estás a punto",
-        null
-    )
-)
-
-/**
- * Real screens of the app in a horizontal carousel, the one for the user's favourite way of
- * practising first and marked as such.
- *
- * @param favouriteKey the learning style the user picked, or null
- */
-@Composable
-private fun ShowcaseCarousel(favouriteKey: String?) {
-    val ordered = remember(favouriteKey) { SHOWCASES.sortedByDescending { it.styleKey == favouriteKey } }
-
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        items(ordered, key = { it.image }) { showcase ->
-            ShowcaseCard(showcase = showcase, isFavourite = favouriteKey != null && showcase.styleKey == favouriteKey)
-        }
-    }
-}
-
-/**
- * One screen of the carousel: the screenshot in a phone-like frame and its caption.
- *
- * @param showcase the screen
- * @param isFavourite whether it shows the user's favourite way of practising
- */
-@Composable
-private fun ShowcaseCard(showcase: Showcase, isFavourite: Boolean) {
-    Column(modifier = Modifier.width(SHOT_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Every card keeps the badge's slot, so the phones stay aligned whichever one wears it.
-        Box(modifier = Modifier.height(30.dp), contentAlignment = Alignment.Center) {
-            if (isFavourite) {
-                Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary) {
-                    Text(
-                        text = "⭐ Tu favorita",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Box {
-            Surface(
-                shape = RoundedCornerShape(22.dp),
-                color = MaterialTheme.colorScheme.onBackground,
-                shadowElevation = 4.dp
-            ) {
-                Image(
-                    painter = painterResource(showcase.image),
-                    contentDescription = showcase.caption,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.TopCenter,
-                    modifier = Modifier
-                        .padding(5.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .fillMaxWidth()
-                        .aspectRatio(360f / 780f)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = showcase.caption,
-            modifier = Modifier.fillMaxWidth(),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface
         )
     }
