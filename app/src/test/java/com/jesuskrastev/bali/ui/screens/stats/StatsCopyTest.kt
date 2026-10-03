@@ -95,6 +95,58 @@ class StatsCopyTest {
             .isEqualTo("Has aprobado 1 de tus últimos 2 simulacros.")
     }
 
+    @Test
+    fun `the goal status counts the passes still missing until it is met`() {
+        fun passes(count: Int) = readiness(
+            ReadinessLevel.ALMOST,
+            taken = 5,
+            recent = List(5) { MockExam(it.toLong(), if (it < count) 28 else 20, 30, it < count) }
+        )
+
+        assertThat(recentGoalStatusOf(passes(0))).isEqualTo("Faltan 4")
+        assertThat(recentGoalStatusOf(passes(3))).isEqualTo("Falta 1")
+        assertThat(recentGoalStatusOf(passes(4))).isEqualTo("Cumplido")
+        assertThat(recentGoalStatusOf(passes(5))).isEqualTo("Cumplido")
+    }
+
+    @Test
+    fun `a mock exam is told by its mistakes, in singular and plural`() {
+        assertThat(mistakesText(MockExam(0, 28, 30, true))).isEqualTo("2 fallos")
+        assertThat(mistakesText(MockExam(0, 29, 30, true))).isEqualTo("1 fallo")
+        assertThat(mistakesText(MockExam(0, 30, 30, true))).isEqualTo("0 fallos")
+        assertThat(mockSlotDescriptionOf(MockExam(0, 22, 30, false))).isEqualTo("Suspendido: 22 aciertos, 8 fallos")
+        assertThat(mockSlotDescriptionOf(null)).isEqualTo("Simulacro por hacer")
+    }
+
+    @Test
+    fun `the evolution subtitle says whether it shows every mock exam`() {
+        assertThat(historySubtitleOf(shown = 4, taken = 4)).isEqualTo("Aciertos de tus 4 simulacros")
+        assertThat(historySubtitleOf(shown = 10, taken = 14)).isEqualTo("Aciertos de tus últimos 10 simulacros")
+    }
+
+    @Test
+    fun `the evolution chart is described in words`() {
+        val exams = listOf(MockExam(0, 25, 30, false), MockExam(1, 28, 30, true), MockExam(2, 30, 30, true))
+
+        assertThat(historyDescriptionOf(exams))
+            .isEqualTo("Aciertos de cada simulacro, del más antiguo al último: 25, 28 y 30. Se aprueba con 27.")
+    }
+
+    @Test
+    fun `the evolution axis starts at a round number below both the pass mark and the worst score`() {
+        assertThat(historyFloorOf(listOf(MockExam(0, 29, 30, true), MockExam(1, 30, 30, true)))).isEqualTo(20)
+        assertThat(historyFloorOf(listOf(MockExam(0, 17, 30, false), MockExam(1, 28, 30, true)))).isEqualTo(15)
+        assertThat(historyFloorOf(listOf(MockExam(0, 3, 30, false), MockExam(1, 9, 30, false)))).isEqualTo(0)
+    }
+
+    @Test
+    fun `a calendar page splits the day into month, number and weekday`() {
+        val page = calendarPageOf(plan(12).targetMillis!!)
+
+        assertThat(page).isEqualTo(CalendarPage(month = "OCT", day = "19", weekday = "LUNES"))
+        assertThat(shortDayText(plan(12).targetMillis!!)).isEqualTo("19 oct")
+    }
+
     /** A plan whose date is [daysLeft] days after Wednesday 7 October 2026. */
     private fun plan(daysLeft: Int, isExamDate: Boolean = true): PlanSummary {
         val date = Calendar.getInstance().apply {
