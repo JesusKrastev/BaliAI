@@ -86,20 +86,10 @@ class OnboardingStepsScreenshotTest {
     }
 
     @Test
-    fun captureIntroChestClosed() {
-        capture("intro_closed")
-        // The cards stay inside until the user opens the chest.
-        composeTestRule.onNodeWithText("Aprueba a la primera").assertDoesNotExist()
-    }
-
-    @Test
-    fun captureIntroChestOpened() {
-        capture("intro_closed_before_tap")
-        composeTestRule.onNodeWithText("Abrir el cofre 🎁").performClick()
-        composeTestRule.mainClock.advanceTimeBy(3_000L)
-
+    fun captureIntro() {
+        capture("intro")
+        // The cards are there from the first frame; there is no chest to open.
         composeTestRule.onNodeWithText("Aprueba a la primera").assertExists()
-        composeTestRule.onRoot().captureRoboImage("build/onboarding-steps/intro_open.png")
     }
 
     @Test
