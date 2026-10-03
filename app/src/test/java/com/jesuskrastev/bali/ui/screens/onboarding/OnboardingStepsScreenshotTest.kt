@@ -9,7 +9,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
@@ -84,8 +86,20 @@ class OnboardingStepsScreenshotTest {
     }
 
     @Test
-    fun captureIntroChest() {
-        capture("intro")
+    fun captureIntroChestClosed() {
+        capture("intro_closed")
+        // The cards stay inside until the user opens the chest.
+        composeTestRule.onNodeWithText("Aprueba a la primera").assertDoesNotExist()
+    }
+
+    @Test
+    fun captureIntroChestOpened() {
+        capture("intro_closed_before_tap")
+        composeTestRule.onNodeWithText("Abrir el cofre 🎁").performClick()
+        composeTestRule.mainClock.advanceTimeBy(3_000L)
+
+        composeTestRule.onNodeWithText("Aprueba a la primera").assertExists()
+        composeTestRule.onRoot().captureRoboImage("build/onboarding-steps/intro_open.png")
     }
 
     @Test
