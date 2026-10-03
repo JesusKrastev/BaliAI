@@ -1,6 +1,10 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.screens.onboarding.steps.NarrativeScene
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * What one screen of the emotional arc says: the mascot's headline and the visual with its line.
@@ -13,14 +17,20 @@ data class Narrative(val headline: String, val content: NarrativeContent)
 /**
  * Copy of the two screens left of the emotional arc: the pain and the gain.
  *
+ * The pain comes once the user has named what blocks them, how far along they are and what worries
+ * them, right before the mini-test; the gain comes once the plan's answers are in, so it can speak
+ * to them by name on the day their plan aims at (2026-10-03: both used to come too early, the pain
+ * after two answers).
+ *
  * The arc used to be eight screens (empathy, three losses, the method, three gains) and PostHog
  * showed only the first two were read: from the third on, most people passed each screen in one or
  * two seconds. What those two said survives here as one screen early in the flow, right after the
  * user names what blocks them; the gain closes the diagnosis, just before the plan is built.
  *
- * Each animation shows what its line says: the clock for waiting on others or on a job that will
- * not wait, the bus for the stop in the rain; someone driving for independence, the door opening for
- * work, the beach for getting away. Pain and gain never share a picture for the same answer. No line carries a figure that cannot be sourced.
+ * Each animation shows what its line says: job offers stamped "sin carnet" for a job that will not
+ * wait and the same offer stamped "carnet B ✓" for the gain (hand-drawn, see `NarrativeScene`), the
+ * clock for waiting on others, the bus for the stop in the rain; someone driving for independence, the door opening for
+ * independence, the beach for getting away. Pain and gain never share a picture for the same answer. No line carries a figure that cannot be sourced.
  */
 object OnboardingNarratives {
 
@@ -33,7 +43,7 @@ object OnboardingNarratives {
      */
     fun forStep(step: OnboardingStep, data: OnboardingData): Narrative? = when (step) {
         OnboardingStep.Pain -> pain(data)
-        OnboardingStep.Gain -> gain(data.motivation)
+        OnboardingStep.Gain -> gain(data)
         else -> null
     }
 
@@ -60,8 +70,9 @@ object OnboardingNarratives {
                 headline = headline,
                 body = "Y mientras tanto, |el trabajo no espera|: ofertas que piden carnet y turnos " +
                     "a los que no llegas en transporte.",
-                emoji = "⏳",
-                animation = R.raw.waiting
+                emoji = "💼",
+                animation = R.raw.waiting,
+                scene = NarrativeScene.JobOffersLost
             )
             else -> narrative(
                 headline = headline,
@@ -73,29 +84,41 @@ object OnboardingNarratives {
         }
     }
 
-    /** The life the licence unlocks, for the reason the user gave. */
-    private fun gain(motivation: String?): Narrative = when (motivation) {
-        OnboardingConfig.MOTIVATION_WORK -> narrative(
-            headline = "|Abre puertas| en el trabajo 💼",
-            body = "Di que sí a ese trabajo, a esos turnos o a esa entrevista lejos: " +
-                "|el carnet deja de ser un freno|.",
-            emoji = "💼",
-            animation = R.raw.door_open
-        )
-        OnboardingConfig.MOTIVATION_FREEDOM -> narrative(
-            headline = "|Muévete con libertad| 🌍",
-            body = "Esa escapada, ese viaje con amigos, esa playa lejos: " +
-                "|todo pasa a ser un plan real|.",
-            emoji = "🌍",
-            animation = R.raw.experiences
-        )
-        else -> narrative(
-            headline = "|Recupera tu independencia| 🕊️",
-            body = "Sal cuando quieras y vuelve cuando quieras, |sin depender de nadie|.",
-            emoji = "🚗",
-            animation = R.raw.freedom
-        )
+    /**
+     * The life the licence unlocks, for the reason the user gave, told to them by name on the day
+     * their plan aims at. It comes once the plan's answers are in, so the date is theirs.
+     */
+    private fun gain(data: OnboardingData, now: Long = System.currentTimeMillis()): Narrative {
+        val day = SPANISH_DAY.format(Date(OnboardingConfig.planTargetMillis(data.examDate, data.weeklyStudy, now)))
+        val name = data.name?.trim()?.takeIf { it.isNotEmpty() }
+        val headline = if (name != null) "$name, imagina el |$day|" else "Imagina el |$day|"
+        return when (data.motivation) {
+            OnboardingConfig.MOTIVATION_WORK -> narrative(
+                headline = "$headline 💼",
+                body = "Carnet en la mano. Esa oferta, esos turnos, esa entrevista lejos: " +
+                    "|esta vez dices que sí|.",
+                emoji = "💼",
+                animation = R.raw.door_open,
+                scene = NarrativeScene.JobOfferWon
+            )
+            OnboardingConfig.MOTIVATION_FREEDOM -> narrative(
+                headline = "$headline 🌍",
+                body = "Carnet en la mano. Esa escapada, ese viaje con amigos, esa playa lejos: " +
+                    "|ya no es un quizá, es un plan|.",
+                emoji = "🌍",
+                animation = R.raw.experiences
+            )
+            else -> narrative(
+                headline = "$headline 🕊️",
+                body = "Carnet en la mano. Sales cuando quieres y vuelves cuando quieres, " +
+                    "|sin pedirle nada a nadie|.",
+                emoji = "🚗",
+                animation = R.raw.freedom
+            )
+        }
     }
+
+    private val SPANISH_DAY = SimpleDateFormat("d 'de' MMMM", Locale("es", "ES"))
 
     /**
      * Builds a [Narrative].
@@ -106,6 +129,11 @@ object OnboardingNarratives {
      * @param animation Lottie shown instead of [emoji]
      * @return the screen copy
      */
-    private fun narrative(headline: String, body: String, emoji: String, animation: Int) =
-        Narrative(headline, NarrativeContent(emoji = emoji, body = body, animation = animation))
+    private fun narrative(
+        headline: String,
+        body: String,
+        emoji: String,
+        animation: Int,
+        scene: NarrativeScene? = null
+    ) = Narrative(headline, NarrativeContent(emoji = emoji, body = body, animation = animation, scene = scene))
 }

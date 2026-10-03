@@ -28,6 +28,7 @@ import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import com.jesuskrastev.bali.ui.screens.stats.pickerMillisFromLocalDay
 import java.util.concurrent.TimeUnit
 
 /**
@@ -68,6 +69,7 @@ class OnboardingStepsScreenshotTest {
     fun captureQuizQuestion() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         capture("quiz_question")
     }
 
@@ -75,6 +77,7 @@ class OnboardingStepsScreenshotTest {
     fun captureQuizExplanation() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.onEvent(OnboardingEvent.AnswerQuiz(1))
         capture("quiz_explanation")
     }
@@ -108,8 +111,16 @@ class OnboardingStepsScreenshotTest {
 
     @Test
     fun capturePain() {
-        answerDiagnosisUpTo(OnboardingStep.Pain)
+        answerDiagnosisUpTo(OnboardingStep.Concern)
+        viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
         capture("pain")
+    }
+
+    @Test
+    fun capturePainDark() {
+        answerDiagnosisUpTo(OnboardingStep.Concern)
+        viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
+        capture("pain_dark", darkTheme = true)
     }
 
     @Test
@@ -121,9 +132,14 @@ class OnboardingStepsScreenshotTest {
 
     @Test
     fun captureGain() {
-        answerQuiz()
-        repeat(2) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+        answerUpToGain()
         capture("gain")
+    }
+
+    @Test
+    fun captureGainDark() {
+        answerUpToGain()
+        capture("gain_dark", darkTheme = true)
     }
 
     @Test
@@ -207,8 +223,6 @@ class OnboardingStepsScreenshotTest {
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.MOTIVATION_WORK))
             onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.BLOCKER_NO_PROGRESS))
-            if (stop == OnboardingStep.Pain) return
-            onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectExperience(OnboardingConfig.EXPERIENCE_FIRST_TIME))
             if (stop == OnboardingStep.Comparison) return
             onEvent(OnboardingEvent.GoToNextStep)
@@ -220,16 +234,29 @@ class OnboardingStepsScreenshotTest {
     private fun answerQuiz() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.uiState.value.data.quizQuestions().forEachIndexed { index, question ->
             viewModel.onEvent(OnboardingEvent.AnswerQuiz(if (index == 1) 0 else question.correctIndex))
             viewModel.onEvent(OnboardingEvent.NextQuizQuestion)
         }
     }
 
-    /** Takes the test and taps through the road and the gain, landing on the name. */
+    /** Takes the test and taps through the result and the road, landing on the name. */
     private fun answerUpToName() {
         answerQuiz()
-        repeat(3) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+        repeat(2) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+    }
+
+    /** Answers the plan's questions as Lucía, with an exam in 16 days, landing on the gain. */
+    private fun answerUpToGain() {
+        answerUpToName()
+        viewModel.onEvent(OnboardingEvent.SetName("Lucía"))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        viewModel.onEvent(OnboardingEvent.SetExamDate(pickerMillisFromLocalDay(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(16))))
+        viewModel.onEvent(OnboardingEvent.SelectProvince("Almería"))
+        viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
+        viewModel.onEvent(OnboardingEvent.SelectStudyTime(OnboardingConfig.studyTimes.keys.last()))
     }
 
     /**
