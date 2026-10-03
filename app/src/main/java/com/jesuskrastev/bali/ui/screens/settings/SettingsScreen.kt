@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,10 +20,15 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +37,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,8 +58,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.util.LegalLinks
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
@@ -111,6 +122,12 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
+    // The user switches each channel in the system settings, outside the app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationChannels() }
+    LaunchedEffect(viewModel) {
+        viewModel.openSystemNotificationSettings.collect { context.openAppNotificationSettings() }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -132,6 +149,25 @@ fun SettingsScreen(
                 )
             )
         )
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsSectionLabel("Notificaciones")
+            if (uiState.notificationsBlocked) {
+                EnableNotificationsPrompt(onEnableClick = viewModel::enableNotifications)
+            }
+            SettingsGroup(
+                NotificationCategory.entries.map { category ->
+                    // While Android blocks the app, no channel delivers anything, whatever its own switch says.
+                    val isOn = !uiState.notificationsBlocked && category !in uiState.disabledNotificationCategories
+                    SettingsRowSpec(
+                        icon = category.icon(),
+                        label = category.title,
+                        description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
+                        onClick = { context.openNotificationSettings(category) }
+                    )
+                }
+            )
+        }
 
         SettingsSection(
             title = "Preferencias",
@@ -374,13 +410,104 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
  * @property checked null for a plain row that ends in a chevron; true or false for a switch row,
  *   which shows a [Switch] in that position. The whole row is tappable either way, so [onClick]
  *   is also what flips the switch.
+ * @property description smaller text under the label, or null for a one-line row
  */
 private data class SettingsRowSpec(
     val icon: ImageVector,
     val label: String,
     val checked: Boolean? = null,
+    val description: String? = null,
     val onClick: () -> Unit
 )
+
+/**
+ * The glyph Settings shows next to this notification category.
+ *
+ * @return the icon for the category's row
+ */
+private fun NotificationCategory.icon(): ImageVector = when (this) {
+    NotificationCategory.STUDY -> Icons.Rounded.NotificationsActive
+    NotificationCategory.STREAK -> Icons.Rounded.LocalFireDepartment
+    NotificationCategory.PROMOTIONS -> Icons.Rounded.LocalOffer
+}
+
+/**
+ * Opens Android's settings for [category]'s channel, where the user switches that kind of
+ * notification on or off. Below Android 8 there are no channels, and some manufacturers' builds
+ * have no channel screen: both fall back to [openAppNotificationSettings].
+ *
+ * @param category the kind of notification to configure
+ */
+private fun Context.openNotificationSettings(category: NotificationCategory) {
+    val openedChannel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, category.channelId)
+    )
+    if (!openedChannel) openAppNotificationSettings()
+}
+
+/**
+ * Opens the app's notification settings in Android, where the user lets notifications through
+ * when the system dialog will not show again; failing that, the app's details screen, which
+ * every Android has and links to them.
+ */
+private fun Context.openAppNotificationSettings() {
+    val openedNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    )
+    if (!openedNotifications) {
+        startActivityOrFalse(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        )
+    }
+}
+
+/**
+ * Message shown while Android blocks the app's notifications, asking the user to turn them
+ * on: without them the study reminders and the streak warning never arrive.
+ *
+ * @param onEnableClick asks for the permission, or opens the system settings when the dialog
+ *   can no longer be shown
+ */
+@Composable
+private fun EnableNotificationsPrompt(onEnableClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.NotificationsOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Activa las notificaciones",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Text(
+                "Sin ellas no podemos avisarte a tu hora de estudio ni cuando tu racha esté en peligro, " +
+                    "y es fácil que se te pase un día. Te llevará un toque.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Button(onClick = onEnableClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Activar notificaciones", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
 
 /**
  * Small uppercase eyebrow label placed above a [SettingsGroup] — the same treatment used for
@@ -436,7 +563,8 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
                         label = item.label,
                         accentColor = MaterialTheme.colorScheme.primary,
                         labelColor = MaterialTheme.colorScheme.onSurface,
-                        checked = item.checked
+                        checked = item.checked,
+                        description = item.description
                     )
                 }
                 if (index != items.lastIndex) {
@@ -460,6 +588,7 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
  * @param labelColor color applied to the label text
  * @param checked null to end the row with a chevron; otherwise the state of the [Switch] shown
  *   instead. The switch only displays the state: the tap is handled by the row around it.
+ * @param description optional smaller text under the label
  */
 @Composable
 private fun SettingsRowContent(
@@ -467,7 +596,8 @@ private fun SettingsRowContent(
     label: String,
     accentColor: Color,
     labelColor: Color,
-    checked: Boolean? = null
+    checked: Boolean? = null,
+    description: String? = null
 ) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -480,14 +610,23 @@ private fun SettingsRowContent(
             Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = labelColor,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = labelColor
+            )
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         if (checked != null) {
+            Spacer(Modifier.width(12.dp))
             Switch(checked = checked, onCheckedChange = null)
         } else {
             Icon(
