@@ -33,6 +33,7 @@ sealed class ShopEvent {
     data object PurchaseStreakRecovery : ShopEvent()
     data object ConfirmPurchase : ShopEvent()
     data object DismissFeedback : ShopEvent()
+    data object DismissChest : ShopEvent()
 }
 
 /**
@@ -84,7 +85,9 @@ private const val PURCHASE_FAILED_MESSAGE =
  * @property hasActiveStreakBet true while a streak bet is running and not lost
  * @property streakBetDaysDone study days completed since the bet was placed, 0 without a bet
  * @property canBetOnStreak true when a bet could be placed now: no bet running and a streak to bet on
- * @property purchaseFeedback one-time message about a purchase: the surprise chest's prize or a failure
+ * @property purchaseFeedback one-time message about a purchase that failed
+ * @property chestPrize coins won by a surprise chest that has just been paid for, while its opening
+ *   animation is on screen; null when no chest is being opened
  */
 data class ShopUiState(
     val coinsCount: Int = 0,
@@ -99,7 +102,8 @@ data class ShopUiState(
     val hasActiveStreakBet: Boolean = false,
     val streakBetDaysDone: Int = 0,
     val canBetOnStreak: Boolean = false,
-    val purchaseFeedback: String? = null
+    val purchaseFeedback: String? = null,
+    val chestPrize: Int? = null
 )
 
 @HiltViewModel
@@ -112,13 +116,15 @@ class ShopViewModel @Inject constructor(
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
     private val _isProcessing = MutableStateFlow(false)
     private val _purchaseFeedback = MutableStateFlow<String?>(null)
+    private val _chestPrize = MutableStateFlow<Int?>(null)
 
     val uiState: StateFlow<ShopUiState> = combine(
         userRepository.get(),
         _selectedItem,
         _isProcessing,
-        _purchaseFeedback
-    ) { user, selected, isProcessing, purchaseFeedback ->
+        _purchaseFeedback,
+        _chestPrize
+    ) { user, selected, isProcessing, purchaseFeedback, chestPrize ->
         user?.let {
             val now = System.currentTimeMillis()
             val settledStreak = DailyStreak.of(it).settledAt(now)
@@ -138,7 +144,8 @@ class ShopViewModel @Inject constructor(
                 streakBetDaysDone =
                     if (betRunning) StreakBet.daysDone(it.streakBetTarget, settledStreak.current) else 0,
                 canBetOnStreak = !betRunning && StreakBet.canBetOn(settledStreak.current),
-                purchaseFeedback = purchaseFeedback
+                purchaseFeedback = purchaseFeedback,
+                chestPrize = chestPrize
             )
         } ?: ShopUiState()
     }.stateIn(
@@ -158,6 +165,7 @@ class ShopViewModel @Inject constructor(
             ShopEvent.PurchaseStreakRecovery -> purchaseStreakRecovery()
             ShopEvent.ConfirmPurchase -> purchaseSelectedItem()
             ShopEvent.DismissFeedback -> _purchaseFeedback.value = null
+            ShopEvent.DismissChest -> _chestPrize.value = null
         }
     }
 
@@ -204,12 +212,15 @@ class ShopViewModel @Inject constructor(
         if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
     }
 
-    /** Opens a paid chest and keeps its prize in [uiState] long enough for the UI to show it. */
+    /**
+     * Opens a paid chest and keeps its prize in [uiState] until the UI has played the opening
+     * animation and the user dismisses it with [ShopEvent.DismissChest].
+     */
     private fun openSurpriseChest() = runPurchase {
         val reward = ShopCatalog.rollChestReward()
         if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
             _selectedItem.value = null
-            _purchaseFeedback.value = "¡Cofre abierto! Has ganado $reward monedas."
+            _chestPrize.value = reward
         }
     }
 

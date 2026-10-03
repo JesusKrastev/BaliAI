@@ -211,8 +211,34 @@ class ShopViewModelTest {
         val prize = user.coins - (100 - ShopCatalog.SURPRISE_CHEST_COST)
         assertThat(prize).isAtLeast(ShopCatalog.CHEST_MIN_REWARD)
         assertThat(prize).isAtMost(ShopCatalog.CHEST_MAX_REWARD)
-        assertThat(viewModel.uiState.first { it.purchaseFeedback != null }.purchaseFeedback)
-            .contains("$prize monedas")
+        val state = viewModel.uiState.first { it.chestPrize != null }
+        assertThat(state.chestPrize).isEqualTo(prize)
+        assertThat(state.purchaseFeedback).isNull()
+        assertThat(state.selectedItem).isNull()
+    }
+
+    @Test
+    fun `the chest prize stays on screen until the animation is dismissed`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+        assertThat(viewModel.uiState.first { it.chestPrize != null }.chestPrize).isNotNull()
+
+        viewModel.onEvent(ShopEvent.DismissChest)
+
+        assertThat(viewModel.uiState.first { it.chestPrize == null }.chestPrize).isNull()
+    }
+
+    @Test
+    fun `a chest the user cannot afford shows no animation and charges nothing`() = runTest {
+        fakeUserRepository.insert(User(coins = ShopCatalog.SURPRISE_CHEST_COST - 1))
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val state = viewModel.uiState.first()
+        assertThat(state.chestPrize).isNull()
+        assertThat(state.coinsCount).isEqualTo(ShopCatalog.SURPRISE_CHEST_COST - 1)
     }
 
     @Test
