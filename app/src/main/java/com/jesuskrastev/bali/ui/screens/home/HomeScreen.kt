@@ -19,8 +19,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,11 +38,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
@@ -53,6 +57,8 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -72,10 +78,10 @@ import com.jesuskrastev.bali.domain.model.RankProgression
 import com.jesuskrastev.bali.ui.screens.ranks.badgeRes
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliFlameColors
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Renders the home dashboard: the plan chip and the streak/coins status at the top, the
@@ -143,6 +149,13 @@ fun HomeScreen(
                     coinsCount = uiState.coinsCount,
                     onCoinsClick = onShopClick,
                     onStreakClick = onStreakClick,
+                    rank = {
+                        RankPill(
+                            xp = uiState.xp,
+                            claimableCount = uiState.claimableRankRewards,
+                            onClick = onRanksClick
+                        )
+                    },
                     leading = {
                         HomePlanChip(
                             viewModel = planViewModel,
@@ -152,11 +165,6 @@ fun HomeScreen(
                             onSeePlan = onSeePlanClick
                         )
                     }
-                )
-                RankJourneyButton(
-                    xp = uiState.xp,
-                    claimableCount = uiState.claimableRankRewards,
-                    onClick = onRanksClick
                 )
             }
         },
@@ -212,32 +220,63 @@ fun HomeScreen(
     }
 }
 
-/** Draws a Home button for [xp] and [claimableCount], invoking [onClick] when tapped. */
+/**
+ * Compact entry to the rank road for the top bar: the current rank's badge and, when prizes are
+ * waiting, a pulsing gold counter on its corner.
+ *
+ * @param xp the user's XP, which sets the badge
+ * @param claimableCount prizes reached and not yet collected
+ * @param onClick opens the rank road
+ */
 @Composable
-private fun RankJourneyButton(xp: Int, claimableCount: Int, onClick: () -> Unit) {
+internal fun RankPill(xp: Int, claimableCount: Int, onClick: () -> Unit) {
     val rank = RankProgression.rankFor(xp)
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.primaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+    val description = buildString {
+        append("Camino de premios: rango ${rank.name}")
+        if (claimableCount > 0) append(", $claimableCount ${if (claimableCount == 1) "premio" else "premios"} por recoger")
+    }
+    Box {
+        StatusPill(
+            onClick = onClick,
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 3.dp),
+            spacing = 0.dp,
+            modifier = Modifier.semantics { contentDescription = description }
         ) {
-            Image(painterResource(rank.badgeRes()), contentDescription = null, modifier = Modifier.size(42.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Camino de rangos", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
-                Text("${rank.name} · $xp XP", style = MaterialTheme.typography.labelMedium)
-            }
-            Text(
-                if (claimableCount > 0) "$claimableCount premios" else "Ver premios",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelMedium
+            Image(
+                painter = painterResource(rank.badgeRes()),
+                contentDescription = null,
+                modifier = Modifier.size(28.dp)
             )
+        }
+        if (claimableCount > 0) {
+            val pulse = rememberInfiniteTransition(label = "rank_pill")
+            val scale by pulse.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.18f,
+                animationSpec = infiniteRepeatable(tween(650), RepeatMode.Reverse),
+                label = "rank_pill_scale"
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 6.dp, y = (-6).dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .size(18.dp)
+                    .background(Color(0xFFFF9F1C), CircleShape)
+                    .border(1.5.dp, MaterialTheme.colorScheme.background, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (claimableCount > 9) "9+" else "$claimableCount",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    lineHeight = 10.sp
+                )
+            }
         }
     }
 }
@@ -252,6 +291,7 @@ private fun RankJourneyButton(xp: Int, claimableCount: Int, onClick: () -> Unit)
  * @param coinsCount current coin balance
  * @param onCoinsClick opens the coin shop
  * @param onStreakClick opens the streak detail screen
+ * @param rank optional pill placed before the streak (the rank road entry)
  * @param leading content placed at the start of the row
  */
 @Composable
@@ -262,16 +302,22 @@ fun UserStatusRow(
     coinsCount: Int,
     onCoinsClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
+    rank: (@Composable () -> Unit)? = null,
     leading: @Composable () -> Unit = {}
 ) {
+    // On the narrowest phones the four items only fit with tighter gaps and no "+" on the coins.
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    val compact = maxWidth < 360.dp
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)
     ) {
         Box(modifier = Modifier.weight(1f)) { leading() }
+
+        rank?.invoke()
 
         StatusPill(onClick = onStreakClick, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp), spacing = 4.dp) {
             Image(
@@ -300,13 +346,16 @@ fun UserStatusRow(
                 fontWeight = FontWeight.Black,
                 style = MaterialTheme.typography.labelLarge
             )
-            Icon(
-                imageVector = Icons.Rounded.Add,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            if (!compact) {
+                Icon(
+                    imageVector = Icons.Rounded.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
+    }
     }
 }
 
@@ -316,6 +365,7 @@ fun UserStatusRow(
  * @param onClick invoked when the pill is tapped
  * @param contentPadding padding between the pill's border and its content
  * @param spacing horizontal gap between the content items
+ * @param modifier layout modifier applied to the pill
  * @param content row content laid out inside the pill
  */
 @Composable
@@ -323,10 +373,12 @@ private fun StatusPill(
     onClick: () -> Unit,
     contentPadding: PaddingValues,
     spacing: Dp,
+    modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
     Surface(
         onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))

@@ -71,3 +71,49 @@ fun prizeState(reward: RankReward, xp: Int, claimedIds: Set<String>): PrizeState
     xp >= reward.requiredXp -> PrizeState.Claimable
     else -> PrizeState.Locked
 }
+
+/**
+ * Everything the celebration of a collected prize says.
+ *
+ * @property reward the prize just collected
+ * @property rank the rank this prize is the reward for reaching, or null for a prize on the way
+ * @property coinsAfter the balance once the prize is added
+ * @property stillClaimable prizes already reached and still waiting to be collected
+ * @property next the next prize ahead on the road, or null when none is left
+ * @property xpToNext XP still needed for [next], or 0 when there is none
+ */
+data class PrizeCelebration(
+    val reward: RankReward,
+    val rank: RankTier?,
+    val coinsAfter: Int,
+    val stillClaimable: Int,
+    val next: RankReward?,
+    val xpToNext: Int
+)
+
+/**
+ * Builds the celebration for [reward], collected by a user with [xp].
+ *
+ * @param claimedIds the prizes collected, [reward] included
+ * @param coinsAfter the balance with [reward] already added
+ * @param ranks ranks in ascending XP
+ * @param rewards the prize catalogue
+ */
+fun prizeCelebrationOf(
+    reward: RankReward,
+    xp: Int,
+    claimedIds: Set<String>,
+    coinsAfter: Int,
+    ranks: List<RankTier> = RankProgression.ranks,
+    rewards: List<RankReward> = RankProgression.rewards
+): PrizeCelebration {
+    val next = rewards.filter { it.requiredXp > xp }.minByOrNull { it.requiredXp }
+    return PrizeCelebration(
+        reward = reward,
+        rank = ranks.firstOrNull { it.requiredXp == reward.requiredXp && it.requiredXp > 0 },
+        coinsAfter = coinsAfter,
+        stillClaimable = rewards.count { prizeState(it, xp, claimedIds) == PrizeState.Claimable },
+        next = next,
+        xpToNext = next?.let { it.requiredXp - xp } ?: 0
+    )
+}
