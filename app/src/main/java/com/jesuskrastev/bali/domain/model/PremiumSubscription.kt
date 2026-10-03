@@ -9,10 +9,13 @@ package com.jesuskrastev.bali.domain.model
  * @property endsAtMillis next renewal (or end of access when [willRenew] is false), null when the
  *   entitlement never expires
  * @property sinceMillis when the user first became a subscriber
+ * @property productId the store product behind the entitlement, used to open its page in Google
+ *   Play; null when unknown
  */
 data class PremiumSubscription(
     val willRenew: Boolean,
     val isTrial: Boolean,
     val endsAtMillis: Long?,
-    val sinceMillis: Long?
+    val sinceMillis: Long?,
+    val productId: String? = null
 )

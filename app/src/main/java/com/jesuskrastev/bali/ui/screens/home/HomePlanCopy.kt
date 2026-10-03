@@ -44,7 +44,7 @@ data class DailyGoalCopy(
  *
  * @property hasDate whether there is a date ahead; without one the sheet asks for it
  * @property urgency how close the date is, which sets the chip's tone like the statistics card's
- * @property chipLabel the chip's text, kept short to fit beside the streak and the coins: "32 d",
+ * @property chipLabel the chip's text, kept short to fit beside the streak and the coins: "32 días",
  *   "Mañana", "Hoy" or "Tu examen"
  * @property chipDescription what a screen reader says for the chip
  * @property stage label at the top of the sheet: the statistics card's stretch, or "TU EXAMEN"
@@ -121,7 +121,7 @@ fun homePlanCopyOf(plan: PlanSummary, datePassed: Boolean, studiedToday: Boolean
         chipLabel = when (urgency) {
             PlanUrgency.TODAY -> "Hoy"
             PlanUrgency.TOMORROW -> "Mañana"
-            else -> "$days d"
+            else -> "$days días"
         },
         chipDescription = buildString {
             append("Tu plan: ")

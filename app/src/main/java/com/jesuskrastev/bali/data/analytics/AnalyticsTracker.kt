@@ -480,24 +480,26 @@ open class AnalyticsTracker @Inject constructor(
         putString("source", source)
     }
 
-    // ── SUBSCRIPTION MANAGEMENT (Customer Center) ───────────────────────────
-    // Opening the Customer Center is already reported as the "CustomerCenter" screen view.
+    // ── SUBSCRIPTION CANCELLATION ───────────────────────────────────────────
+    // Entering the cancellation flow is already reported as the "CancelSubscription" screen view.
 
     /**
-     * Tracks an option picked in the Customer Center, before any survey or store hand-off.
-     * "cancel" here is the intent to leave, whether or not the user goes through with it.
+     * Tracks a user who started cancelling and chose to keep the plan instead.
      *
-     * @param option `cancel`, `missing_purchase`, `custom_url` or `custom_action`
+     * @param step where they stopped: `progress` (what they would lose) or `reason` (the survey)
+     * @param reasonId the reason picked before staying, or null when none was picked
      */
-    open fun customerCenterOptionSelected(option: String) = log("customer_center_option_selected") {
-        putString("option", option)
+    open fun subscriptionCancelKept(step: String, reasonId: String?) = log("subscription_cancel_kept") {
+        putString("step", step)
+        reasonId?.let { putString("reason", it) }
     }
 
     /**
-     * Tracks the answer to "¿Por qué lo dejas?", the cancellation survey configured in the
-     * RevenueCat dashboard. Flushes immediately: the user is about to leave for Google Play.
+     * Tracks the answer to "¿Por qué quieres cancelar?", the in-app cancellation survey.
+     * Flushes immediately: the user is about to leave for Google Play.
      *
-     * @param reasonId the id of the chosen survey option, as set in the RevenueCat dashboard
+     * @param reasonId the id of the chosen [com.jesuskrastev.bali.ui.screens.subscription.CancelReason],
+     *   or `skipped` when the user went on without answering
      */
     open fun subscriptionCancelReason(reasonId: String) {
         log("subscription_cancel_reason") { putString("reason", reasonId) }
@@ -506,7 +508,7 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Tracks the Customer Center handing the user over to Google Play's subscription screen,
+     * Tracks the app handing the user over to Google Play's subscription screen,
      * where the cancellation actually happens. Flushes immediately, because the app is left.
      */
     open fun subscriptionManagementOpened() {
