@@ -74,8 +74,7 @@ import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
-import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
-import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
+import com.jesuskrastev.bali.ui.screens.subscription.CancelSubscriptionScreen
 import com.jesuskrastev.bali.ui.screens.subscription.ManageSubscriptionScreen
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
@@ -146,9 +145,9 @@ object ChatRoute
 @Serializable
 object ManageSubscriptionRoute
 
-/** RevenueCat's Customer Center, opened from the subscription screen to change or cancel the plan. */
+/** The cancellation flow (progress, reason, Google Play), opened from the subscription screen. */
 @Serializable
-object CustomerCenterRoute
+object CancelSubscriptionRoute
 
 /**
  * Sign-in destination.
@@ -366,15 +365,14 @@ fun AppNavigation(
             composable<ManageSubscriptionRoute> {
                 ManageSubscriptionScreen(
                     onBackClick = { navController.popBackStack() },
-                    onOpenCustomerCenter = { navController.navigate(CustomerCenterRoute) }
+                    onCancelClick = { navController.navigate(CancelSubscriptionRoute) }
                 )
             }
 
-            composable<CustomerCenterRoute> {
-                val viewModel: CustomerCenterViewModel = hiltViewModel()
-                CustomerCenterLauncher(
-                    listener = viewModel.listener,
-                    onDismiss = { navController.popBackStack() }
+            composable<CancelSubscriptionRoute> {
+                CancelSubscriptionScreen(
+                    onClose = { navController.popBackStack() },
+                    onSuggestionsClick = { navController.navigate(SuggestionsRoute) }
                 )
             }
 

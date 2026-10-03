@@ -19,9 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Restore
-import androidx.compose.material.icons.rounded.SupportAgent
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,15 +28,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -60,40 +53,28 @@ private val BENEFITS = listOf(
 
 /**
  * "Gestionar suscripción": a plan card with the real status and next date, what the plan
- * includes, and the actions a subscriber looks for (change or cancel, restore, get help). The
- * change/cancel action hands over to RevenueCat's Customer Center, where the cancellation
- * survey lives.
+ * includes, and a single action: cancel (through the in-app cancellation flow) or, once
+ * cancelled, reactivate in Google Play.
  *
  * @param onBackClick closes the screen
- * @param onOpenCustomerCenter opens the Customer Center to change or cancel the plan
+ * @param onCancelClick opens the cancellation flow
  * @param modifier layout modifier applied to the scaffold
- * @param viewModel supplies the plan status and the restore action
+ * @param viewModel supplies the plan status
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageSubscriptionScreen(
     onBackClick: () -> Unit,
-    onOpenCustomerCenter: () -> Unit,
+    onCancelClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ManageSubscriptionViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val isRestoring by viewModel.isRestoring.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-
-    LaunchedEffect(message) {
-        message?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.messageShown()
-        }
-    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Tu suscripción", fontWeight = FontWeight.Black) },
@@ -118,64 +99,29 @@ fun ManageSubscriptionScreen(
                 BenefitsCard()
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                when (uiState) {
-                    ManageSubscriptionUiState.Inactive -> Text(
-                        "Si ya pagaste con esta cuenta de Google, restaura la compra y recuperarás el acceso.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    else -> Button(
-                        onClick = onOpenCustomerCenter,
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            if ((uiState as? ManageSubscriptionUiState.Active)?.isCancelled == true) {
-                                "Gestionar o reactivar"
-                            } else {
-                                "Cambiar o cancelar plan"
-                            },
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = viewModel::restorePurchases,
-                    enabled = !isRestoring,
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    if (isRestoring) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Rounded.Restore, contentDescription = null, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    Text("Restaurar compras", fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
+            val active = uiState as? ManageSubscriptionUiState.Active
+            when {
+                active?.isCancelled == true -> Button(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_SENDTO).apply {
-                            data = Uri.parse("mailto:appbali@gmail.com")
-                            putExtra(Intent.EXTRA_SUBJECT, "Ayuda con mi suscripción")
-                        }
                         try {
-                            context.startActivity(intent)
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(playSubscriptionsUrl(active.productId)))
+                            )
                         } catch (_: ActivityNotFoundException) {
                         }
                     },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Reactivar plan", fontWeight = FontWeight.Bold)
+                }
+                active != null || uiState is ManageSubscriptionUiState.Unavailable -> OutlinedButton(
+                    onClick = onCancelClick,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
                 ) {
-                    Icon(Icons.Rounded.SupportAgent, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("¿Un cobro que no esperabas? Escríbenos", fontWeight = FontWeight.SemiBold)
+                    Text("Cancelar plan", fontWeight = FontWeight.SemiBold)
                 }
             }
 
