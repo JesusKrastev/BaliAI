@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.data.remote.firestore.dao
 
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -13,7 +14,9 @@ import com.google.firebase.firestore.snapshots
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -35,6 +38,37 @@ class FirestoreUserDao @Inject constructor(
         const val FIRST_STEPS_STARTED_AT = "firstStepsStartedAt"
         const val FIRST_STEPS_DONE = "firstStepsDone"
         const val FIRST_STEPS_DISMISSED = "firstStepsDismissed"
+    }
+
+    /** Returns whether [userId] earned and claimed [reward] in one Firestore transaction. */
+    @AddTrace(name = "claim_rank_reward")
+    suspend fun claimRankReward(userId: String, reward: RankReward): Boolean {
+        val docRef = collection.document(userId)
+        return try {
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val xp = snapshot.getLong("xp") ?: 0L
+                val claimed = (snapshot.get("claimedRankRewards") as? List<*>)
+                    ?.filterIsInstance<String>().orEmpty()
+                if (xp < reward.requiredXp || reward.id in claimed) {
+                    false
+                } else {
+                    transaction.set(
+                        docRef,
+                        mapOf(
+                            "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
+                            "claimedRankRewards" to (claimed + reward.id)
+                        ),
+                        SetOptions.merge()
+                    )
+                    true
+                }
+            }.await()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            FirebaseCrashlytics.getInstance().recordException(error)
+            throw error
+        }
     }
 
     // --- User Operations ---
@@ -134,21 +168,31 @@ class FirestoreUserDao @Inject constructor(
     }
 
     /**
-     * Charges a surprise chest and credits its coin [reward] atomically.
+     * Charges a surprise chest and grants [reward] atomically.
      *
      * @param userId document owner
      * @param cost coins paid to open the chest
-     * @param reward random coin reward, picked by the caller
+     * @param reward coins or an inventory item picked by the caller
      * @return true if the chest opened, false when the user cannot afford it
      */
-    suspend fun openSurpriseChest(userId: String, cost: Int, reward: Int): Boolean {
+    @AddTrace(name = "open_surprise_chest")
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: ChestReward): Boolean {
         val docRef = collection.document(userId)
         return shopTransaction { transaction ->
-            val coins = transaction.get(docRef).getLong("coins") ?: 0L
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
             if (coins < cost) {
                 false
             } else {
-                transaction.set(docRef, mapOf("coins" to coins - cost + reward), SetOptions.merge())
+                val updates = mutableMapOf<String, Any>("coins" to coins - cost)
+                when (reward) {
+                    is ChestReward.Coins -> updates["coins"] = coins - cost + reward.amount
+                    is ChestReward.Inventory -> {
+                        val field = reward.item.firestoreField
+                        updates[field] = (snapshot.getLong(field) ?: 0L) + reward.quantity
+                    }
+                }
+                transaction.set(docRef, updates, SetOptions.merge())
                 true
             }
         }

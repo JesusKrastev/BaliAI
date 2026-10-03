@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.EnablePushesResult
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
@@ -12,6 +13,7 @@ import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
 import com.jesuskrastev.bali.domain.repository.*
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,16 @@ class FakeUserRepository(
     hasCompletedOnboarding: Boolean = true,
     private val userExists: Boolean = true
 ) : UserRepository {
+    /** Claims an earned rank prize once in the in-memory test profile. */
+    override suspend fun claimRankReward(reward: RankReward): Boolean {
+        val user = _user.value ?: return false
+        if (user.xp < reward.requiredXp || reward.id in user.claimedRankRewards) return false
+        _user.value = user.copy(
+            coins = user.coins + reward.coins,
+            claimedRankRewards = user.claimedRankRewards + reward.id
+        )
+        return true
+    }
     private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
     private val _hasCompletedOnboarding = MutableStateFlow(hasCompletedOnboarding)
 
@@ -95,11 +107,23 @@ class FakeUserRepository(
         return true
     }
 
-    /** Opens a fake surprise chest by charging [cost] and crediting its [reward]. */
-    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean {
+    /** Opens a fake surprise chest by charging [cost] and granting its [reward]. */
+    override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean {
         val user = _user.value ?: return false
         if (user.coins < cost) return false
-        _user.value = user.copy(coins = user.coins - cost + reward)
+        _user.value = when (reward) {
+            is ChestReward.Coins -> user.copy(coins = user.coins - cost + reward.amount)
+            is ChestReward.Inventory -> user.copy(
+                coins = user.coins - cost,
+                hints = user.hints + if (reward.item == ShopInventoryItem.HINT) reward.quantity else 0,
+                fiftyFifties = user.fiftyFifties +
+                    if (reward.item == ShopInventoryItem.FIFTY_FIFTY) reward.quantity else 0,
+                doubleXpBoosts = user.doubleXpBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_XP) reward.quantity else 0,
+                doubleCoinBoosts = user.doubleCoinBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_COINS) reward.quantity else 0
+            )
+        }
         return true
     }
 
@@ -249,6 +273,17 @@ class FakeAnalyticsTracker(
     var firstStepsExamClicks = 0
         private set
     val notificationsAnswers = mutableListOf<Pair<String, String?>>()
+    /** Every mini-test answer reported, as question id and whether it was right. */
+    val quizAnswers = mutableListOf<Pair<String, Boolean>>()
+    /** Every intro card reported, by position from 1. */
+    val introCards = mutableListOf<Int>()
+    var quizSkips = 0
+        private set
+    /** Every exam date reported, as days until it and the screen it was set from. */
+    val examDates = mutableListOf<Pair<Int, String>>()
+    /** The answers profile sent when the onboarding content was finished. */
+    var completedProfile: Map<String, String>? = null
+        private set
 
     /** The `source` of each [notificationsAnswers] entry, in the same order. */
     val notificationsAnswerSources = mutableListOf<String>()
@@ -257,6 +292,22 @@ class FakeAnalyticsTracker(
         notificationsAnswers.add(result to studySlot)
         notificationsAnswerSources.add(source)
     }
+    override fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) {
+        quizAnswers.add(questionId to isCorrect)
+    }
+    override fun onboardingQuizSkipped() { quizSkips++ }
+    override fun onboardingIntroCardShown(position: Int) { introCards.add(position) }
+    override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String) {
+        examDates.add(daysUntil to source)
+    }
+    override fun onboardingFlowCompleted(profile: Map<String, String>) { completedProfile = profile }
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
     override fun signUp(method: String) { signUpEvents.add(method) }
@@ -295,6 +346,11 @@ class FakeAnalyticsTracker(
         firstStepsExamClicks = 0
         notificationsAnswers.clear()
         notificationsAnswerSources.clear()
+        quizAnswers.clear()
+        introCards.clear()
+        quizSkips = 0
+        examDates.clear()
+        completedProfile = null
     }
 }
 

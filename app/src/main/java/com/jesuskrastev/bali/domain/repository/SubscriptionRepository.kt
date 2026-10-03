@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import com.jesuskrastev.bali.domain.model.PremiumSubscription
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
 
@@ -33,6 +34,14 @@ interface SubscriptionRepository {
      * @return the original purchase time in millis, or null when premium is not active
      */
     fun premiumSinceMillis(customerInfo: CustomerInfo): Long?
+
+    /**
+     * Reads the active premium entitlement as a plan summary.
+     *
+     * @param customerInfo the customer info to read
+     * @return the plan, or null when premium is not active
+     */
+    fun premiumSubscription(customerInfo: CustomerInfo): PremiumSubscription?
 
     /**
      * Fetches a specific offering by its RevenueCat identifier, for paywalls that are not the

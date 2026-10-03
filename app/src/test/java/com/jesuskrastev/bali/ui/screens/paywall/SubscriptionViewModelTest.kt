@@ -295,6 +295,7 @@ private class FakeSubscriptionRepository : SubscriptionRepository {
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = premium
 
     override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? = null
+    override fun premiumSubscription(customerInfo: CustomerInfo): com.jesuskrastev.bali.domain.model.PremiumSubscription? = null
 
     override suspend fun getOffering(identifier: String): Result<Offering?> =
         offeringFailure?.let { Result.failure(it) } ?: Result.success(winbackOffering)

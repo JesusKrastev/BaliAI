@@ -45,7 +45,7 @@ class HomePlanCopyTest {
         val copy = homePlanCopyOf(plan(45, isExamDate = false), datePassed = false, studiedToday = false)
 
         assertThat(copy.hasDate).isTrue()
-        assertThat(copy.chipLabel).isEqualTo("45 d")
+        assertThat(copy.chipLabel).isEqualTo("45 días")
         assertThat(copy.stage).isEqualTo("CUENTA ATRÁS")
         assertThat(copy.title).isEqualTo("Carnet antes del 21 de noviembre")
         assertThat(copy.subtitle).isEqualTo("Faltan 45 días")
@@ -183,7 +183,7 @@ class HomePlanCopyTest {
 
         assertThat(state.plan.daysLeft).isEqualTo(30)
         assertThat(state.studiedToday).isTrue()
-        assertThat(state.copy?.chipLabel).isEqualTo("30 d")
+        assertThat(state.copy?.chipLabel).isEqualTo("30 días")
     }
 
     @Test

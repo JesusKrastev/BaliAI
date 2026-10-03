@@ -193,6 +193,44 @@ open class AnalyticsTracker @Inject constructor(
             studySlot?.let { putString("study_slot", it) }
         }
 
+    /**
+     * Tracks an answer to the onboarding mini-test, the user's first taste of the product.
+     *
+     * @param questionId stable id of the question, independent of its wording
+     * @param topic the subject of the question, such as "Alcohol"
+     * @param isCorrect whether the option tapped was the right one
+     * @param position the question's place in the test, from 1
+     * @param seconds time from the question appearing to the answer
+     * @param concern the worry that picked the questions, without its emoji
+     */
+    open fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) = log("onboarding_quiz_answered") {
+        putString("question_id", questionId)
+        putString("topic", topic)
+        putBoolean("correct", isCorrect)
+        putInt("position", position)
+        putInt("seconds", seconds)
+        concern?.let { putString("concern", it) }
+    }
+
+    /**
+     * Tracks that a card of the onboarding intro came on screen.
+     *
+     * @param position the card, from 1
+     */
+    open fun onboardingIntroCardShown(position: Int) = log("onboarding_intro_card_shown") {
+        putInt("position", position)
+    }
+
+    /** Tracks that the user skipped the onboarding mini-test without answering. */
+    open fun onboardingQuizSkipped() = log("onboarding_quiz_skipped")
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**
@@ -446,24 +484,26 @@ open class AnalyticsTracker @Inject constructor(
         putString("source", source)
     }
 
-    // ── SUBSCRIPTION MANAGEMENT (Customer Center) ───────────────────────────
-    // Opening the Customer Center is already reported as the "CustomerCenter" screen view.
+    // ── SUBSCRIPTION CANCELLATION ───────────────────────────────────────────
+    // Entering the cancellation flow is already reported as the "CancelSubscription" screen view.
 
     /**
-     * Tracks an option picked in the Customer Center, before any survey or store hand-off.
-     * "cancel" here is the intent to leave, whether or not the user goes through with it.
+     * Tracks a user who started cancelling and chose to keep the plan instead.
      *
-     * @param option `cancel`, `missing_purchase`, `custom_url` or `custom_action`
+     * @param step where they stopped: `progress` (what they would lose) or `reason` (the survey)
+     * @param reasonId the reason picked before staying, or null when none was picked
      */
-    open fun customerCenterOptionSelected(option: String) = log("customer_center_option_selected") {
-        putString("option", option)
+    open fun subscriptionCancelKept(step: String, reasonId: String?) = log("subscription_cancel_kept") {
+        putString("step", step)
+        reasonId?.let { putString("reason", it) }
     }
 
     /**
-     * Tracks the answer to "¿Por qué lo dejas?", the cancellation survey configured in the
-     * RevenueCat dashboard. Flushes immediately: the user is about to leave for Google Play.
+     * Tracks the answer to "¿Por qué quieres cancelar?", the in-app cancellation survey.
+     * Flushes immediately: the user is about to leave for Google Play.
      *
-     * @param reasonId the id of the chosen survey option, as set in the RevenueCat dashboard
+     * @param reasonId the id of the chosen [com.jesuskrastev.bali.ui.screens.subscription.CancelReason],
+     *   or `skipped` when the user went on without answering
      */
     open fun subscriptionCancelReason(reasonId: String) {
         log("subscription_cancel_reason") { putString("reason", reasonId) }
@@ -472,7 +512,7 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Tracks the Customer Center handing the user over to Google Play's subscription screen,
+     * Tracks the app handing the user over to Google Play's subscription screen,
      * where the cancellation actually happens. Flushes immediately, because the app is left.
      */
     open fun subscriptionManagementOpened() {

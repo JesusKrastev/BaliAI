@@ -1,5 +1,8 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -51,6 +54,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
+import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 
 private val FIELD_HEIGHT = 64.dp
@@ -64,6 +68,11 @@ private val ROW_HEIGHT = 56.dp
  * live in a sheet with its own search. Changing a wrong pick is the same gesture as making
  * it — tap the field, tap another province — so nothing has to be cleared by hand.
  *
+ * The note above the field says the true thing: the theory exam is the same in every province,
+ * so Bali covers all 52. Once a province is picked, a line confirms it by name, which is the
+ * personal touch this screen is for — the old claim that every traffic office has its own
+ * question bank was false and is gone, together with the screen that repeated it.
+ *
  * @param selectedProvince the province chosen so far, or null if none
  * @param onSelect called with the province the user picked
  */
@@ -75,11 +84,7 @@ fun StepProvince(
     var pickerOpen by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Cada jefatura tiene su propio banco de preguntas.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        CoverageNote()
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -87,6 +92,16 @@ fun StepProvince(
             province = selectedProvince,
             onClick = { pickerOpen = true }
         )
+
+        AnimatedVisibility(visible = selectedProvince != null, enter = fadeIn() + expandVertically()) {
+            Text(
+                text = "✅ Listo: te preparas para el examen de la DGT en |${selectedProvince.orEmpty()}|."
+                    .highlightPipes(MaterialTheme.colorScheme.primary),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 14.dp, start = 4.dp, end = 4.dp)
+            )
+        }
     }
 
     if (pickerOpen) {
@@ -98,6 +113,29 @@ fun StepProvince(
                 pickerOpen = false
             }
         )
+    }
+}
+
+private const val COVERAGE_NOTE = "Preparamos el teórico en |las 52 provincias de España|: " +
+    "el examen de la DGT es el mismo en todas, estés donde estés."
+
+/** Says that Bali covers every province, and why that is true: the exam is the same in all. */
+@Composable
+private fun CoverageNote() {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "🇪🇸", fontSize = 26.sp)
+            Spacer(modifier = Modifier.size(12.dp))
+            Text(
+                text = COVERAGE_NOTE.highlightPipes(MaterialTheme.colorScheme.primary),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 

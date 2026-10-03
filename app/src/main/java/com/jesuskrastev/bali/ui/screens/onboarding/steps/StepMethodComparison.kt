@@ -46,6 +46,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -108,18 +110,19 @@ private const val ACCENT_DRAW_MS = 1100
 private const val ACCENT_DELAY_MS = CURVE_DRAW_MS - 350
 
 /**
- * The turning point of the onboarding: after three screens on what not having the licence
- * costs, this one shows the way out.
+ * The way out, right after the mini-test result: from the user's score today to the 27 of 30
+ * the exam asks for.
  *
  * Two curves tell the story without a word — Bali climbing steadily, and going it alone
  * bouncing up and crashing three times, each crash marked with an X. The step hides the
  * mascot bubble and carries its own title so the chart gets the full height.
  *
+ * @param data the answers collected so far, whose mini-test score opens the road
  * @param modifier modifier applied to the root container
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun StepMethodComparison(modifier: Modifier = Modifier) {
+fun StepMethodComparison(data: OnboardingData, modifier: Modifier = Modifier) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val failureColor = MaterialTheme.colorScheme.error
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -146,7 +149,7 @@ fun StepMethodComparison(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Tu camino a la libertad",
+            text = "Tu camino hasta el aprobado",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -189,15 +192,23 @@ fun StepMethodComparison(modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(32.dp))
 
+        // Where the user starts, from their own mini-test, and where the exam needs them: the
+        // curve above is the road between the two. It replaced an unsourced "+1000 personas".
         Text(
-            text = "+1000",
-            style = MaterialTheme.typography.displayMedium,
+            text = if (data.quizAnswers.isEmpty()) "${ExamRules.PASS_SCORE} de ${ExamRules.QUESTION_COUNT}"
+            else "${data.quizScore()} de ${data.quizAnswers.size} → ${ExamRules.PASS_SCORE} de ${ExamRules.QUESTION_COUNT}",
+            style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.ExtraBold,
-            color = primaryColor
+            color = primaryColor,
+            textAlign = TextAlign.Center
         )
 
         Text(
-            text = "personas consiguieron su libertad con Bali AI en tiempo récord",
+            text = if (data.quizAnswers.isEmpty()) {
+                "Es lo que necesitas en el examen. Tu plan te lleva hasta ahí, tema a tema."
+            } else {
+                "De tu prueba de hoy a lo que pide el examen. Tu plan te lleva hasta ahí, tema a tema."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
@@ -435,7 +446,7 @@ private fun LegendItem(color: Color, label: String, isCross: Boolean = false) {
 private fun StepMethodComparisonPreview() {
     BaliTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            StepMethodComparison(modifier = Modifier.padding(24.dp))
+            StepMethodComparison(data = OnboardingData(), modifier = Modifier.padding(24.dp))
         }
     }
 }

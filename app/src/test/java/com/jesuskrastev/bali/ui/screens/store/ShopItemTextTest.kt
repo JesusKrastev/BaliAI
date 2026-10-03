@@ -13,44 +13,56 @@ class ShopItemTextTest {
         assertThat(shopItemTitle(ShopItem.StreakRecovery)).isEqualTo("Recuperador de racha")
     }
 
+    /** Verifies the freezer copy states the automatic protection, limit and price concisely. */
     @Test
     fun `the freezer explanation states its limit and price`() {
         val info = shopItemInfo(ShopItem.StreakFreezer)
 
-        assertThat(info).contains("hasta ${DailyStreak.MAX_FREEZES} a la vez")
+        assertThat(info).contains("Protege automáticamente")
+        assertThat(info).contains("hasta ${DailyStreak.MAX_FREEZES}")
         assertThat(info).contains("Cuesta 120 monedas")
     }
 
+    /** Verifies the recovery copy makes its short availability window obvious. */
     @Test
     fun `the recovery explanation states when it works and its price`() {
         val info = shopItemInfo(ShopItem.StreakRecovery)
 
-        assertThat(info).contains("hasta el final del día siguiente")
+        assertThat(info).contains("perdiste ayer")
+        assertThat(info).contains("hasta terminar hoy")
         assertThat(info).contains("Cuesta ${DailyStreak.RECOVERY_COST_COINS} monedas")
     }
 
+    /** Verifies the bet copy preserves its stake, duration, payout and frozen-day rule. */
     @Test
     fun `the streak bet explanation states the stake, the days, the payout and the risk`() {
         val info = shopItemInfo(ShopItem.StreakBet)
 
-        assertThat(info).contains("Pagas ${StreakBet.COST_COINS} monedas")
+        assertThat(info).contains("Apuesta ${StreakBet.COST_COINS} monedas")
         assertThat(info).contains("${StreakBet.DAYS} días más")
-        assertThat(info).contains("recibes ${StreakBet.PAYOUT_COINS}")
-        assertThat(info).contains("pierdes las ${StreakBet.COST_COINS}")
+        assertThat(info).contains("gana ${StreakBet.PAYOUT_COINS}")
+        assertThat(info).contains("pierdes la apuesta")
+        assertThat(info).contains("días congelados no avanzan")
     }
 
+    /** Verifies practice-aid copy says what happens and that one unit is consumed. */
     @Test
-    fun `practice aids say they do not work in the mock exam`() {
-        assertThat(shopItemInfo(ShopItem.Hint)).contains("no se puede usar en el simulacro")
-        assertThat(shopItemInfo(ShopItem.FiftyFifty)).contains("no se puede usar en el simulacro")
+    fun `practice aids explain their immediate effect and consumption`() {
+        assertThat(shopItemInfo(ShopItem.Hint)).contains("Muestra la explicación")
+        assertThat(shopItemInfo(ShopItem.Hint)).contains("Usa una pista")
+        assertThat(shopItemInfo(ShopItem.Hint)).contains("solo en práctica")
+        assertThat(shopItemInfo(ShopItem.FiftyFifty)).contains("Descarta dos respuestas")
+        assertThat(shopItemInfo(ShopItem.FiftyFifty)).contains("Usa un 50/50")
     }
 
+    /** Verifies the chest explains every reward family and the rarest probability. */
     @Test
-    fun `the surprise chest admits that it can lose coins`() {
+    fun `the surprise chest explains coins items and their probabilities`() {
         val info = shopItemInfo(ShopItem.SurpriseChest)
 
-        assertThat(info).contains("entre ${ShopCatalog.CHEST_MIN_REWARD} y ${ShopCatalog.CHEST_MAX_REWARD}")
-        assertThat(info).contains("ganando o perdiendo")
+        assertThat(info).contains("monedas (65 %)")
+        assertThat(info).contains("pista (14 %)")
+        assertThat(info).contains("doble moneda (5 %)")
     }
 
     @Test
