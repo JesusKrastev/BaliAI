@@ -69,6 +69,7 @@ private class ControllableSubscriptionRepository(
     override suspend fun restorePurchases(): Result<CustomerInfo> = Result.success(customerInfo)
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = premiumSince != null
     override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? = premiumSince
+    override fun premiumSubscription(customerInfo: CustomerInfo): com.jesuskrastev.bali.domain.model.PremiumSubscription? = null
     override suspend fun getOffering(identifier: String): Result<Offering?> = Result.success(null)
 }
 

@@ -1,8 +1,10 @@
 package com.jesuskrastev.bali.data.repository
 
+import com.jesuskrastev.bali.domain.model.PremiumSubscription
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
+import com.revenuecat.purchases.PeriodType
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesException
 import com.revenuecat.purchases.awaitCustomerInfo
@@ -91,6 +93,16 @@ class RevenueCatSubscriptionRepository @Inject constructor() : SubscriptionRepos
      */
     override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? =
         customerInfo.entitlements.active[PREMIUM_ENTITLEMENT]?.originalPurchaseDate?.time
+
+    override fun premiumSubscription(customerInfo: CustomerInfo): PremiumSubscription? =
+        customerInfo.entitlements.active[PREMIUM_ENTITLEMENT]?.let { entitlement ->
+            PremiumSubscription(
+                willRenew = entitlement.willRenew,
+                isTrial = entitlement.periodType == PeriodType.TRIAL,
+                endsAtMillis = entitlement.expirationDate?.time,
+                sinceMillis = entitlement.originalPurchaseDate?.time
+            )
+        }
 
     override suspend fun getOffering(identifier: String): Result<Offering?> {
         return try {
