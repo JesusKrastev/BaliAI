@@ -114,6 +114,8 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     var phase by remember { mutableStateOf(ChestPhase.Closed) }
     var canClose by remember { mutableStateOf(false) }
+    // A tap that lands while the animation is still loading opens the chest as soon as it is ready.
+    var tappedWhileLoading by remember { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
     val squash = remember { Animatable(1f) }
 
@@ -124,6 +126,7 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
         }
         val loaded = composition ?: return@LaunchedEffect
         animatable.snapTo(composition = loaded, progress = 0f)
+        if (tappedWhileLoading) phase = ChestPhase.Opening
     }
 
     // The shut chest wobbles every so often, inviting the tap that opens it.
@@ -175,9 +178,9 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
 
     val onTap: () -> Unit = {
         when (phase) {
-            ChestPhase.Closed -> if (composition != null) {
+            ChestPhase.Closed -> {
                 haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                phase = ChestPhase.Opening
+                if (composition != null) phase = ChestPhase.Opening else tappedWhileLoading = true
             }
             ChestPhase.Opening -> Unit
             ChestPhase.Opened -> if (canClose) onDismiss()
@@ -237,7 +240,8 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
 
                 TapHint(
                     text = when (phase) {
-                        ChestPhase.Closed -> "¡Toca el cofre para abrirlo!"
+                        // Only once the chest is drawn, so the hint never points at an empty screen.
+                        ChestPhase.Closed -> if (composition != null) "¡Toca el cofre para abrirlo!" else null
                         ChestPhase.Opening -> null
                         ChestPhase.Opened -> if (canClose) "Toca para continuar" else null
                     }
