@@ -103,6 +103,7 @@ class ShopViewModelTest {
         assertThat(viewModel.uiState.value.coinsCount).isAtLeast(0)
     }
 
+    /** Verifies a successful inventory purchase emits a celebratory confirmation. */
     @Test
     fun `buying a hint charges coins and adds it to the practice inventory`() = runTest {
         fakeUserRepository.insert(User(coins = 100))
@@ -113,6 +114,8 @@ class ShopViewModelTest {
         val user = fakeUserRepository.get().first { it?.hints == 1 }!!
         assertThat(user.coins).isEqualTo(100 - ShopCatalog.HINT_COST)
         assertThat(viewModel.uiState.value.selectedItem).isNull()
+        val feedback = viewModel.uiState.first { it.purchaseFeedback?.isSuccess == true }.purchaseFeedback!!
+        assertThat(feedback.message).contains("Pista conseguida")
     }
 
     /** A profile with a streak of [days] days that includes today, so a bet can be placed. */
@@ -260,7 +263,8 @@ class ShopViewModelTest {
         offlineViewModel.onEvent(ShopEvent.ConfirmPurchase)
 
         val state = offlineViewModel.uiState.first { it.purchaseFeedback != null }
-        assertThat(state.purchaseFeedback).contains("No se ha podido completar la compra")
+        assertThat(state.purchaseFeedback?.message).contains("No se ha podido completar la compra")
+        assertThat(state.purchaseFeedback?.isSuccess).isFalse()
         assertThat(state.isProcessing).isFalse()
         assertThat(fakeUserRepository.get().first()!!.coins).isEqualTo(100)
     }

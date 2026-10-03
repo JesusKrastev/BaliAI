@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,6 +37,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Error
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -48,6 +51,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -135,13 +139,13 @@ fun ShopScreen(
     viewModel: ShopViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
     var infoItem by remember { mutableStateOf<ShopItem?>(null) }
 
     LaunchedEffect(uiState.purchaseFeedback) {
         uiState.purchaseFeedback?.let { feedback ->
-            snackbarHostState.showSnackbar(feedback)
+            snackbarHostState.showSnackbar(feedback.message)
             viewModel.onEvent(ShopEvent.DismissFeedback)
         }
     }
@@ -151,7 +155,14 @@ fun ShopScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                PurchaseFeedbackSnackbar(
+                    message = data.visuals.message,
+                    isSuccess = uiState.purchaseFeedback?.isSuccess == true
+                )
+            }
+        },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Tienda", fontWeight = FontWeight.Black) },
@@ -912,8 +923,10 @@ fun PurchaseConfirmationContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
-            .padding(bottom = 32.dp),
+            .navigationBarsPadding()
+            .padding(bottom = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -1010,6 +1023,35 @@ fun PurchaseConfirmationContent(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Shows a high-contrast, celebratory confirmation for successful purchases and a clear error for
+ * failed ones.
+ *
+ * @param message feedback text supplied by the ViewModel
+ * @param isSuccess whether the purchase completed successfully
+ */
+@Composable
+private fun PurchaseFeedbackSnackbar(message: String, isSuccess: Boolean) {
+    val container = if (isSuccess) Color(0xFF14532D) else MaterialTheme.colorScheme.errorContainer
+    val content = if (isSuccess) Color.White else MaterialTheme.colorScheme.onErrorContainer
+    Snackbar(
+        modifier = Modifier.padding(16.dp),
+        containerColor = container,
+        contentColor = content,
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = if (isSuccess) Icons.Rounded.CheckCircle else Icons.Rounded.Error,
+                contentDescription = if (isSuccess) "Compra completada" else "Error de compra",
+                tint = if (isSuccess) Color(0xFF86EFAC) else content
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(message, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1133,33 +1175,25 @@ fun shopItemPrice(item: ShopItem): Int = when (item) {
  */
 fun shopItemEffect(item: ShopItem): String = when (item) {
     ShopItem.StreakFreezer ->
-        "Si un día no estudias, se gasta un congelador y tu racha sigue como si hubieras " +
-            "estudiado. Puedes tener hasta ${DailyStreak.MAX_FREEZES} a la vez."
+        "Protege automáticamente un día sin estudiar. Se consume al usarlo y puedes guardar " +
+            "hasta ${DailyStreak.MAX_FREEZES}."
     ShopItem.StreakRecovery ->
-        "Si fallas un día sin congelador y pierdes la racha, aquí la recuperas entera. " +
-            "Solo está disponible hasta el final del día siguiente a perderla; después se " +
-            "pierde para siempre."
+        "Recupera completa la racha que perdiste ayer. Solo puedes usarlo hasta terminar hoy."
     ShopItem.StreakBet ->
-        "Pagas ${StreakBet.COST_COINS} monedas y, si estudias ${StreakBet.DAYS} días más sin " +
-            "perder la racha, recibes ${StreakBet.PAYOUT_COINS}. Si la pierdes antes, pierdes las " +
-            "${StreakBet.COST_COINS}. Si hoy ya has estudiado, hoy no cuenta, y un día cubierto " +
-            "con un congelador mantiene la racha pero no cuenta como día de estudio. Solo puedes " +
-            "apostar con una racha en marcha y tener una apuesta a la vez."
+        "Apuesta ${StreakBet.COST_COINS} monedas: estudia ${StreakBet.DAYS} días más sin perder " +
+            "la racha y gana ${StreakBet.PAYOUT_COINS}. Si fallas, pierdes la apuesta; los días " +
+            "congelados no avanzan el reto."
     ShopItem.Hint ->
-        "En un test de práctica, te enseña la explicación de la pregunta antes de que respondas. " +
-            "Gasta una pista por pregunta y no se puede usar en el simulacro."
+        "Muestra la explicación antes de responder. Usa una pista cada vez; solo en práctica."
     ShopItem.FiftyFifty ->
-        "En un test de práctica, deja solo dos opciones de la pregunta: la correcta y una " +
-            "incorrecta. Gasta un 50/50 por pregunta y no se puede usar en el simulacro."
+        "Descarta dos respuestas. Usa un 50/50 cada vez; solo en práctica."
     ShopItem.SurpriseChest ->
-        "Puede contener 20, 40 u 80 monedas (65 %), una pista (14 %), un 50/50 (10 %), " +
-            "doble XP (6 %) o doble de monedas (5 %). Cada apertura concede exactamente una recompensa."
+        "Consigue una recompensa: monedas (65 %), pista (14 %), 50/50 (10 %), doble XP (6 %) " +
+            "o doble moneda (5 %)."
     ShopItem.DoubleXp ->
-        "El próximo test, simulacro o minijuego que termines da el doble de XP, con sus bonus " +
-            "incluidos. Se gasta al terminarlo y cada uno vale para una sola actividad."
+        "Duplica el XP de tu próximo test, simulacro o minijuego. Se consume al terminarlo."
     ShopItem.DoubleCoins ->
-        "El próximo test, simulacro o minijuego que termines da el doble de monedas. Se gasta " +
-            "al terminarlo y cada uno vale para una sola actividad."
+        "Duplica las monedas de tu próximo test, simulacro o minijuego. Se consume al terminarlo."
 }
 
 /**
