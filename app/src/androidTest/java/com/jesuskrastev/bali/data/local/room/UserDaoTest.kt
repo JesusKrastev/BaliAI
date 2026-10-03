@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
+import com.jesuskrastev.bali.domain.model.RankReward
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.flow.first
@@ -169,5 +170,20 @@ class UserDaoTest {
         val retrieved = userDao.get().first()
         assertThat(retrieved?.examDateMillis).isEqualTo(3_000L)
         assertThat(retrieved?.planTargetMillis).isEqualTo(2_000L)
+    }
+
+    @Test
+    fun rankRewardNeedsXpAndCanOnlyBeClaimedOnce() = runTest {
+        val reward = RankReward("xp_100", requiredXp = 100, coins = 30)
+        userDao.insert(UserEntity(id = "user_123", xp = 99, coins = 5))
+
+        assertThat(userDao.claimRankReward(reward)).isFalse()
+        userDao.updateXp(100, 1)
+        assertThat(userDao.claimRankReward(reward)).isTrue()
+        assertThat(userDao.claimRankReward(reward)).isFalse()
+
+        val user = userDao.get().first()
+        assertThat(user?.coins).isEqualTo(35)
+        assertThat(user?.claimedRankRewards).containsExactly("xp_100")
     }
 }

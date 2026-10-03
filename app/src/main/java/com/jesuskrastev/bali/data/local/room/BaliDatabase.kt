@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 19,
+    version = 20,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,14 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /** Adds the locally persisted claim ledger for XP-path coin prizes. */
+        val MIGRATION_19_20 = object : Migration(19, 20) {
+            /** Starts existing profiles with no prizes claimed. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN claimedRankRewards TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         /**
          * Adds what an answer needs to be told apart later: the question's id, the topic of its
          * session and where it was given. The columns are nullable with no default and stay null

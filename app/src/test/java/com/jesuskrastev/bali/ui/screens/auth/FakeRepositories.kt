@@ -11,6 +11,7 @@ import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
 import com.jesuskrastev.bali.domain.repository.*
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,16 @@ class FakeUserRepository(
     hasCompletedOnboarding: Boolean = true,
     private val userExists: Boolean = true
 ) : UserRepository {
+    /** Claims an earned rank prize once in the in-memory test profile. */
+    override suspend fun claimRankReward(reward: RankReward): Boolean {
+        val user = _user.value ?: return false
+        if (user.xp < reward.requiredXp || reward.id in user.claimedRankRewards) return false
+        _user.value = user.copy(
+            coins = user.coins + reward.coins,
+            claimedRankRewards = user.claimedRankRewards + reward.id
+        )
+        return true
+    }
     private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
     private val _hasCompletedOnboarding = MutableStateFlow(hasCompletedOnboarding)
 

@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.di
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV11ToV12
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV12ToV13
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV13ToV14
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
@@ -89,6 +90,12 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV12ToV13(migration: MigrationV12ToV13): FirestoreMigration = migration
+
+    /** Registers the optional XP reward claim ledger. */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV13ToV14(migration: MigrationV13ToV14): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

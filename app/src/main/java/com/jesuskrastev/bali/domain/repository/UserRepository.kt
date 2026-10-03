@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.Flow
  * data sources behind a single interface used by the domain layer.
  */
 interface UserRepository {
+    /** Atomically grants [reward] when earned and unclaimed; returns true only for a new claim. */
+    suspend fun claimRankReward(reward: com.jesuskrastev.bali.domain.model.RankReward): Boolean
     /** Emits the current user, or null if no user exists yet. */
     fun get(): Flow<User?>
 

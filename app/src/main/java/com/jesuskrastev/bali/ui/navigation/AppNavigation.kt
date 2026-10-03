@@ -78,6 +78,7 @@ import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
 import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
+import com.jesuskrastev.bali.ui.screens.ranks.RankRewardsScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
 import com.jesuskrastev.bali.ui.screens.test.ResultSoundViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
@@ -131,6 +132,9 @@ object ExamRoute
 
 @Serializable
 object ShopRoute
+
+@Serializable
+object RankRewardsRoute
 
 @Serializable
 object StatsRoute
@@ -312,6 +316,7 @@ fun AppNavigation(
                     onShopClick = {
                         navController.navigate(ShopRoute)
                     },
+                    onRanksClick = { navController.navigate(RankRewardsRoute) },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
                     },
@@ -408,6 +413,10 @@ fun AppNavigation(
                     },
                     viewModel = viewModel
                 )
+            }
+
+            composable<RankRewardsRoute> {
+                RankRewardsScreen(onBackClick = { navController.popBackStack() })
             }
 
             composable<TestRoute> { backStackEntry ->
