@@ -49,8 +49,7 @@ import com.jesuskrastev.bali.ui.theme.BaliTheme
 private const val TEXT_ENTRANCE_DELAY_MS = 220
 
 /**
- * Single-idea onboarding screen used by the whole emotional arc (empathy, the three
- * loss screens and the three gain screens).
+ * Single-idea onboarding screen used by the emotional arc: the pain and the gain.
  *
  * The headline is delivered by the mascot bubble above, so this body carries only the
  * visual and one line. There is deliberately no card: the copy sits straight on the

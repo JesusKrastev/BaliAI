@@ -74,6 +74,16 @@ class ShopScreenScreenshotTest {
     @Test
     fun captureShopScreen_nothingToRecover() = captureShop(User(coins = 450))
 
+    /** The whole shop on one tall picture, with the recovery on sale and a balance short of some items. */
+    @Test
+    @Config(qualifiers = "w411dp-h1700dp-xxhdpi")
+    fun captureShopScreen_wholeShop() = captureShop(lostYesterday(coins = 75))
+
+    /** The whole shop in the dark theme. */
+    @Test
+    @Config(qualifiers = "w411dp-h1700dp-xxhdpi")
+    fun captureShopScreen_wholeShopDark() = captureShop(lostYesterday(coins = 450), darkTheme = true)
+
     @Test
     fun captureShopScreen_infoDialogOfTheDisabledRecovery() =
         captureShop(User(coins = 450), openInfoOf = "Recuperador de racha")

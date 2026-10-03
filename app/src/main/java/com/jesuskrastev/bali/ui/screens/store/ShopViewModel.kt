@@ -2,6 +2,8 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.domain.model.ChestReward
+import com.jesuskrastev.bali.domain.model.ChestRewardTable
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.model.StreakBet
@@ -12,7 +14,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 import javax.inject.Inject
 
 sealed class ShopItem {
@@ -33,6 +34,7 @@ sealed class ShopEvent {
     data object PurchaseStreakRecovery : ShopEvent()
     data object ConfirmPurchase : ShopEvent()
     data object DismissFeedback : ShopEvent()
+    data object DismissChest : ShopEvent()
 }
 
 /**
@@ -47,26 +49,14 @@ object ShopCatalog {
     const val DOUBLE_XP_COST = 80
     const val DOUBLE_COINS_COST = 70
 
-    /**
-     * Smallest and largest prize of a surprise chest. Their average (55) has to stay below
-     * [SURPRISE_CHEST_COST]: a chest that pays more than it costs would print coins.
-     */
-    const val CHEST_MIN_REWARD = 20
-    const val CHEST_MAX_REWARD = 90
-
-    /**
-     * Picks a surprise chest's prize, every value in the range equally likely.
-     *
-     * @param random the source of randomness, replaceable in tests
-     * @return a coin amount from [CHEST_MIN_REWARD] to [CHEST_MAX_REWARD]
-     */
-    fun rollChestReward(random: Random = Random): Int =
-        random.nextInt(CHEST_MIN_REWARD, CHEST_MAX_REWARD + 1)
 }
 
 /** Shown when a purchase could not be completed, usually for lack of connection. */
 private const val PURCHASE_FAILED_MESSAGE =
     "No se ha podido completar la compra. Comprueba tu conexión e inténtalo de nuevo."
+
+/** One-shot visual confirmation or error emitted after a shop purchase attempt. */
+data class ShopFeedback(val message: String, val isSuccess: Boolean)
 
 /**
  * What the shop shows.
@@ -84,7 +74,9 @@ private const val PURCHASE_FAILED_MESSAGE =
  * @property hasActiveStreakBet true while a streak bet is running and not lost
  * @property streakBetDaysDone study days completed since the bet was placed, 0 without a bet
  * @property canBetOnStreak true when a bet could be placed now: no bet running and a streak to bet on
- * @property purchaseFeedback one-time message about a purchase: the surprise chest's prize or a failure
+ * @property purchaseFeedback one-time success or error shown after a purchase attempt
+ * @property chestReward reward granted by a paid surprise chest while its opening animation is on
+ *   screen; null when no chest is being opened
  */
 data class ShopUiState(
     val coinsCount: Int = 0,
@@ -99,7 +91,8 @@ data class ShopUiState(
     val hasActiveStreakBet: Boolean = false,
     val streakBetDaysDone: Int = 0,
     val canBetOnStreak: Boolean = false,
-    val purchaseFeedback: String? = null
+    val purchaseFeedback: ShopFeedback? = null,
+    val chestReward: ChestReward? = null
 )
 
 @HiltViewModel
@@ -111,14 +104,16 @@ class ShopViewModel @Inject constructor(
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
     private val _isProcessing = MutableStateFlow(false)
-    private val _purchaseFeedback = MutableStateFlow<String?>(null)
+    private val _purchaseFeedback = MutableStateFlow<ShopFeedback?>(null)
+    private val _chestReward = MutableStateFlow<ChestReward?>(null)
 
     val uiState: StateFlow<ShopUiState> = combine(
         userRepository.get(),
         _selectedItem,
         _isProcessing,
-        _purchaseFeedback
-    ) { user, selected, isProcessing, purchaseFeedback ->
+        _purchaseFeedback,
+        _chestReward
+    ) { user, selected, isProcessing, purchaseFeedback, chestReward ->
         user?.let {
             val now = System.currentTimeMillis()
             val settledStreak = DailyStreak.of(it).settledAt(now)
@@ -138,7 +133,8 @@ class ShopViewModel @Inject constructor(
                 streakBetDaysDone =
                     if (betRunning) StreakBet.daysDone(it.streakBetTarget, settledStreak.current) else 0,
                 canBetOnStreak = !betRunning && StreakBet.canBetOn(settledStreak.current),
-                purchaseFeedback = purchaseFeedback
+                purchaseFeedback = purchaseFeedback,
+                chestReward = chestReward
             )
         } ?: ShopUiState()
     }.stateIn(
@@ -158,6 +154,7 @@ class ShopViewModel @Inject constructor(
             ShopEvent.PurchaseStreakRecovery -> purchaseStreakRecovery()
             ShopEvent.ConfirmPurchase -> purchaseSelectedItem()
             ShopEvent.DismissFeedback -> _purchaseFeedback.value = null
+            ShopEvent.DismissChest -> _chestReward.value = null
         }
     }
 
@@ -192,7 +189,7 @@ class ShopViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                _purchaseFeedback.value = PURCHASE_FAILED_MESSAGE
+                _purchaseFeedback.value = ShopFeedback(PURCHASE_FAILED_MESSAGE, isSuccess = false)
             } finally {
                 _isProcessing.value = false
             }
@@ -201,15 +198,21 @@ class ShopViewModel @Inject constructor(
 
     /** Charges [cost] and adds [item] to the user's synchronized inventory. */
     private fun purchaseInventory(item: ShopInventoryItem, cost: Int) = runPurchase {
-        if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
+        if (userRepository.purchaseInventoryItem(item, cost)) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = inventoryPurchaseFeedback(item)
+        }
     }
 
-    /** Opens a paid chest and keeps its prize in [uiState] long enough for the UI to show it. */
+    /**
+     * Opens a paid chest and keeps its prize in [uiState] until the UI has played the opening
+     * animation and the user dismisses it with [ShopEvent.DismissChest].
+     */
     private fun openSurpriseChest() = runPurchase {
-        val reward = ShopCatalog.rollChestReward()
+        val reward = ChestRewardTable.roll()
         if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
             _selectedItem.value = null
-            _purchaseFeedback.value = "¡Cofre abierto! Has ganado $reward monedas."
+            _chestReward.value = reward
         }
     }
 
@@ -228,6 +231,10 @@ class ShopViewModel @Inject constructor(
         }
         if (userRepository.placeStreakBet(StreakBet.COST_COINS, StreakBet.targetFor(settledStreak))) {
             _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Apuesta activada! Estudia ${StreakBet.DAYS} días más y gana ${StreakBet.PAYOUT_COINS} monedas 🎯",
+                isSuccess = true
+            )
         }
     }
 
@@ -236,7 +243,13 @@ class ShopViewModel @Inject constructor(
      * purchase, so a second tap cannot charge twice.
      */
     private fun purchaseStreakRecovery() = runPurchase {
-        if (recoverStreakUseCase() != null) _selectedItem.value = null
+        if (recoverStreakUseCase() != null) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Racha recuperada! Ya puedes seguir sumando días 🔥",
+                isSuccess = true
+            )
+        }
     }
 
     /**
@@ -254,6 +267,21 @@ class ShopViewModel @Inject constructor(
         if (decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)) {
             userRepository.updateStreakFreezes(user.streakFreezes + 1)
             _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Congelador conseguido! Ya está listo para proteger tu racha 🧊",
+                isSuccess = true
+            )
         }
+    }
+
+    /** Returns the celebratory confirmation shown after buying inventory [item]. */
+    private fun inventoryPurchaseFeedback(item: ShopInventoryItem): ShopFeedback {
+        val message = when (item) {
+            ShopInventoryItem.HINT -> "¡Pista conseguida! Ya está en tu inventario 💡"
+            ShopInventoryItem.FIFTY_FIFTY -> "¡50/50 conseguido! Ya puedes usarlo en práctica ✨"
+            ShopInventoryItem.DOUBLE_XP -> "¡Doble XP conseguido! Se activará en tu próxima actividad ⚡"
+            ShopInventoryItem.DOUBLE_COINS -> "¡Doble moneda conseguido! Tu próxima recompensa valdrá el doble 🪙"
+        }
+        return ShopFeedback(message, isSuccess = true)
     }
 }

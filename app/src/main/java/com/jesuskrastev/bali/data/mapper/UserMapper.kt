@@ -30,7 +30,8 @@ fun UserEntity.toDomain(): User = User(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    streakBetTarget = streakBetTarget
+    streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts this [User] into the Room entity stored for offline access. */
@@ -57,7 +58,8 @@ fun User.toEntity(): UserEntity = UserEntity(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    streakBetTarget = streakBetTarget
+    streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts this [User] into its Firestore document representation. */
@@ -87,7 +89,8 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     streakBetTarget = streakBetTarget,
     firstStepsStartedAt = firstSteps.startedAtMillis,
     firstStepsDone = firstSteps.completed.map { it.id },
-    firstStepsDismissed = firstSteps.dismissed
+    firstStepsDismissed = firstSteps.dismissed,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts a Firestore profile document into the framework-free [User] domain model. */
@@ -115,6 +118,7 @@ fun UserFirestore.toDomain(): User = User(
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
     streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards,
     firstSteps = FirstStepsProgress(
         startedAtMillis = firstStepsStartedAt,
         // Ids this build does not know (written by a newer version) are ignored, not crashed on.

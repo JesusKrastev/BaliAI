@@ -1,22 +1,26 @@
 package com.jesuskrastev.bali.ui.screens.onboarding.steps
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,9 +29,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -35,63 +38,46 @@ import androidx.compose.ui.unit.dp
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingConfig
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingData
 import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
+import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
+import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
-
-private const val BALI_PASS_RATE = 0.89f
+import java.text.NumberFormat
+import java.util.Locale
 
 /**
- * The complement of the 58% failure rate the title leads with. The two numbers are on
- * screen at the same time, so they have to add up to 100 or the chart contradicts the
- * headline sitting right above it.
+ * Theory exams for the B licence sat in Spain in 2025, from the DGT's monthly exam microdata
+ * (dgt.es, DGT en cifras, microdatos de exámenes por autoescuela: `PRUEBA TEÓRICA`, permiso B,
+ * January to December 2025). Counted on 2026-10-03.
  */
-private const val AVERAGE_PASS_RATE = 0.42f
+internal const val DGT_THEORY_EXAMS_2025 = 1_069_167
 
-/** Height of a bar at 100%. Both bars are measured against this, so their ratio stays honest. */
-private val BAR_FULL_HEIGHT = 200.dp
+/** Of [DGT_THEORY_EXAMS_2025], the ones marked "no apto". */
+internal const val DGT_THEORY_FAILS_2025 = 531_286
 
-private val BAR_WIDTH = 82.dp
+/** Sheets per row in the picture: one row passed, one row failed, which is what 49.7 % looks like. */
+private const val SHEETS_PER_ROW = 5
 
-/** The losing bar rises first so the winning one lands last and holds the attention. */
-private const val LOSING_BAR_DELAY_MS = 200L
-private const val WINNING_BAR_DELAY_MS = 550L
+/** Delay between one sheet and the next as they land. */
+private const val SHEET_STAGGER_MS = 70
 
-/** Bouncy enough to feel alive, damped enough that the overshoot never looks like a glitch. */
-private val BAR_SPRING = spring<Float>(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessLow
-)
+private val SPANISH = Locale("es", "ES")
 
 /**
- * Post-processing screen that turns the collected profile into the single number the user
- * cares about: their odds of passing on the first attempt.
+ * The real stakes, from the DGT's own figures: in 2025 half of the theory exams for the B licence
+ * ended in a fail. Ten exam sheets make the number visible at a glance, and the title answers
+ * back the attempt the user just told us about.
  *
- * It talks about the *result*, not about the method — the learning curve earlier in the flow
- * already made the case for the method. The step hides the mascot bubble and carries its own
- * title so the chart gets the full height.
+ * It replaced a chart that put a made-up 89 % "with Bali" next to an unsourced average: every
+ * number on this screen can be checked.
  *
- * @param data the answers collected during the onboarding flow, used to personalise the headline
+ * @param data the answers collected so far, used for the title and the closing line
  */
 @Composable
 fun StepComparison(data: OnboardingData) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val losingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
-
-    val winningProgress = remember { Animatable(0f) }
-    val losingProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        launch {
-            delay(LOSING_BAR_DELAY_MS)
-            losingProgress.animateTo(1f, BAR_SPRING)
-        }
-        launch {
-            delay(WINNING_BAR_DELAY_MS)
-            winningProgress.animateTo(1f, BAR_SPRING)
-        }
-    }
+    val primary = MaterialTheme.colorScheme.primary
+    val failRate = DGT_THEORY_FAILS_2025.toDouble() / DGT_THEORY_EXAMS_2025
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(SHEETS_PER_ROW * 2 * SHEET_STAGGER_MS + 400)) }
 
     Column(
         modifier = Modifier
@@ -100,55 +86,44 @@ fun StepComparison(data: OnboardingData) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = buildTitle(data).highlightPipes(primaryColor),
-            style = MaterialTheme.typography.headlineMedium,
+            text = buildTitle(data).highlightPipes(primary),
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SheetRow(passed = true, rowIndex = 0, progress = { appear.value })
+                SheetRow(passed = false, rowIndex = 1, progress = { appear.value })
+                Spacer(modifier = Modifier.height(4.dp))
+                Legend(color = BaliAccentGreen, text = "${percent(1 - failRate)} aprobados")
+                Legend(color = BaliAccentRed, text = "${percent(failRate)} suspensos")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         Text(
-            text = "Calculada con tus respuestas y con los datos de alumnos con tu mismo perfil",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Fuente: DGT. Exámenes teóricos del permiso B en 2025 " +
+                "(${NumberFormat.getIntegerInstance(SPANISH).format(DGT_THEORY_EXAMS_2025)} exámenes).",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.Bottom
-        ) {
-            ProbabilityBar(
-                rate = BALI_PASS_RATE,
-                progress = { winningProgress.value },
-                label = "Con Bali AI",
-                barBrush = Brush.verticalGradient(
-                    colors = listOf(primaryColor, primaryColor.copy(alpha = 0.72f))
-                ),
-                valueColor = primaryColor,
-                glowColor = primaryColor
-            )
-            ProbabilityBar(
-                rate = AVERAGE_PASS_RATE,
-                progress = { losingProgress.value },
-                label = "Sin Bali AI",
-                barBrush = Brush.verticalGradient(
-                    colors = listOf(losingColor, losingColor.copy(alpha = 0.55f))
-                ),
-                valueColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                glowColor = Color.Transparent
-            )
-        }
-
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = buildHeadline(data).highlightPipes(primaryColor),
+            text = buildHeadline(data).highlightPipes(primary),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -159,75 +134,68 @@ fun StepComparison(data: OnboardingData) {
 }
 
 /**
- * One bar of the comparison, with its percentage counting up as it grows and its caption
- * underneath.
+ * Formats a rate the Spanish way, with one decimal: "49,7 %".
  *
- * The bar is a laid-out box rather than a canvas drawing, which is what lets the percentage
- * and the caption be real text — correctly sized, themed and accessible — instead of glyphs
- * painted at hand-computed coordinates.
+ * @param rate a fraction between 0 and 1
+ * @return the percentage
+ */
+private fun percent(rate: Double): String = String.format(SPANISH, "%.1f %%", rate * 100)
+
+/**
+ * A row of exam sheets that land one after another.
  *
- * @param rate final value of the bar, between 0f and 1f
- * @param progress lambda returning the entrance progress, which may overshoot above 1f
- * @param label caption shown under the bar
- * @param barBrush fill of the bar
- * @param valueColor colour of the percentage above the bar
- * @param glowColor colour of the halo behind the bar; pass [Color.Transparent] for no halo
+ * @param passed whether the row shows passed (green tick) or failed (red cross) sheets
+ * @param rowIndex 0 for the first row, so the second one lands after it
+ * @param progress the entrance, from 0 to 1, shared by both rows
  */
 @Composable
-private fun ProbabilityBar(
-    rate: Float,
-    progress: () -> Float,
-    label: String,
-    barBrush: Brush,
-    valueColor: Color,
-    glowColor: Color
-) {
-    // The spring overshoots past 1f, which gives the bar its bounce but would make the
-    // percentage tick above its real value, so the number is clamped and the bar is not.
-    val raw = progress()
-    val barFraction = raw.coerceAtLeast(0f)
-    val displayedPercentage = (rate * 100f * raw.coerceIn(0f, 1f)).roundToInt()
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = "$displayedPercentage%",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = valueColor
-        )
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Box(contentAlignment = Alignment.BottomCenter) {
-            if (glowColor != Color.Transparent) {
-                Box(
-                    modifier = Modifier
-                        .width(BAR_WIDTH + 28.dp)
-                        .height(BAR_FULL_HEIGHT * rate * barFraction)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(glowColor.copy(alpha = 0.22f), Color.Transparent)
-                            ),
-                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-                        )
-                )
-            }
-
+private fun SheetRow(passed: Boolean, rowIndex: Int, progress: () -> Float) {
+    val color = if (passed) BaliAccentGreen else BaliAccentRed
+    val total = SHEETS_PER_ROW * 2
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        repeat(SHEETS_PER_ROW) { column ->
+            val order = rowIndex * SHEETS_PER_ROW + column
             Box(
                 modifier = Modifier
-                    .width(BAR_WIDTH)
-                    .height(BAR_FULL_HEIGHT * rate * barFraction)
-                    .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
-                    .background(barBrush)
-            )
+                    .weight(1f)
+                    .aspectRatio(0.78f)
+                    .graphicsLayer {
+                        val start = order / total.toFloat()
+                        val local = ((progress() - start) * total).coerceIn(0f, 1f)
+                        alpha = local
+                        scaleX = 0.7f + 0.3f * local
+                        scaleY = 0.7f + 0.3f * local
+                    }
+                    .background(color.copy(alpha = 0.14f), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (passed) Icons.Rounded.Check else Icons.Rounded.Close,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(12.dp))
-
+/**
+ * One line of the legend under the sheets.
+ *
+ * @param color the colour of the sheets it names
+ * @param text what they stand for
+ */
+@Composable
+private fun Legend(color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(12.dp).background(color, RoundedCornerShape(3.dp)))
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = text,
+            modifier = Modifier.padding(start = 10.dp),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -235,25 +203,20 @@ private fun ProbabilityBar(
 /**
  * Picks the title, which answers back the attempt the user just told us about.
  *
- * Both variants lead with the same failure rate the chart is drawn from, so the screen
- * reads as a reaction to their answer rather than as a generic statistic: a repeat
- * candidate is told they already know what it feels like, a first-timer is told it does
- * not have to happen to them.
- *
  * @param data the answers collected during the onboarding flow
  * @return the title, with the words to highlight wrapped in pipes
  */
 private fun buildTitle(data: OnboardingData): String = when (data.experience) {
     OnboardingConfig.EXPERIENCE_FIRST_TIME ->
-        "El |58%| suspende a la primera. No tiene que ser tu caso."
+        "En 2025, |1 de cada 2| exámenes teóricos acabó en suspenso. No tiene que ser tu caso."
     OnboardingConfig.EXPERIENCE_RETRY ->
-        "Ya sabes lo que se siente. El |58%| suspende a la primera, y tú no vas a repetir."
-    else -> "Tu probabilidad de aprobar |a la primera|"
+        "Ya sabes lo que se siente: en 2025, |1 de cada 2| exámenes teóricos acabó en suspenso. Esta vez, no."
+    else -> "En 2025, |1 de cada 2| exámenes teóricos acabó en suspenso."
 }
 
 /**
- * Picks the closing line under the chart, which turns the title's statistic into what the
- * user's own plan does about it.
+ * Picks the closing line under the picture, which turns the statistic into what the user's own
+ * plan does about it.
  *
  * @param data the answers collected during the onboarding flow
  * @return the closing line, with the words to highlight wrapped in pipes
@@ -262,8 +225,8 @@ private fun buildHeadline(data: OnboardingData): String = when (data.experience)
     OnboardingConfig.EXPERIENCE_FIRST_TIME ->
         "Llegar al examen con un método desde el día uno es tu |mayor ventaja|."
     OnboardingConfig.EXPERIENCE_RETRY ->
-        "Esta vez |es la definitiva|: atacamos justo donde fallaste."
-    else -> "Tu perfil encaja con el de los alumnos que |aprueban a la primera|."
+        "La segunda vez se aprueba |con método|, no repitiendo lo mismo."
+    else -> "Con un método, |no tienes por qué estar en esa mitad|."
 }
 
 @Preview(showBackground = true)
@@ -271,12 +234,7 @@ private fun buildHeadline(data: OnboardingData): String = when (data.experience)
 private fun StepComparisonPreview() {
     BaliTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            StepComparison(
-                data = OnboardingData(
-                    name = "Jesús",
-                    experience = OnboardingConfig.EXPERIENCE_FIRST_TIME
-                )
-            )
+            StepComparison(data = OnboardingData(experience = OnboardingConfig.EXPERIENCE_FIRST_TIME))
         }
     }
 }

@@ -35,6 +35,7 @@ private class FakeSubscriptionRepository(private val hasPremium: Boolean) : Subs
     override suspend fun restorePurchases(): Result<CustomerInfo> = Result.success(customerInfo)
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = hasPremium
     override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? = null
+    override fun premiumSubscription(customerInfo: CustomerInfo): com.jesuskrastev.bali.domain.model.PremiumSubscription? = null
     override suspend fun getOffering(identifier: String): Result<Offering?> = Result.success(null)
 }
 

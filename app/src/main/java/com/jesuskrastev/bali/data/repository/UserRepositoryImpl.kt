@@ -8,6 +8,7 @@ import com.jesuskrastev.bali.data.local.room.Converters
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepTask
@@ -31,6 +32,15 @@ class UserRepositoryImpl @Inject constructor(
     private val firestoreUserDao: FirestoreUserDao,
     private val authRepository: AuthRepository
 ) : UserRepository {
+
+    /** Returns whether [reward] was collected through the active Firestore or Room profile. */
+    override suspend fun claimRankReward(reward: com.jesuskrastev.bali.domain.model.RankReward): Boolean =
+        withContext(Dispatchers.IO) {
+            withAuthRouting(
+                actionRemote = { userId -> firestoreUserDao.claimRankReward(userId, reward) },
+                actionLocal = { userDao.claimRankReward(reward) }
+            )
+        }
 
     override fun get(): Flow<User?> = authRepository.currentUserFlow.flatMapLatest { userId ->
         if (userId != null) {
@@ -177,16 +187,26 @@ class UserRepositoryImpl @Inject constructor(
         }
 
     /**
-     * Applies a surprise chest's [reward] while charging its [cost] in the same persistence write.
+     * Applies a surprise chest's [reward] while charging its [cost] in one persistence write.
      *
      * @return true when the chest opened, false for an insufficient balance.
      */
-    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean = withContext(Dispatchers.IO) {
-        withAuthRouting(
-            actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
-            actionLocal = { userDao.openSurpriseChest(cost, reward) == 1 }
-        )
-    }
+    override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean =
+        withContext(Dispatchers.IO) {
+            withAuthRouting(
+                actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
+                actionLocal = {
+                    val coins = (reward as? ChestReward.Coins)?.amount ?: 0
+                    val inventory = reward as? ChestReward.Inventory
+                    userDao.openSurpriseChest(
+                        cost = cost,
+                        coinReward = coins,
+                        item = inventory?.item?.name,
+                        quantity = inventory?.quantity ?: 0
+                    ) == 1
+                }
+            )
+        }
 
     /**
      * Decrements one inventory [item] only when it is still owned.

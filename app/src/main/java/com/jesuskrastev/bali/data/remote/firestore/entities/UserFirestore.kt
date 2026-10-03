@@ -30,5 +30,6 @@ data class UserFirestore(
     val fcmToken: String = "",
     val firstStepsStartedAt: Long = 0L,
     val firstStepsDone: List<String> = emptyList(),
-    val firstStepsDismissed: Boolean = false
+    val firstStepsDismissed: Boolean = false,
+    val claimedRankRewards: List<String> = emptyList()
 )

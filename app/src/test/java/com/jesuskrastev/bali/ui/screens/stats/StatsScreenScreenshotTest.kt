@@ -75,7 +75,12 @@ class StatsScreenScreenshotTest {
     )
 
     /** Captures the screen for [stats], counting down to the date [user] has saved. */
-    private fun capture(stats: ProgressStats, user: User = profile, darkTheme: Boolean = false) {
+    private fun capture(
+        stats: ProgressStats,
+        user: User = profile,
+        darkTheme: Boolean = false,
+        path: String? = null
+    ) {
         val plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now)
         composeTestRule.setContent {
             BaliTheme(darkTheme = darkTheme) {
@@ -84,8 +89,20 @@ class StatsScreenScreenshotTest {
                 }
             }
         }
-        composeTestRule.onRoot().captureRoboImage()
+        if (path == null) composeTestRule.onRoot().captureRoboImage() else composeTestRule.onRoot().captureRoboImage(path)
     }
+
+    /** The statistics as the onboarding intro shows them: phone-sized, dark, ready to pass. */
+    @Test
+    @Config(sdk = [34], qualifiers = "w360dp-h780dp-xhdpi")
+    fun captureOnboardingShowcase() = capture(
+        useCase(
+            listOf(exam(28, 12), exam(29, 8), exam(29, 5), exam(30, 3), exam(30, 1)) + topicPractice,
+            answers(listOf(0, 0, 24, 30, 0, 40, 30)), profile, now
+        ),
+        darkTheme = true,
+        path = "build/onboarding-showcase/shot_stats.png"
+    )
 
     @Test
     fun captureStatsScreen_ready() = capture(

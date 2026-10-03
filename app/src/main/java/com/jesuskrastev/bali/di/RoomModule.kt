@@ -46,7 +46,8 @@ object RoomModule {
                 BaliDatabase.MIGRATION_15_16,
                 BaliDatabase.MIGRATION_16_17,
                 BaliDatabase.MIGRATION_17_18,
-                BaliDatabase.MIGRATION_18_19
+                BaliDatabase.MIGRATION_18_19,
+                BaliDatabase.MIGRATION_19_20
             )
             .build()
 

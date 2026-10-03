@@ -243,17 +243,23 @@ private fun OnboardingStepContent(
         label = "onboarding_step",
         modifier = Modifier
             .fillMaxSize()
-            // StepProcessing centres its own full-bleed layout and applies its own padding.
-            .padding(horizontal = if (state.currentStep == OnboardingStep.Processing) 0.dp else 24.dp)
+            // StepProcessing centres its own full-bleed layout and applies its own padding, and the
+            // exam date calendar needs the full width of a small phone.
+            .padding(horizontal = if (state.currentStep in FULL_WIDTH_STEPS) 0.dp else 24.dp)
     ) { step ->
-        // Every screen of the emotional arc shares the same one-idea layout.
-        val narrative = OnboardingConfig.narratives[step]
+        // Every screen of the emotional arc shares the same one-idea layout, with copy written
+        // for the answers given so far.
+        val narrative = OnboardingNarratives.forStep(step, state.data)
         if (narrative != null) {
-            StepNarrative(content = narrative)
+            StepNarrative(content = narrative.content)
             return@AnimatedContent
         }
 
         when (step) {
+            OnboardingStep.Intro -> StepIntro(
+                onPageShown = { viewModel.onEvent(OnboardingEvent.IntroCardShown(it)) },
+                onFinish = { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
+            )
             OnboardingStep.Motivation -> {
                 StepSelectorList(OnboardingConfig.motivations, viewModel) { motivation, _ ->
                     viewModel.onEvent(OnboardingEvent.SelectMotivation(motivation))
@@ -279,23 +285,30 @@ private fun OnboardingStepContent(
                     viewModel.onEvent(OnboardingEvent.SelectReadiness(readiness))
                 }
             }
-            OnboardingStep.FutureImpact -> {
-                StepSelectorList(OnboardingConfig.futureImpacts, viewModel) { impact, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectFutureImpact(impact))
+            OnboardingStep.Quiz -> {
+                val questions = state.data.quizQuestions()
+                questions.getOrNull(state.quizIndex)?.let { question ->
+                    StepQuiz(
+                        question = question,
+                        index = state.quizIndex,
+                        total = questions.size,
+                        selectedIndex = state.data.quizAnswers.getOrNull(state.quizIndex)?.selectedIndex,
+                        onAnswer = { viewModel.onEvent(OnboardingEvent.AnswerQuiz(it)) },
+                        onNext = { viewModel.onEvent(OnboardingEvent.NextQuizQuestion) },
+                        onSkip = { viewModel.onEvent(OnboardingEvent.SkipQuiz) }
+                    )
                 }
             }
-            OnboardingStep.MethodComparison -> StepMethodComparison()
+            OnboardingStep.QuizResult -> StepQuizResult(state.data)
+            OnboardingStep.MethodComparison -> StepMethodComparison(state.data)
             OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
-            OnboardingStep.ExamDate -> {
-                StepSelectorList(OnboardingConfig.examTimings, viewModel) { timing, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectExamTiming(timing))
-                }
-            }
+            OnboardingStep.ExamDate -> StepExamDate(
+                examDate = state.data.examDate,
+                onConfirm = { viewModel.onEvent(OnboardingEvent.SetExamDate(it)) },
+                onNoDate = { viewModel.onEvent(OnboardingEvent.SetExamDate(null)) }
+            )
             OnboardingStep.Province -> StepProvince(state.data.province) { province ->
                 viewModel.onEvent(OnboardingEvent.SelectProvince(province))
-            }
-            OnboardingStep.ProvinceConfirmed -> {
-                StepNarrative(content = OnboardingConfig.provinceConfirmation(state.data.province))
             }
             OnboardingStep.WeeklyStudy -> {
                 StepSelectorList(OnboardingConfig.weeklyStudyOptions, viewModel) { weeklyStudy, _ ->
@@ -313,11 +326,11 @@ private fun OnboardingStepContent(
                 onAccept = { viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true)) },
                 onDecline = { viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = false)) }
             )
-            OnboardingStep.LearningPreference -> {
-                StepSelectorList(OnboardingConfig.learningPreferences, viewModel) { preference, _ ->
-                    viewModel.onEvent(OnboardingEvent.SelectLearningPreference(preference))
-                }
-            }
+            OnboardingStep.LearningPreference -> StepLearningStyle(
+                styles = OnboardingConfig.learningStyles,
+                selectedKey = state.data.learningPreference,
+                onSelect = { viewModel.onEvent(OnboardingEvent.SelectLearningPreference(it.key)) }
+            )
             OnboardingStep.Processing -> StepProcessing(
                 progress = state.processingProgress,
                 data = state.data
@@ -331,6 +344,9 @@ private fun OnboardingStepContent(
     }
 }
 
+/** Steps that lay out their own side margins. */
+private val FULL_WIDTH_STEPS = setOf(OnboardingStep.Processing, OnboardingStep.ExamDate)
+
 /**
  * Decides whether the mascot bubble is rendered above the step content.
  *
@@ -338,6 +354,7 @@ private fun OnboardingStepContent(
  * @return false for steps that own their full-height layout and carry their own title
  */
 private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
+    OnboardingStep.Intro,
     OnboardingStep.MethodComparison,
     OnboardingStep.Comparison,
     OnboardingStep.Processing,
@@ -366,16 +383,11 @@ private fun shouldShowBottomButton(step: OnboardingStep): Boolean =
  */
 private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.Name -> "Empezar mi plan 🚀"
-    OnboardingStep.Empathy -> "Sí, es justo eso →"
-    OnboardingStep.LossTime -> "Es verdad 😔"
-    OnboardingStep.LossOpportunity -> "No quiero eso →"
-    OnboardingStep.LossAutonomy -> "Se acabó 😤"
-    OnboardingStep.MethodComparison -> "Ese es mi camino 🕊️"
-    OnboardingStep.GainFreedom -> "Eso quiero 🕊️"
-    OnboardingStep.GainExperiences -> "Me lo estoy imaginando 🏖️"
-    OnboardingStep.GainLevelUp -> "Ese es mi siguiente paso 🚀"
-    OnboardingStep.ProvinceConfirmed -> "Perfecto →"
-    OnboardingStep.Comparison -> "Quiero este método 💪"
+    OnboardingStep.Pain -> "Sí, es justo eso →"
+    OnboardingStep.MethodComparison -> "Ese es mi camino 🚀"
+    OnboardingStep.Gain -> "Eso quiero ✨"
+    OnboardingStep.Comparison -> "A por ello 💪"
+    OnboardingStep.QuizResult -> "Seguir →"
     OnboardingStep.PlanReveal -> "Este es mi plan 🎯"
     OnboardingStep.SocialProof -> "Yo también puedo →"
     else -> "Continuar →"

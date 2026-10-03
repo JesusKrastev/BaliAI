@@ -5,27 +5,40 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -46,10 +61,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.screens.onboarding.components.highlightPipes
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 
+/** What Bali is, in three tags a first-time visitor reads in a second. All three are real features. */
+private val VALUE_TAGS = listOf("🎓 Simulacros tipo examen", "💡 Cada fallo explicado", "📅 Un plan hasta tu examen")
+
 /**
- * Presents Bali's welcome screen with a curved hero, explanatory content and account actions.
+ * Presents Bali's welcome screen: the mascot lit up like the beacon it is, saying hello, then what
+ * the app does in one line and the two ways in.
+ *
+ * The first screen has one job — tell a stranger what this is and why it is worth a minute — so
+ * the copy names the outcome (passing the theory exam first time) and the means (exam-style tests,
+ * every mistake explained) instead of a claim about how many people already used it.
  *
  * @param sharedTransitionScope scope shared with destinations that animate the mascot.
  * @param animatedVisibilityScope scope that owns the destination visibility animation.
@@ -93,7 +117,7 @@ fun GreetingsScreen(
 
             GreetingsContent(
                 isVisible = isVisible,
-                modifier = Modifier.padding(start = 32.dp, top = 8.dp, end = 32.dp)
+                modifier = Modifier.padding(start = 28.dp, top = 4.dp, end = 28.dp)
             )
 
             GreetingsFooter(
@@ -106,7 +130,8 @@ fun GreetingsScreen(
 }
 
 /**
- * Draws the curved brand header and centers the Bali mascot inside it.
+ * Draws the curved brand header with the mascot in the middle: a beacon light, so it glows and
+ * bobs gently, and says hello from a speech bubble.
  *
  * @param isVisible whether the mascot entrance animation should play.
  * @param sharedTransitionScope scope shared with destinations that animate the mascot.
@@ -121,6 +146,20 @@ private fun GreetingsHeader(
     animatedVisibilityScope: AnimatedVisibilityScope,
     modifier: Modifier = Modifier
 ) {
+    val beacon = rememberInfiniteTransition(label = "beacon")
+    val glow by beacon.animateFloat(
+        initialValue = 0.85f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "beacon_glow"
+    )
+    val bob by beacon.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "beacon_bob"
+    )
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -140,6 +179,24 @@ private fun GreetingsHeader(
             drawPath(path = path, color = BaliPrimary)
         }
 
+        // The beacon's light: a warm halo that breathes behind the mascot.
+        Box(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .size(280.dp)
+                .graphicsLayer {
+                    scaleX = glow
+                    scaleY = glow
+                    alpha = if (isVisible) 1f else 0f
+                }
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(Color(0xFFFFE08A).copy(alpha = 0.75f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+
         AnimatedVisibility(
             visible = isVisible,
             modifier = Modifier.align(Alignment.Center),
@@ -153,9 +210,10 @@ private fun GreetingsHeader(
             with(sharedTransitionScope) {
                 Image(
                     painter = painterResource(id = R.drawable.bali),
-                    contentDescription = "Beacon Bali",
+                    contentDescription = "Bali",
                     modifier = Modifier
-                        .size(210.dp)
+                        .size(200.dp)
+                        .graphicsLayer { translationY = -8.dp.toPx() * bob }
                         .sharedElement(
                             rememberSharedContentState(key = "bali_mascot"),
                             animatedVisibilityScope = animatedVisibilityScope
@@ -164,15 +222,38 @@ private fun GreetingsHeader(
                 )
             }
         }
+
+        AnimatedVisibility(
+            visible = isVisible,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = 84.dp, y = (-104).dp),
+            enter = scaleIn(tween(400, delayMillis = 700)) + fadeIn(tween(400, delayMillis = 700))
+        ) {
+            Surface(
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 4.dp),
+                color = Color.White,
+                shadowElevation = 6.dp
+            ) {
+                Text(
+                    text = "¡Hola! Soy Bali 👋",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0F172A),
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                )
+            }
+        }
     }
 }
 
 /**
- * Shows the welcome copy and social proof immediately below the curved header.
+ * The promise and what backs it, right under the header.
  *
  * @param isVisible whether the content entrance animations should play.
  * @param modifier layout modifier that positions the content between header and actions.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GreetingsContent(
     isVisible: Boolean, modifier: Modifier = Modifier
@@ -183,8 +264,9 @@ private fun GreetingsContent(
     ) {
         AnimatedVisibility(visible = isVisible, enter = staggeredEnter(delayMillis = 300)) {
             Text(
-                text = "¡Hola! Soy Bali",
-                fontSize = 32.sp,
+                text = "Aprueba el teórico\n|a la primera|".highlightPipes(MaterialTheme.colorScheme.primary),
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
@@ -195,25 +277,37 @@ private fun GreetingsContent(
 
         AnimatedVisibility(visible = isVisible, enter = staggeredEnter(delayMillis = 500)) {
             Text(
-                text = "Te ayudo a conseguir tu L a la primera",
+                text = "Tests como los del examen de la DGT y un profe que te explica cada fallo.",
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         AnimatedVisibility(visible = isVisible, enter = staggeredEnter(delayMillis = 700)) {
-            Image(
-                painter = painterResource(
-                    id = if (isSystemInDarkTheme()) R.drawable.editors_choice_dark else R.drawable.editors_choice_light
-                ),
-                contentDescription = "Editors Choice",
-                modifier = Modifier
-                    .height(90.dp)
-                    .fillMaxWidth(),
-                contentScale = ContentScale.Fit
-            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                VALUE_TAGS.forEach { tag ->
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                    ) {
+                        Text(
+                            text = tag,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

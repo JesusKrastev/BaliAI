@@ -74,10 +74,11 @@ import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
-import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterLauncher
-import com.jesuskrastev.bali.ui.screens.paywall.CustomerCenterViewModel
+import com.jesuskrastev.bali.ui.screens.subscription.CancelSubscriptionScreen
+import com.jesuskrastev.bali.ui.screens.subscription.ManageSubscriptionScreen
 import com.jesuskrastev.bali.ui.screens.paywall.PaywallScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopScreen
+import com.jesuskrastev.bali.ui.screens.ranks.RankRewardsScreen
 import com.jesuskrastev.bali.ui.screens.store.ShopViewModel
 import com.jesuskrastev.bali.ui.screens.test.ResultSoundViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
@@ -133,6 +134,9 @@ object ExamRoute
 object ShopRoute
 
 @Serializable
+object RankRewardsRoute
+
+@Serializable
 object StatsRoute
 
 @Serializable
@@ -141,9 +145,13 @@ object SuggestionsRoute
 @Serializable
 object ChatRoute
 
-/** RevenueCat's Customer Center, opened from settings to manage or cancel the subscription. */
+/** Plan status and subscription actions, opened from settings. */
 @Serializable
-object CustomerCenterRoute
+object ManageSubscriptionRoute
+
+/** The cancellation flow (progress, reason, Google Play), opened from the subscription screen. */
+@Serializable
+object CancelSubscriptionRoute
 
 /**
  * Sign-in destination.
@@ -312,6 +320,7 @@ fun AppNavigation(
                     onShopClick = {
                         navController.navigate(ShopRoute)
                     },
+                    onRanksClick = { navController.navigate(RankRewardsRoute) },
                     onStreakClick = {
                         navController.navigate(MainStreakRoute)
                     },
@@ -353,16 +362,22 @@ fun AppNavigation(
                         navController.navigate(SuggestionsRoute)
                     },
                     onManageSubscriptionClick = {
-                        navController.navigate(CustomerCenterRoute)
+                        navController.navigate(ManageSubscriptionRoute)
                     }
                 )
             }
 
-            composable<CustomerCenterRoute> {
-                val viewModel: CustomerCenterViewModel = hiltViewModel()
-                CustomerCenterLauncher(
-                    listener = viewModel.listener,
-                    onDismiss = { navController.popBackStack() }
+            composable<ManageSubscriptionRoute> {
+                ManageSubscriptionScreen(
+                    onBackClick = { navController.popBackStack() },
+                    onCancelClick = { navController.navigate(CancelSubscriptionRoute) }
+                )
+            }
+
+            composable<CancelSubscriptionRoute> {
+                CancelSubscriptionScreen(
+                    onClose = { navController.popBackStack() },
+                    onSuggestionsClick = { navController.navigate(SuggestionsRoute) }
                 )
             }
 
@@ -408,6 +423,10 @@ fun AppNavigation(
                     },
                     viewModel = viewModel
                 )
+            }
+
+            composable<RankRewardsRoute> {
+                RankRewardsScreen(onBackClick = { navController.popBackStack() })
             }
 
             composable<TestRoute> { backStackEntry ->
