@@ -11,7 +11,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
-import java.util.concurrent.TimeUnit
 
 class HomePlanViewModelTest {
 
@@ -50,7 +49,11 @@ class HomePlanViewModelTest {
     /** Built on first use, once [MainDispatcherRule] has set the main dispatcher its scope runs on. */
     private val viewModel by lazy { HomePlanViewModel(userRepository = users, analytics = tracker) }
 
-    private fun daysFromNow(days: Int) = System.currentTimeMillis() + TimeUnit.DAYS.toMillis(days.toLong())
+    // Calendar days, not 24-hour blocks: across the end of summer time a block lands an hour short,
+    // on the day before, when the test runs just after midnight.
+    private fun daysFromNow(days: Int) = java.util.Calendar.getInstance().apply {
+        add(java.util.Calendar.DAY_OF_YEAR, days)
+    }.timeInMillis
 
     @Test
     fun `the chip counts down to the plan date saved at onboarding`() = runTest {
