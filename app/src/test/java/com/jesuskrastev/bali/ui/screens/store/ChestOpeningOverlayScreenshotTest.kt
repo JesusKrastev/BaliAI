@@ -2,10 +2,9 @@ package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.airbnb.lottie.LottieCompositionFactory
@@ -39,20 +38,22 @@ class ChestOpeningOverlayScreenshotTest {
         }
     }
 
-    /** Verifies the closed phase blocks collection until the opening sequence completes. */
+    /** Verifies the shut chest waits for a tap: no prize and no button until the user opens it. */
     @Test
-    fun theChestOpensBeforeTheUserCanCollectThePrize() {
+    fun theChestWaitsForATapBeforeOpening() {
         showOverlay(reward = ChestReward.Coins(73), dismissals = mutableListOf())
 
-        composeTestRule.onNodeWithText("Abriendo cofre…").assertExists()
-        composeTestRule.onNodeWithText("RECOGER").assertIsNotEnabled()
-        composeTestRule.onNodeWithText("+73").assertDoesNotExist()
+        composeTestRule.waitUntilExactlyOneExists(hasText("¡Toca el cofre para abrirlo!"), timeoutMillis = 15_000)
+        composeTestRule.mainClock.advanceTimeBy(3_000)
 
+        composeTestRule.onNodeWithText("+73").assertDoesNotExist()
+        composeTestRule.onNodeWithText("RECOGER").assertDoesNotExist()
+
+        composeTestRule.onNodeWithTag(CHEST_OVERLAY_TAG).performClick()
         composeTestRule.waitUntilExactlyOneExists(hasText("+73"), timeoutMillis = 15_000)
 
         composeTestRule.onNodeWithText("¡Has ganado 73 monedas!").assertExists()
-        composeTestRule.onNodeWithText("Abriendo cofre…").assertDoesNotExist()
-        composeTestRule.onNodeWithText("RECOGER").assertIsEnabled()
+        composeTestRule.onNodeWithText("¡Toca el cofre para abrirlo!").assertDoesNotExist()
     }
 
     /** Verifies the bundled Lottie keeps the markers required by the overlay state machine. */
@@ -70,14 +71,20 @@ class ChestOpeningOverlayScreenshotTest {
         }
     }
 
-    /** Verifies collecting an already revealed reward dismisses the overlay exactly once. */
+    /** Verifies a tap opens the chest and a second tap, once the prize is out, closes it once. */
     @Test
-    fun collectingThePrizeDismissesTheOverlay() {
+    fun aSecondTapAfterThePrizeClosesTheOverlay() {
         val dismissals = mutableListOf<Unit>()
         showOverlay(reward = ChestReward.Coins(40), dismissals = dismissals)
-        composeTestRule.waitUntilExactlyOneExists(hasText("+40"), timeoutMillis = 15_000)
+        composeTestRule.waitUntilExactlyOneExists(hasText("¡Toca el cofre para abrirlo!"), timeoutMillis = 15_000)
 
-        composeTestRule.onNodeWithText("RECOGER").performClick()
+        composeTestRule.onNodeWithTag(CHEST_OVERLAY_TAG).performClick()
+        composeTestRule.waitUntilExactlyOneExists(hasText("+40"), timeoutMillis = 15_000)
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.onNodeWithText("Toca para continuar").assertExists()
+        assertThat(dismissals).isEmpty()
+
+        composeTestRule.onNodeWithTag(CHEST_OVERLAY_TAG).performClick()
 
         assertThat(dismissals).hasSize(1)
     }
@@ -89,10 +96,11 @@ class ChestOpeningOverlayScreenshotTest {
             reward = ChestReward.Inventory(ShopInventoryItem.DOUBLE_XP),
             dismissals = mutableListOf()
         )
+        composeTestRule.waitUntilExactlyOneExists(hasText("¡Toca el cofre para abrirlo!"), timeoutMillis = 15_000)
 
+        composeTestRule.onNodeWithTag(CHEST_OVERLAY_TAG).performClick()
         composeTestRule.waitUntilExactlyOneExists(hasText("Doble XP"), timeoutMillis = 15_000)
 
         composeTestRule.onNodeWithText("¡Recompensa rara: doble XP!").assertExists()
-        composeTestRule.onNodeWithText("RECOGER").assertIsEnabled()
     }
 }
