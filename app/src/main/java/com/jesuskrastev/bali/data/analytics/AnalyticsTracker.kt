@@ -189,6 +189,35 @@ open class AnalyticsTracker @Inject constructor(
             studySlot?.let { putString("study_slot", it) }
         }
 
+    /**
+     * Tracks an answer to the onboarding mini-test, the user's first taste of the product.
+     *
+     * @param questionId stable id of the question, independent of its wording
+     * @param topic the subject of the question, such as "Alcohol"
+     * @param isCorrect whether the option tapped was the right one
+     * @param position the question's place in the test, from 1
+     * @param seconds time from the question appearing to the answer
+     * @param concern the worry that picked the questions, without its emoji
+     */
+    open fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) = log("onboarding_quiz_answered") {
+        putString("question_id", questionId)
+        putString("topic", topic)
+        putBoolean("correct", isCorrect)
+        putInt("position", position)
+        putInt("seconds", seconds)
+        concern?.let { putString("concern", it) }
+    }
+
+    /** Tracks that the user skipped the onboarding mini-test without answering. */
+    open fun onboardingQuizSkipped() = log("onboarding_quiz_skipped")
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**

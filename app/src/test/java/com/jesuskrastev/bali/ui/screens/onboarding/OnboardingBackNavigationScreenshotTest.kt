@@ -15,6 +15,7 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.ui.theme.BaliTheme
+import com.jesuskrastev.bali.util.FakeSoundEffects
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -48,7 +49,8 @@ class OnboardingBackNavigationScreenshotTest {
         viewModel = OnboardingViewModel(
             userRepository = FakeUserRepository(),
             analyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock()),
-            notificationsRepository = FakeNotificationsRepository()
+            notificationsRepository = FakeNotificationsRepository(),
+            soundEffects = FakeSoundEffects()
         )
     }
 
@@ -90,24 +92,24 @@ class OnboardingBackNavigationScreenshotTest {
         with(viewModel) {
             onEvent(OnboardingEvent.SelectMotivation(OnboardingConfig.motivations.first()))
             onEvent(OnboardingEvent.SelectTheoryBlocker(OnboardingConfig.theoryBlockers.first()))
-            onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
             onEvent(OnboardingEvent.SelectExperience(OnboardingConfig.experiences.first()))
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectReadiness(OnboardingConfig.readinessLevels.first()))
-            onEvent(OnboardingEvent.SelectFutureImpact(OnboardingConfig.futureImpacts.first()))
+            onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
+            // The mini-test is skipped, and its result with it.
+            onEvent(OnboardingEvent.SkipQuiz)
             // Empathy, the three losses, the method and the three gains lead to the name.
             repeat(8) { onEvent(OnboardingEvent.GoToNextStep) }
             onEvent(OnboardingEvent.SetName("Jesus"))
             onEvent(OnboardingEvent.GoToNextStep)
-            onEvent(OnboardingEvent.SelectExamTiming(OnboardingConfig.EXAM_TIMING_SOON))
+            onEvent(OnboardingEvent.SetExamDate(null))
             onEvent(OnboardingEvent.SelectProvince("Almería"))
-            // The province and its confirmation both wait for the bottom button.
-            onEvent(OnboardingEvent.GoToNextStep)
+            // The province waits for the bottom button.
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
             onEvent(OnboardingEvent.SelectStudyTime(OnboardingConfig.studyTimes.keys.last()))
             onEvent(OnboardingEvent.AnswerNotifications(accepted = false))
-            onEvent(OnboardingEvent.SelectLearningPreference(OnboardingConfig.learningPreferences.first()))
+            onEvent(OnboardingEvent.SelectLearningPreference(OnboardingConfig.STYLE_MOCK_EXAMS.key))
             onEvent(OnboardingEvent.GoToNextStep)
         }
     }
