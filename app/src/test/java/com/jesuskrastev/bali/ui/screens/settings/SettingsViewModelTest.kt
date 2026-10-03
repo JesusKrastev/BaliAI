@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.settings
 
 import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
+import com.jesuskrastev.bali.domain.model.EnablePushesResult
 import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.screens.auth.FakeAuthRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
@@ -17,6 +18,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -55,7 +57,7 @@ class SettingsViewModelTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
 
         fakeNotifications.disabledCategories.add(NotificationCategory.PROMOTIONS)
-        viewModel.refreshNotificationAccess()
+        viewModel.refreshNotificationChannels()
 
         assertThat(viewModel.uiState.value.disabledNotificationCategories)
             .containsExactly(NotificationCategory.PROMOTIONS)
@@ -73,41 +75,79 @@ class SettingsViewModelTest {
             .containsExactly(NotificationCategory.STREAK)
 
         fakeNotifications.disabledCategories.clear()
-        viewModel.refreshNotificationAccess()
+        viewModel.refreshNotificationChannels()
 
         assertThat(viewModel.uiState.value.disabledNotificationCategories).isEmpty()
         collectJob.cancel()
     }
 
     @Test
-    fun `notifications are flagged as blocked when Android blocks them and unflagged when it lets them through`() = runTest {
-        fakeNotifications.permissionGranted = false
-        viewModel = SettingsViewModel(
-            FakeUserRepository(), FakeAuthRepository(), analyticsTracker, fakeSoundEffects, fakeNotifications
-        )
+    fun `the blocked flag follows Android and the opt-out without waiting for a refresh`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        assertThat(viewModel.uiState.value.notificationsBlocked).isFalse()
+
+        fakeNotifications.pushesAllowed.value = false
         assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
 
-        fakeNotifications.permissionGranted = true
-        viewModel.refreshNotificationAccess()
-
+        fakeNotifications.pushesAllowed.value = true
         assertThat(viewModel.uiState.value.notificationsBlocked).isFalse()
         collectJob.cancel()
     }
 
     @Test
-    fun `asking for permission from Settings falls back to the system settings and re-checks`() = runTest {
+    fun `enabling notifications from Settings lets them through and logs it apart from onboarding`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
-        fakeNotifications.permissionGranted = false
-        viewModel.refreshNotificationAccess()
-        assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
+        var settingsOpened = 0
+        val eventsJob = launch(UnconfinedTestDispatcher()) {
+            viewModel.openSystemNotificationSettings.collect { settingsOpened++ }
+        }
+        fakeNotifications.pushesAllowed.value = false
 
-        fakeNotifications.permissionGranted = true
-        viewModel.requestNotificationPermission()
+        viewModel.enableNotifications()
 
-        assertThat(fakeNotifications.permissionRequests).isEqualTo(1)
-        assertThat(fakeNotifications.settingsFallbacks).containsExactly(true)
+        assertThat(fakeNotifications.enableRequests).isEqualTo(1)
         assertThat(viewModel.uiState.value.notificationsBlocked).isFalse()
+        assertThat(settingsOpened).isEqualTo(0)
+        verify(analyticsTracker).notificationsPermissionAnswered("granted", null, "settings")
+        eventsJob.cancel()
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `when Android will not ask again, Settings opens the system settings instead`() = runTest {
+        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        var settingsOpened = 0
+        val eventsJob = launch(UnconfinedTestDispatcher()) {
+            viewModel.openSystemNotificationSettings.collect { settingsOpened++ }
+        }
+        fakeNotifications.pushesAllowed.value = false
+        fakeNotifications.enableResult = EnablePushesResult.NEEDS_SYSTEM_SETTINGS
+
+        viewModel.enableNotifications()
+
+        assertThat(settingsOpened).isEqualTo(1)
+        assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
+        verify(analyticsTracker).notificationsPermissionAnswered("system_settings", null, "settings")
+        eventsJob.cancel()
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `a no to the system dialog keeps notifications blocked and opens nothing else`() = runTest {
+        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        var settingsOpened = 0
+        val eventsJob = launch(UnconfinedTestDispatcher()) {
+            viewModel.openSystemNotificationSettings.collect { settingsOpened++ }
+        }
+        fakeNotifications.pushesAllowed.value = false
+        fakeNotifications.enableResult = EnablePushesResult.DENIED
+
+        viewModel.enableNotifications()
+
+        assertThat(settingsOpened).isEqualTo(0)
+        assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
+        verify(analyticsTracker).notificationsPermissionAnswered("denied", null, "settings")
+        eventsJob.cancel()
         collectJob.cancel()
     }
 

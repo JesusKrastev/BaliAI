@@ -37,6 +37,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -121,8 +122,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
-    // The user changes the permission and each channel in the system settings, outside the app.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationAccess() }
+    // The user switches each channel in the system settings, outside the app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationChannels() }
+    LaunchedEffect(viewModel) {
+        viewModel.openSystemNotificationSettings.collect { context.openAppNotificationSettings() }
+    }
 
     Column(
         modifier = modifier
@@ -149,15 +153,16 @@ fun SettingsScreen(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingsSectionLabel("Notificaciones")
             if (uiState.notificationsBlocked) {
-                EnableNotificationsPrompt(onEnableClick = viewModel::requestNotificationPermission)
+                EnableNotificationsPrompt(onEnableClick = viewModel::enableNotifications)
             }
             SettingsGroup(
                 NotificationCategory.entries.map { category ->
-                    val status = if (category in uiState.disabledNotificationCategories) "Desactivado" else "Activado"
+                    // While Android blocks the app, no channel delivers anything, whatever its own switch says.
+                    val isOn = !uiState.notificationsBlocked && category !in uiState.disabledNotificationCategories
                     SettingsRowSpec(
                         icon = category.icon(),
                         label = category.title,
-                        description = "$status · ${category.description}",
+                        description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
                         onClick = { context.openNotificationSettings(category) }
                     )
                 }
@@ -428,19 +433,34 @@ private fun NotificationCategory.icon(): ImageVector = when (this) {
 
 /**
  * Opens Android's settings for [category]'s channel, where the user switches that kind of
- * notification on or off. Below Android 8 there are no channels, so it opens the app's
- * notification settings, which switch them all together.
+ * notification on or off. Below Android 8 there are no channels, and some manufacturers' builds
+ * have no channel screen: both fall back to [openAppNotificationSettings].
  *
  * @param category the kind of notification to configure
  */
 private fun Context.openNotificationSettings(category: NotificationCategory) {
-    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    val openedChannel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
         Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
             .putExtra(Settings.EXTRA_CHANNEL_ID, category.channelId)
-    } else {
-        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+    )
+    if (!openedChannel) openAppNotificationSettings()
+}
+
+/**
+ * Opens the app's notification settings in Android, where the user lets notifications through
+ * when the system dialog will not show again; failing that, the app's details screen, which
+ * every Android has and links to them.
+ */
+private fun Context.openAppNotificationSettings() {
+    val openedNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    )
+    if (!openedNotifications) {
+        startActivityOrFalse(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        )
     }
-    startActivityOrFalse(intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
 }
 
 /**

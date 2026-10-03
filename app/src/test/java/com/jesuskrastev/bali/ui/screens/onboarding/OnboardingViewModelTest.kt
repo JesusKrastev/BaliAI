@@ -396,7 +396,7 @@ class OnboardingViewModelTest {
     fun `going back is ignored while the permission dialog is open`() = runTest {
         val dialog = CompletableDeferred<Boolean>()
         val dialogOpen = object : NotificationsRepository by FakeNotificationsRepository() {
-            override suspend fun requestPermission(openSettingsIfBlocked: Boolean): Boolean = dialog.await()
+            override suspend fun requestPermission(): Boolean = dialog.await()
         }
         viewModel = OnboardingViewModel(fakeUserRepository, fakeAnalyticsTracker, dialogOpen)
         advanceToNotifications()

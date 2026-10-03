@@ -177,15 +177,19 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Tracks the answer to the onboarding screen that offers study reminders.
+     * Tracks an answer to the offer of notifications: the onboarding's reminders screen, or the
+     * "Activar notificaciones" button in Settings.
      *
-     * @param result `granted` (said yes and Android allowed it), `denied` (said yes but
-     *   refused the system dialog) or `declined` (tapped "Ahora no", no system dialog shown)
-     * @param studySlot the part of the day picked on the previous screen, e.g. `night`
+     * @param result `granted` (Android allows them now), `denied` (refused the system dialog),
+     *   `declined` (tapped "Ahora no" in onboarding, no system dialog shown) or `system_settings`
+     *   (Settings, when Android would not show the dialog and the system settings were opened)
+     * @param studySlot the part of the day picked on the previous screen, e.g. `night`; null outside onboarding
+     * @param source `onboarding` or `settings`, so the onboarding funnel is not mixed with later opt-ins
      */
-    open fun notificationsPermissionAnswered(result: String, studySlot: String?) =
+    open fun notificationsPermissionAnswered(result: String, studySlot: String?, source: String = "onboarding") =
         log("notifications_permission_result") {
             putString("result", result)
+            putString("source", source)
             studySlot?.let { putString("study_slot", it) }
         }
 

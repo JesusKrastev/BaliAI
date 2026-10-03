@@ -5,14 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.audio.SoundEffects
+import com.jesuskrastev.bali.domain.model.EnablePushesResult
 import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.NotificationsRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -32,18 +36,33 @@ class SettingsViewModel @Inject constructor(
     private val notificationsRepository: NotificationsRepository
 ) : ViewModel() {
 
-    /** What Android currently lets the app show: the permission and which category channels are off. */
-    private data class NotificationAccess(
-        val blocked: Boolean,
+    /**
+     * The categories whose channel is off. Android has no callback for channel changes, so this
+     * is re-read by [refreshNotificationChannels] each time the screen comes back to the front.
+     */
+    private val disabledCategories = MutableStateFlow(readDisabledCategories())
+
+    /** What the preference rows show, gathered so the profile flows keep fitting one `combine`. */
+    private data class Preferences(
+        val soundsEnabled: Boolean,
+        val pushesAllowed: Boolean,
         val disabledCategories: Set<NotificationCategory>
     )
 
-    private val notificationAccess = MutableStateFlow(readNotificationAccess())
+    private val preferences = combine(
+        soundEffects.isEnabled,
+        notificationsRepository.pushesAllowed,
+        disabledCategories,
+        ::Preferences
+    )
 
-    /** What the preference rows show, gathered so the profile flows keep fitting one `combine`. */
-    private data class Preferences(val soundsEnabled: Boolean, val notifications: NotificationAccess)
+    private val _openSystemNotificationSettings = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    private val preferences = combine(soundEffects.isEnabled, notificationAccess, ::Preferences)
+    /**
+     * Fires when only Android's settings can turn notifications back on, so the screen opens them:
+     * the view model holds no `Context` to start that activity itself.
+     */
+    val openSystemNotificationSettings: SharedFlow<Unit> = _openSystemNotificationSettings.asSharedFlow()
 
     /** Combines the local user profile, the live auth session and the preference rows into [SettingsUiState]. */
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -59,8 +78,8 @@ class SettingsViewModel @Inject constructor(
             profilePictureUrl = profilePictureUrl,
             isLoggedIn = isLoggedIn,
             soundsEnabled = preferences.soundsEnabled,
-            disabledNotificationCategories = preferences.notifications.disabledCategories,
-            notificationsBlocked = preferences.notifications.blocked
+            disabledNotificationCategories = preferences.disabledCategories,
+            notificationsBlocked = !preferences.pushesAllowed
         )
     }.stateIn(
         scope = viewModelScope,
@@ -82,21 +101,30 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Re-reads the notification permission and every category's channel. Called whenever the
-     * screen comes back to the front, because the user changes both in Android's settings.
+     * Re-reads every category's channel. Called whenever the screen comes back to the front,
+     * because the user switches channels in Android's settings. The permission needs no
+     * refresh: [NotificationsRepository.pushesAllowed] follows it by itself.
      */
-    fun refreshNotificationAccess() {
-        notificationAccess.value = readNotificationAccess()
+    fun refreshNotificationChannels() {
+        disabledCategories.value = readDisabledCategories()
     }
 
     /**
-     * Asks Android to let notifications through, taking the user to the system settings when
-     * the dialog can no longer be shown.
+     * Lets notifications through again: opts back in, shows the system dialog, or, when Android
+     * will not show it any more, asks the screen to open the system settings. The outcome is
+     * logged with `source = settings`, apart from the onboarding's answers.
      */
-    fun requestNotificationPermission() {
+    fun enableNotifications() {
         viewModelScope.launch {
-            notificationsRepository.requestPermission(openSettingsIfBlocked = true)
-            refreshNotificationAccess()
+            val result = notificationsRepository.enablePushes()
+            analyticsTracker.notificationsPermissionAnswered(
+                result = result.analyticsValue,
+                studySlot = null,
+                source = NOTIFICATIONS_SOURCE_SETTINGS
+            )
+            if (result == EnablePushesResult.NEEDS_SYSTEM_SETTINGS) {
+                _openSystemNotificationSettings.tryEmit(Unit)
+            }
         }
     }
 
@@ -114,14 +142,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Reads the permission and the channels from Android.
+     * Reads the channels from Android.
      *
-     * @return what the app may show right now
+     * @return the categories whose channel the user switched off
      */
-    private fun readNotificationAccess() = NotificationAccess(
-        blocked = !notificationsRepository.isPermissionGranted(),
-        disabledCategories = NotificationCategory.entries
-            .filterNot(notificationsRepository::isCategoryEnabled)
-            .toSet()
-    )
+    private fun readDisabledCategories(): Set<NotificationCategory> = NotificationCategory.entries
+        .filterNot(notificationsRepository::isCategoryEnabled)
+        .toSet()
+
+    private companion object {
+        /** `source` of `notifications_permission_result` when the answer comes from Settings. */
+        const val NOTIFICATIONS_SOURCE_SETTINGS = "settings"
+    }
 }

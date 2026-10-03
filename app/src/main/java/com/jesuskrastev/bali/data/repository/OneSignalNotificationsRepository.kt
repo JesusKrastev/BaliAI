@@ -3,19 +3,26 @@ package com.jesuskrastev.bali.data.repository
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.jesuskrastev.bali.domain.model.EnablePushesResult
 import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
 import com.jesuskrastev.bali.domain.repository.NotificationsRepository
 import com.onesignal.OneSignal
+import com.onesignal.notifications.IPermissionObserver
+import com.onesignal.user.subscriptions.IPushSubscriptionObserver
+import com.onesignal.user.subscriptions.PushSubscriptionChangedState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -55,8 +62,32 @@ class OneSignalNotificationsRepository @Inject constructor(
         }
     }
 
-    /** @return true when Android lets this app show notifications right now */
-    override fun isPermissionGranted(): Boolean = OneSignal.Notifications.permission
+    /**
+     * Follows OneSignal's permission and push-subscription observers rather than reading the
+     * permission once: OneSignal refreshes its copy when the app regains focus, which can land
+     * after the screen has already read it on returning from the system settings.
+     */
+    override val pushesAllowed: Flow<Boolean> = callbackFlow {
+        fun allowed() = OneSignal.Notifications.permission && OneSignal.User.pushSubscription.optedIn
+
+        val permissionObserver = object : IPermissionObserver {
+            override fun onNotificationPermissionChange(permission: Boolean) {
+                trySend(allowed())
+            }
+        }
+        val subscriptionObserver = object : IPushSubscriptionObserver {
+            override fun onPushSubscriptionChange(state: PushSubscriptionChangedState) {
+                trySend(allowed())
+            }
+        }
+        OneSignal.Notifications.addPermissionObserver(permissionObserver)
+        OneSignal.User.pushSubscription.addObserver(subscriptionObserver)
+        trySend(allowed())
+        awaitClose {
+            OneSignal.Notifications.removePermissionObserver(permissionObserver)
+            OneSignal.User.pushSubscription.removeObserver(subscriptionObserver)
+        }
+    }.distinctUntilChanged()
 
     /**
      * Reads the importance of the category's channel, which the user sets in Android's settings.
@@ -73,13 +104,14 @@ class OneSignalNotificationsRepository @Inject constructor(
 
     /**
      * Shows OneSignal's permission request and opts the push subscription back in when it is
-     * granted, in case an earlier "Ahora no" opted it out.
+     * granted, in case an earlier "Ahora no" opted it out. OneSignal's own "go to settings"
+     * fallback stays off: it is an English-only dialog that would also pop up right after the
+     * user says no.
      *
-     * @param openSettingsIfBlocked send the user to the system settings when no dialog can be shown
      * @return true when notifications can be shown; false when denied or the request failed
      */
-    override suspend fun requestPermission(openSettingsIfBlocked: Boolean): Boolean = try {
-        OneSignal.Notifications.requestPermission(fallbackToSettings = openSettingsIfBlocked).also { granted ->
+    override suspend fun requestPermission(): Boolean = try {
+        OneSignal.Notifications.requestPermission(fallbackToSettings = false).also { granted ->
             if (granted) OneSignal.User.pushSubscription.optIn()
         }
     } catch (e: CancellationException) {
@@ -87,6 +119,24 @@ class OneSignalNotificationsRepository @Inject constructor(
     } catch (e: Exception) {
         FirebaseCrashlytics.getInstance().recordException(e)
         false
+    }
+
+    /**
+     * Opts back in when Android already shows notifications (only the "Ahora no" opt-out was in
+     * the way); otherwise asks with the system dialog while OneSignal has not recorded that the
+     * user blocked it for good, which Android only lets happen from Android 13.
+     *
+     * @return what happened
+     */
+    override suspend fun enablePushes(): EnablePushesResult {
+        if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            OneSignal.User.pushSubscription.optIn()
+            return EnablePushesResult.ENABLED
+        }
+        val dialogPossible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            OneSignal.Notifications.canRequestPermission
+        if (!dialogPossible) return EnablePushesResult.NEEDS_SYSTEM_SETTINGS
+        return if (requestPermission()) EnablePushesResult.ENABLED else EnablePushesResult.DENIED
     }
 
     /** Opts this install's push subscription out, so OneSignal sends it nothing. */
