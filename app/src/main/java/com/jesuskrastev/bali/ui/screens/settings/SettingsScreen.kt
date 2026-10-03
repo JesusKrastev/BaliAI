@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.LocalOffer
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -117,8 +121,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
-    // The user may have allowed or blocked notifications in the system settings while away.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationPermission() }
+    // The user changes the permission and each channel in the system settings, outside the app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationAccess() }
 
     Column(
         modifier = modifier
@@ -142,33 +146,23 @@ fun SettingsScreen(
             )
         )
 
-        SettingsSection(
-            title = "Notificaciones",
-            items = buildList {
-                if (uiState.notificationsBlocked) {
-                    add(
-                        SettingsRowSpec(
-                            icon = Icons.Rounded.NotificationsOff,
-                            label = "Android bloquea las notificaciones",
-                            description = "Toca para permitirlas",
-                            onClick = viewModel::requestNotificationPermission
-                        )
-                    )
-                }
-                NotificationCategory.entries.forEach { category ->
-                    val enabled = category !in uiState.disabledNotificationCategories
-                    add(
-                        SettingsRowSpec(
-                            icon = category.icon(),
-                            label = category.title,
-                            description = category.description,
-                            checked = enabled,
-                            onClick = { viewModel.setNotificationCategoryEnabled(category, !enabled) }
-                        )
-                    )
-                }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsSectionLabel("Notificaciones")
+            if (uiState.notificationsBlocked) {
+                EnableNotificationsPrompt(onEnableClick = viewModel::requestNotificationPermission)
             }
-        )
+            SettingsGroup(
+                NotificationCategory.entries.map { category ->
+                    val status = if (category in uiState.disabledNotificationCategories) "Desactivado" else "Activado"
+                    SettingsRowSpec(
+                        icon = category.icon(),
+                        label = category.title,
+                        description = "$status · ${category.description}",
+                        onClick = { context.openNotificationSettings(category) }
+                    )
+                }
+            )
+        }
 
         SettingsSection(
             title = "Preferencias",
@@ -428,7 +422,71 @@ private data class SettingsRowSpec(
  */
 private fun NotificationCategory.icon(): ImageVector = when (this) {
     NotificationCategory.STUDY -> Icons.Rounded.NotificationsActive
+    NotificationCategory.STREAK -> Icons.Rounded.LocalFireDepartment
     NotificationCategory.PROMOTIONS -> Icons.Rounded.LocalOffer
+}
+
+/**
+ * Opens Android's settings for [category]'s channel, where the user switches that kind of
+ * notification on or off. Below Android 8 there are no channels, so it opens the app's
+ * notification settings, which switch them all together.
+ *
+ * @param category the kind of notification to configure
+ */
+private fun Context.openNotificationSettings(category: NotificationCategory) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, category.channelId)
+    } else {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+    }
+    startActivityOrFalse(intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+}
+
+/**
+ * Message shown while Android blocks the app's notifications, asking the user to turn them
+ * on: without them the study reminders and the streak warning never arrive.
+ *
+ * @param onEnableClick asks for the permission, or opens the system settings when the dialog
+ *   can no longer be shown
+ */
+@Composable
+private fun EnableNotificationsPrompt(onEnableClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Rounded.NotificationsOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Activa las notificaciones",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Text(
+                "Sin ellas no podemos avisarte a tu hora de estudio ni cuando tu racha esté en peligro, " +
+                    "y es fácil que se te pase un día. Te llevará un toque.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Button(onClick = onEnableClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Activar notificaciones", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
 }
 
 /**

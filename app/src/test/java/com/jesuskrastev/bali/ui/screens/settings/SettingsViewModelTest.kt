@@ -17,7 +17,6 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.verify
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
@@ -52,26 +51,31 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `turning a category off is stored, shown and tracked, and leaves the others on`() = runTest {
+    fun `a channel the user turned off in Android shows as off once Settings is opened again`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
 
-        viewModel.setNotificationCategoryEnabled(NotificationCategory.PROMOTIONS, enabled = false)
+        fakeNotifications.disabledCategories.add(NotificationCategory.PROMOTIONS)
+        viewModel.refreshNotificationAccess()
 
         assertThat(viewModel.uiState.value.disabledNotificationCategories)
             .containsExactly(NotificationCategory.PROMOTIONS)
-        verify(analyticsTracker).notificationCategoryChanged("promos", false)
         collectJob.cancel()
     }
 
     @Test
-    fun `turning a category back on removes it from the disabled ones`() = runTest {
+    fun `a channel turned back on stops showing as off`() = runTest {
+        fakeNotifications.disabledCategories.add(NotificationCategory.STREAK)
+        viewModel = SettingsViewModel(
+            FakeUserRepository(), FakeAuthRepository(), analyticsTracker, fakeSoundEffects, fakeNotifications
+        )
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        assertThat(viewModel.uiState.value.disabledNotificationCategories)
+            .containsExactly(NotificationCategory.STREAK)
 
-        viewModel.setNotificationCategoryEnabled(NotificationCategory.STUDY, enabled = false)
-        viewModel.setNotificationCategoryEnabled(NotificationCategory.STUDY, enabled = true)
+        fakeNotifications.disabledCategories.clear()
+        viewModel.refreshNotificationAccess()
 
         assertThat(viewModel.uiState.value.disabledNotificationCategories).isEmpty()
-        verify(analyticsTracker).notificationCategoryChanged("study", true)
         collectJob.cancel()
     }
 
@@ -85,18 +89,26 @@ class SettingsViewModelTest {
         assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
 
         fakeNotifications.permissionGranted = true
-        viewModel.refreshNotificationPermission()
+        viewModel.refreshNotificationAccess()
 
         assertThat(viewModel.uiState.value.notificationsBlocked).isFalse()
         collectJob.cancel()
     }
 
     @Test
-    fun `asking for permission from Settings falls back to the system settings`() = runTest {
+    fun `asking for permission from Settings falls back to the system settings and re-checks`() = runTest {
+        val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        fakeNotifications.permissionGranted = false
+        viewModel.refreshNotificationAccess()
+        assertThat(viewModel.uiState.value.notificationsBlocked).isTrue()
+
+        fakeNotifications.permissionGranted = true
         viewModel.requestNotificationPermission()
 
         assertThat(fakeNotifications.permissionRequests).isEqualTo(1)
         assertThat(fakeNotifications.settingsFallbacks).containsExactly(true)
+        assertThat(viewModel.uiState.value.notificationsBlocked).isFalse()
+        collectJob.cancel()
     }
 
     @Test

@@ -21,7 +21,7 @@ import javax.inject.Inject
 /**
  * Backs the Settings tab: the signed-in profile and sign-out action that used to live in Home's
  * side drawer, now surfaced from the persistent bottom navigation, the sound effects switch and
- * the switches for each kind of notification.
+ * what the user allowed in Android for each kind of notification.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -32,24 +32,20 @@ class SettingsViewModel @Inject constructor(
     private val notificationsRepository: NotificationsRepository
 ) : ViewModel() {
 
-    /** What the preference switches show, gathered so the profile flows keep fitting one `combine`. */
-    private data class Preferences(
-        val soundsEnabled: Boolean,
-        val disabledCategories: Set<NotificationCategory>,
-        val notificationsBlocked: Boolean
+    /** What Android currently lets the app show: the permission and which category channels are off. */
+    private data class NotificationAccess(
+        val blocked: Boolean,
+        val disabledCategories: Set<NotificationCategory>
     )
 
-    private val notificationsAllowed = MutableStateFlow(notificationsRepository.isPermissionGranted())
+    private val notificationAccess = MutableStateFlow(readNotificationAccess())
 
-    private val preferences = combine(
-        soundEffects.isEnabled,
-        notificationsRepository.disabledCategories,
-        notificationsAllowed
-    ) { soundsEnabled, disabled, allowed ->
-        Preferences(soundsEnabled, disabled.orEmpty(), notificationsBlocked = !allowed)
-    }
+    /** What the preference rows show, gathered so the profile flows keep fitting one `combine`. */
+    private data class Preferences(val soundsEnabled: Boolean, val notifications: NotificationAccess)
 
-    /** Combines the local user profile, the live auth session and the preference switches into [SettingsUiState]. */
+    private val preferences = combine(soundEffects.isEnabled, notificationAccess, ::Preferences)
+
+    /** Combines the local user profile, the live auth session and the preference rows into [SettingsUiState]. */
     val uiState: StateFlow<SettingsUiState> = combine(
         userRepository.get(),
         authRepository.isLoggedIn,
@@ -63,8 +59,8 @@ class SettingsViewModel @Inject constructor(
             profilePictureUrl = profilePictureUrl,
             isLoggedIn = isLoggedIn,
             soundsEnabled = preferences.soundsEnabled,
-            disabledNotificationCategories = preferences.disabledCategories,
-            notificationsBlocked = preferences.notificationsBlocked
+            disabledNotificationCategories = preferences.notifications.disabledCategories,
+            notificationsBlocked = preferences.notifications.blocked
         )
     }.stateIn(
         scope = viewModelScope,
@@ -86,25 +82,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Switches one kind of notification on or off. The choice reaches OneSignal through the tag
-     * sync, which skips this user in the journeys of a category they turned off.
-     *
-     * @param category the kind of notification to change
-     * @param enabled false to stop receiving it
+     * Re-reads the notification permission and every category's channel. Called whenever the
+     * screen comes back to the front, because the user changes both in Android's settings.
      */
-    fun setNotificationCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
-        viewModelScope.launch {
-            notificationsRepository.setCategoryEnabled(category, enabled)
-            analyticsTracker.notificationCategoryChanged(category.key, enabled)
-        }
-    }
-
-    /**
-     * Re-reads whether Android lets the app show notifications. Called whenever the screen comes
-     * back to the front, because the user may have changed it in the system settings.
-     */
-    fun refreshNotificationPermission() {
-        notificationsAllowed.value = notificationsRepository.isPermissionGranted()
+    fun refreshNotificationAccess() {
+        notificationAccess.value = readNotificationAccess()
     }
 
     /**
@@ -114,7 +96,7 @@ class SettingsViewModel @Inject constructor(
     fun requestNotificationPermission() {
         viewModelScope.launch {
             notificationsRepository.requestPermission(openSettingsIfBlocked = true)
-            refreshNotificationPermission()
+            refreshNotificationAccess()
         }
     }
 
@@ -130,4 +112,16 @@ class SettingsViewModel @Inject constructor(
             analyticsTracker.resetUser()
         }
     }
+
+    /**
+     * Reads the permission and the channels from Android.
+     *
+     * @return what the app may show right now
+     */
+    private fun readNotificationAccess() = NotificationAccess(
+        blocked = !notificationsRepository.isPermissionGranted(),
+        disabledCategories = NotificationCategory.entries
+            .filterNot(notificationsRepository::isCategoryEnabled)
+            .toSet()
+    )
 }

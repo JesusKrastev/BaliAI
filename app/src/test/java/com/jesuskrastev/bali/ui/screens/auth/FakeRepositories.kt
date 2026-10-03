@@ -318,21 +318,18 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
     /** The latest saved study moment, or null if none was saved. */
     val savedSchedule: StudySchedule? get() = _studySchedule.value
 
-    private val _disabledCategories = MutableStateFlow<Set<NotificationCategory>?>(null)
-    override val disabledCategories: Flow<Set<NotificationCategory>?> = _disabledCategories
-
     /** What Android currently says about showing notifications; tests flip it to simulate the system settings. */
     var permissionGranted = true
+
+    /** The categories whose channel the user turned off in Android's settings; tests fill it to simulate that. */
+    val disabledCategories = mutableSetOf<NotificationCategory>()
 
     /** The `openSettingsIfBlocked` value of every [requestPermission] call in order. */
     val settingsFallbacks = mutableListOf<Boolean>()
 
     override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
-    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
-        val disabled = _disabledCategories.value.orEmpty()
-        _disabledCategories.value = if (enabled) disabled - category else disabled + category
-    }
     override fun isPermissionGranted(): Boolean = permissionGranted
+    override fun isCategoryEnabled(category: NotificationCategory): Boolean = category !in disabledCategories
     override suspend fun requestPermission(openSettingsIfBlocked: Boolean): Boolean {
         permissionRequests++
         settingsFallbacks.add(openSettingsIfBlocked)

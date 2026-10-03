@@ -1,9 +1,10 @@
 package com.jesuskrastev.bali.data.repository
 
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.domain.model.NotificationCategory
@@ -41,10 +42,6 @@ class OneSignalNotificationsRepository @Inject constructor(
         }
         .distinctUntilChanged()
 
-    override val disabledCategories: Flow<Set<NotificationCategory>?> = context.notificationsDataStore.data
-        .map { preferences -> preferences[KEY_DISABLED_CATEGORIES]?.let(NotificationCategory::fromKeys) }
-        .distinctUntilChanged()
-
     /**
      * Stores [schedule], replacing any earlier answer.
      *
@@ -58,23 +55,21 @@ class OneSignalNotificationsRepository @Inject constructor(
         }
     }
 
-    /**
-     * Stores the new choice for [category]. The first change saves the whole picture, so from
-     * then on this device is the one that says what is on and off.
-     *
-     * @param category the kind of notification to change
-     * @param enabled false to stop receiving it
-     */
-    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
-        context.notificationsDataStore.edit { preferences ->
-            val disabled = preferences[KEY_DISABLED_CATEGORIES].orEmpty().toMutableSet()
-            if (enabled) disabled.remove(category.key) else disabled.add(category.key)
-            preferences[KEY_DISABLED_CATEGORIES] = disabled
-        }
-    }
-
     /** @return true when Android lets this app show notifications right now */
     override fun isPermissionGranted(): Boolean = OneSignal.Notifications.permission
+
+    /**
+     * Reads the importance of the category's channel, which the user sets in Android's settings.
+     *
+     * @param category the kind of notification to look up
+     * @return false when the channel is set to "no notifications"; true otherwise
+     */
+    override fun isCategoryEnabled(category: NotificationCategory): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
+        val channel = context.getSystemService(NotificationManager::class.java)
+            .getNotificationChannel(category.channelId)
+        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     /**
      * Shows OneSignal's permission request and opts the push subscription back in when it is
@@ -123,6 +118,5 @@ class OneSignalNotificationsRepository @Inject constructor(
     private companion object {
         val KEY_STUDY_SLOT = stringPreferencesKey("study_slot")
         val KEY_STUDY_RHYTHM = stringPreferencesKey("study_rhythm")
-        val KEY_DISABLED_CATEGORIES = stringSetPreferencesKey("disabled_categories")
     }
 }

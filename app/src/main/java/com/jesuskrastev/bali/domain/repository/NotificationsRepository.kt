@@ -24,26 +24,22 @@ interface NotificationsRepository {
     suspend fun saveStudySchedule(schedule: StudySchedule)
 
     /**
-     * The categories the user switched off in Settings, or null while they never touched the
-     * switches. Null is not the same as "none": it keeps whatever the account already has in
-     * OneSignal, so a reinstall does not turn back on what the user had silenced.
-     */
-    val disabledCategories: Flow<Set<NotificationCategory>?>
-
-    /**
-     * Switches one category on or off, keeping every other category as it is.
-     *
-     * @param category the kind of notification to change
-     * @param enabled false to stop receiving it
-     */
-    suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean)
-
-    /**
-     * Whether Android currently lets this app show notifications.
+     * Whether Android currently lets this app show notifications at all.
      *
      * @return true when a push would be shown
      */
     fun isPermissionGranted(): Boolean
+
+    /**
+     * Whether the user left a category's notification channel on. Each category has its own
+     * channel in Android's settings, and a push sent to a channel the user turned off is
+     * never shown; the app can read that choice but only the user can change it.
+     *
+     * @param category the kind of notification to look up
+     * @return false when the user turned the channel off; true otherwise, also below Android 8,
+     *   which has no channels
+     */
+    fun isCategoryEnabled(category: NotificationCategory): Boolean
 
     /**
      * Asks Android for permission to show notifications and lets pushes through when it is

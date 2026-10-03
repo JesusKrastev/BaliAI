@@ -6,27 +6,22 @@ import org.junit.Test
 class NotificationCategoryTest {
 
     @Test
-    fun `the keys are the ones the OneSignal journeys filter on`() {
-        // Renaming a key silently breaks the journeys in the dashboard: this fails first.
-        assertThat(NotificationCategory.entries.map { it.key }).containsExactly("study", "promos").inOrder()
+    fun `the channel ids are the ones the OneSignal messages name`() {
+        // Renaming one silently sends that kind of push to a new, empty channel: this fails first.
+        assertThat(NotificationCategory.entries.map { it.channelId })
+            .containsExactly("reminders", "streak", "promotions").inOrder()
     }
 
     @Test
-    fun `nothing switched off gives no tag value`() {
-        assertThat(NotificationCategory.offTagValue(emptySet())).isNull()
+    fun `no two categories share a channel`() {
+        val ids = NotificationCategory.entries.map { it.channelId }
+
+        assertThat(ids).containsNoDuplicates()
     }
 
     @Test
-    fun `the tag value does not depend on the order the categories were switched off`() {
-        val both = setOf(NotificationCategory.PROMOTIONS, NotificationCategory.STUDY)
-
-        assertThat(NotificationCategory.offTagValue(both)).isEqualTo("study,promos")
-    }
-
-    @Test
-    fun `stored keys come back as categories and unknown ones are dropped`() {
-        val read = NotificationCategory.fromKeys(setOf("promos", "from-a-newer-version"))
-
-        assertThat(read).containsExactly(NotificationCategory.PROMOTIONS)
+    fun `the study channel keeps the id installs already have`() {
+        // Existing installs created "reminders" before categories existed; keeping the id keeps their choice.
+        assertThat(NotificationCategory.STUDY.channelId).isEqualTo("reminders")
     }
 }

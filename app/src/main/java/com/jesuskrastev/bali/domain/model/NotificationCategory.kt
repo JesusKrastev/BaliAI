@@ -1,48 +1,32 @@
 package com.jesuskrastev.bali.domain.model
 
 /**
- * A kind of push notification the user can switch off on its own from Settings.
+ * A kind of push notification, with its own notification channel in Android.
  *
- * The categories an opted-out user has are sent to OneSignal as a single `notif_off` tag (the
- * free plan keeps 6 tags per user, so one tag per category does not fit), and the journeys in
- * the OneSignal dashboard skip whoever is opted out of theirs.
+ * Every push the OneSignal journeys send names the channel of its category, so the user can
+ * silence one kind from Android's settings and keep the rest: Android drops what arrives on a
+ * channel that is switched off. Nothing is tagged or filtered in OneSignal for this.
  *
- * @property key stable value inside the `notif_off` tag; never rename it, the OneSignal
- *   journeys filter on it
- * @property title name shown in Settings
+ * @property channelId id of the Android channel; never rename it, the messages in the OneSignal
+ *   dashboard name it as "existing channel" and a renamed one would be created empty
+ * @property title name shown in Settings and in Android's channel list
  * @property description what the category sends, shown under [title]
  */
-enum class NotificationCategory(val key: String, val title: String, val description: String) {
+enum class NotificationCategory(val channelId: String, val title: String, val description: String) {
+    /** The id is the one the app has always created, so existing installs keep their choice. */
     STUDY(
-        key = "study",
+        channelId = "reminders",
         title = "Recordatorios de estudio",
-        description = "Tu hora de estudio, la racha en peligro y un aviso si llevas días sin abrir la app"
+        description = "Tu hora de estudio y un aviso si llevas días sin abrir la app"
+    ),
+    STREAK(
+        channelId = "streak",
+        title = "Racha en peligro",
+        description = "Un aviso cuando tu racha de días se va a perder"
     ),
     PROMOTIONS(
-        key = "promos",
+        channelId = "promotions",
         title = "Ofertas y novedades",
         description = "Descuentos y novedades de Bali AI"
-    );
-
-    companion object {
-        /**
-         * Builds the value of the `notif_off` tag for [disabled]: the keys in enum order, joined
-         * by commas, so the same choice always gives the same text (`study`, `promos` or
-         * `study,promos`).
-         *
-         * @param disabled the categories the user switched off
-         * @return the tag value, or null when nothing is switched off and the tag must go
-         */
-        fun offTagValue(disabled: Set<NotificationCategory>): String? =
-            entries.filter { it in disabled }.joinToString(",") { it.key }.ifEmpty { null }
-
-        /**
-         * Reads categories back from their [key]s, ignoring any this version does not know.
-         *
-         * @param keys values previously stored from [NotificationCategory.key]
-         * @return the matching categories
-         */
-        fun fromKeys(keys: Set<String>): Set<NotificationCategory> =
-            entries.filterTo(mutableSetOf()) { it.key in keys }
-    }
+    )
 }
