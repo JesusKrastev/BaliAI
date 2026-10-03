@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -35,13 +36,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -191,59 +196,128 @@ private const val RING_START = 135f
 private const val RING_SWEEP = 270f
 
 /**
- * Row of the latest mock exams as pass/fail dots, with empty slots for the ones still to take.
+ * Row of the latest mock exams as score tiles, with empty slots for the ones still to take.
  *
  * @param recent the latest mock exams, oldest first
- * @param slots how many dots to draw
+ * @param slots how many tiles to draw
  */
 @Composable
-internal fun RecentMockDots(recent: List<MockExam>, slots: Int) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+internal fun RecentMockTiles(recent: List<MockExam>, slots: Int) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(slots) { index ->
-            val exam = recent.getOrNull(index)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                MockDot(exam)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = exam?.let { "${it.score}/${it.total}" } ?: "—",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            MockTile(exam = recent.getOrNull(index), modifier = Modifier.weight(1f))
         }
     }
 }
 
 /**
- * One dot: green with a tick when passed, red with a cross when failed, an empty ring when the
- * slot has no exam yet.
+ * One mock exam: its score on a green (passed) or red (failed) tile, a tick or cross badge on the
+ * corner so the result never rests on colour alone, and the mistakes under it, which is how the
+ * DGT counts. A slot still to take is an empty outline.
  *
  * @param exam the mock exam, or null for an empty slot
+ * @param modifier layout modifier, usually a weight
  */
 @Composable
-private fun MockDot(exam: MockExam?) {
-    val base = Modifier.size(48.dp)
-    when {
-        exam == null -> Box(
-            modifier = base.border(2.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), CircleShape)
-        )
-        else -> {
-            val color = if (exam.passed) BaliAccentGreen else BaliAccentRed
+private fun MockTile(exam: MockExam?, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(16.dp)
+    val description = mockSlotDescriptionOf(exam)
+    Column(
+        modifier = modifier.clearAndSetSemantics { contentDescription = description },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (exam == null) {
             Box(
-                modifier = base
-                    .clip(CircleShape)
-                    .background(color.copy(alpha = 0.16f))
-                    .border(2.dp, color, CircleShape),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(MOCK_TILE_HEIGHT)
+                    .border(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f), shape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (exam.passed) Icons.Rounded.Check else Icons.Rounded.Close,
-                    contentDescription = if (exam.passed) "Aprobado" else "Suspendido",
-                    tint = color,
-                    modifier = Modifier.size(26.dp)
+                Text(
+                    text = "—",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }
+            Spacer(Modifier.height(6.dp))
+            Text(text = "", style = MaterialTheme.typography.labelSmall)
+        } else {
+            val color = if (exam.passed) BaliAccentGreen else BaliAccentRed
+            Box(modifier = Modifier.fillMaxWidth().height(MOCK_TILE_HEIGHT)) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(shape)
+                        .background(color.copy(alpha = 0.12f))
+                        .border(1.5.dp, color.copy(alpha = 0.7f), shape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = exam.score.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 6.dp, y = (-6).dp)
+                        .size(20.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                        .padding(2.dp)
+                        .background(color, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (exam.passed) Icons.Rounded.Check else Icons.Rounded.Close,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = mistakesText(exam),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+private val MOCK_TILE_HEIGHT = 56.dp
+
+/**
+ * Progress toward a goal counted in whole steps, one segment per step, so "4 de 5" reads as
+ * four boxes to fill rather than as a percentage.
+ *
+ * @param filled steps done; anything above [total] fills every segment
+ * @param total steps in the goal
+ * @param color colour of the filled segments
+ * @param modifier layout modifier
+ */
+@Composable
+internal fun GoalSegments(filled: Int, total: Int, color: Color, modifier: Modifier = Modifier) {
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {},
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(total) { index ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(10.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(if (index < filled) color else track)
+            )
         }
     }
 }
@@ -286,64 +360,103 @@ internal fun StatsBar(
 }
 
 /**
- * Bar chart of mock exam scores with the pass mark drawn as a dashed line.
+ * Line chart of mock exam scores over time. The pass zone (from [ExamRules.PASS_SCORE] up) is a
+ * green band, each exam a dot coloured by its result, and only the latest score is written on the
+ * plot: the tiles above already carry the recent ones. The axis starts at [historyFloorOf], not at
+ * zero, because every score that matters sits in the top third of the 0–30 range and bars from zero
+ * made 25 and 30 look alike; a line, unlike a bar, does not imply its length from zero.
  *
- * @param exams the exams to draw, oldest first
+ * @param exams the exams to draw, oldest first, at least two
  */
 @Composable
 internal fun MockHistoryChart(exams: List<MockExam>) {
-    val chartHeight = 150.dp
-    val passLine = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
-    val passFraction = ExamRules.PASS_SCORE.toFloat() / ExamRules.QUESTION_COUNT
+    val textMeasurer = rememberTextMeasurer()
+    val colors = MaterialTheme.colorScheme
+    val lineColor = colors.onSurfaceVariant.copy(alpha = 0.7f)
+    val ringColor = colors.surface
+    val gridColor = colors.onSurface.copy(alpha = 0.10f)
+    val bandColor = BaliAccentGreen.copy(alpha = 0.14f)
+    val tickStyle = MaterialTheme.typography.labelSmall.copy(color = colors.onSurfaceVariant)
+    val valueStyle = MaterialTheme.typography.labelLarge.copy(color = colors.onSurface, fontWeight = FontWeight.Black)
+    val floor = historyFloorOf(exams)
+    val description = historyDescriptionOf(exams)
+    val firstDay = shortDayText(exams.first().dateMillis)
+    val lastDay = shortDayText(exams.last().dateMillis)
 
-    Box(modifier = Modifier.fillMaxWidth().height(chartHeight + 28.dp)) {
-        Canvas(modifier = Modifier.fillMaxWidth().height(chartHeight).align(Alignment.BottomCenter)) {
-            val y = size.height * (1f - passFraction)
-            drawLine(
-                color = passLine,
-                start = Offset(0f, y),
-                end = Offset(size.width, y),
-                strokeWidth = 1.5.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(HISTORY_CHART_HEIGHT)
+            .semantics { contentDescription = description }
+    ) {
+        val markerRadius = 5.dp.toPx()
+        val ring = 2.dp.toPx()
+        val axisWidth = 24.dp.toPx()
+        val plotTop = 26.dp.toPx()
+        val plotBottom = size.height - 24.dp.toPx()
+        val firstX = axisWidth + markerRadius + 10.dp.toPx()
+        val lastX = size.width - markerRadius - ring - 4.dp.toPx()
+        val span = (ExamRules.QUESTION_COUNT - floor).toFloat()
+
+        fun yOf(score: Int) = plotTop + (ExamRules.QUESTION_COUNT - score) / span * (plotBottom - plotTop)
+        fun xOf(index: Int) = firstX + index * (lastX - firstX) / (exams.size - 1)
+
+        drawRect(
+            color = bandColor,
+            topLeft = Offset(axisWidth, yOf(ExamRules.QUESTION_COUNT)),
+            size = Size(size.width - axisWidth, yOf(ExamRules.PASS_SCORE) - yOf(ExamRules.QUESTION_COUNT))
+        )
+        listOf(floor, ExamRules.PASS_SCORE, ExamRules.QUESTION_COUNT).forEach { tick ->
+            val y = yOf(tick)
+            drawLine(gridColor, Offset(axisWidth, y), Offset(size.width, y), strokeWidth = 1.dp.toPx())
+            val label = textMeasurer.measure(tick.toString(), tickStyle)
+            drawText(label, topLeft = Offset(axisWidth - label.size.width - 6.dp.toPx(), y - label.size.height / 2f))
+        }
+
+        val path = Path()
+        exams.forEachIndexed { index, exam ->
+            if (index == 0) path.moveTo(xOf(index), yOf(exam.score)) else path.lineTo(xOf(index), yOf(exam.score))
+        }
+        drawPath(path, lineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        exams.forEachIndexed { index, exam ->
+            val center = Offset(xOf(index), yOf(exam.score))
+            drawCircle(ringColor, radius = markerRadius + ring, center = center)
+            drawCircle(if (exam.passed) BaliAccentGreen else BaliAccentRed, radius = markerRadius, center = center)
+        }
+
+        val last = Offset(xOf(exams.lastIndex), yOf(exams.last().score))
+        val value = textMeasurer.measure(exams.last().score.toString(), valueStyle)
+        drawText(
+            value,
+            topLeft = Offset(
+                (last.x - value.size.width / 2f).coerceAtMost(size.width - value.size.width),
+                last.y - markerRadius - ring - 2.dp.toPx() - value.size.height
             )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().height(chartHeight + 28.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            exams.forEach { exam ->
-                val color = if (exam.passed) BaliAccentGreen else BaliAccentRed
-                val fraction = (exam.score.toFloat() / ExamRules.QUESTION_COUNT).coerceIn(0.04f, 1f)
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Bottom
-                ) {
-                    Text(
-                        text = exam.score.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = color
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .width(if (exams.size > 6) 18.dp else 28.dp)
-                            .height(chartHeight * fraction)
-                            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
-                            .background(color)
-                    )
-                }
-            }
-        }
+        )
+
+        val dateTop = plotBottom + 6.dp.toPx()
+        val first = textMeasurer.measure(firstDay, tickStyle)
+        drawText(first, topLeft = Offset((xOf(0) - first.size.width / 2f).coerceAtLeast(axisWidth), dateTop))
+        val end = textMeasurer.measure(lastDay, tickStyle)
+        drawText(end, topLeft = Offset((last.x - end.size.width / 2f).coerceAtMost(size.width - end.size.width), dateTop))
     }
-    Text(
-        text = "Línea discontinua: ${ExamRules.PASS_SCORE} aciertos, el mínimo para aprobar",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(width = 14.dp, height = 10.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(bandColor)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = "Aprobado: ${ExamRules.PASS_SCORE} aciertos o más (${ExamRules.MAX_MISTAKES} fallos como mucho)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
+
+private val HISTORY_CHART_HEIGHT = 190.dp
 
 /**
  * A big number with its label and an icon, laid out for a two-by-two grid of totals.

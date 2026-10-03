@@ -16,11 +16,13 @@ import java.util.concurrent.TimeUnit
  * @param emoji large symbol shown at the top, used when [animation] is null
  * @param body short, punchy line that lands the idea
  * @param animation optional Lottie raw resource rendered instead of [emoji]
+ * @param scene optional hand-drawn scene, rendered instead of [animation] and [emoji]
  */
 data class NarrativeContent(
     val emoji: String,
     val body: String,
-    @RawRes val animation: Int? = null
+    @RawRes val animation: Int? = null,
+    val scene: com.jesuskrastev.bali.ui.screens.onboarding.steps.NarrativeScene? = null
 )
 
 /**

@@ -4,10 +4,13 @@ The sounds are synthesised here from plain sine/triangle waves, so they are orig
 sample, library or third-party recording is involved and nothing has to be attributed. They are
 released as CC0 1.0 (public domain) together with this script.
 
-    sfx_correct.ogg          two rising notes (C6 -> G6), a short bright chime
+    sfx_correct.ogg          three quick bell notes rising (C6 -> E6 -> G6) with a sparkle on top:
+                             a glassy "ting-ting-ting" that rewards a right answer
     sfx_wrong.ogg            two falling notes (A3 -> F3), soft and low, never harsh
     sfx_lesson_complete.ogg  a C major arpeggio (C5 E5 G5) landing on a held C6 chord: the
                              result screen of a test, mini-game or exam worth celebrating
+    sfx_chest_open.ogg       a wooden creak of the lid, then a magic shimmer climbing a pentatonic
+                             scale and ringing out on a high chord: a surprise chest opening
     sfx_soft_finish.ogg      two quiet, round notes rising a fourth (G4 -> C5): the result screen
                              of a failed exam or a low score, a calm "done" with no fanfare
 
@@ -60,15 +63,28 @@ def mix(notes_at, total_length):
     return out
 
 
+def bell(freq, length, decay, attack=0.003):
+    """Glassy bell note: inharmonic upper partials ring and die faster than the fundamental."""
+    partials = [(1.0, 1.0, 1.0), (2.76, 0.38, 0.55), (5.40, 0.16, 0.30), (8.93, 0.06, 0.18)]
+    t = np.arange(int(length * SAMPLE_RATE)) / SAMPLE_RATE
+    out = np.zeros_like(t)
+    for multiple, amplitude, speed in partials:
+        out += amplitude * np.sin(2 * np.pi * freq * multiple * t) * np.exp(-t / (decay * speed))
+    out *= np.minimum(1.0, t / attack) * np.minimum(1.0, (length - t) / 0.02)
+    return out
+
+
 def correct():
-    """Bright rising chime: C6 then G6 (a perfect fifth up) with soft upper partials."""
-    bright = [(1, 1.0), (2, 0.30), (3, 0.10)]
+    """Glassy rising "ting-ting-ting": C6, E6, G6 fifty-five milliseconds apart, the last one
+    ringing longest with a quiet G7 sparkle over it. Higher and quicker than lesson_complete()."""
     return mix(
         [
-            (0.00, note(1046.50, 0.30, bright, decay=0.10)),
-            (0.09, note(1567.98, 0.46, bright, decay=0.16)),
+            (0.000, bell(1046.50, 0.30, decay=0.10)),
+            (0.055, bell(1318.51, 0.32, decay=0.11)),
+            (0.110, bell(1567.98, 0.55, decay=0.20)),
+            (0.110, 0.22 * bell(3135.96, 0.40, decay=0.10)),
         ],
-        total_length=0.55,
+        total_length=0.66,
     )
 
 
@@ -103,6 +119,41 @@ def lesson_complete():
         ],
         total_length=1.10,
     )
+
+
+def chest_open():
+    """Surprise chest: a wooden creak of the lid, a soft thump as it gives, then a shimmer climbing
+    a C major pentatonic (C5 D5 E5 G5 A5 C6 E6) that lands on a ringing high chord.
+
+    Total length is about 1.5 s, close to the lid animation (frames 1-37), so the shimmer arrives
+    as the glow rises out of the chest.
+    """
+    t = np.arange(int(0.50 * SAMPLE_RATE)) / SAMPLE_RATE
+    rng = np.random.default_rng(7)  # fixed seed: the file is reproducible
+    # Stick-slip creak: a sawtooth gliding up while a ~26 Hz pulse chops it, plus a little noise.
+    freq = 82.0 + 70.0 * (t / t[-1]) + 6.0 * np.sin(2 * np.pi * 9.0 * t)
+    phase = np.cumsum(freq) / SAMPLE_RATE
+    saw = 2.0 * (phase % 1.0) - 1.0
+    chop = 0.55 + 0.45 * np.sign(np.sin(2 * np.pi * 26.0 * t)) * np.sin(2 * np.pi * 3.0 * t)
+    raw = saw * chop + 0.25 * rng.standard_normal(len(t))
+    kernel = np.ones(14) / 14  # crude low-pass: keeps it woody, not buzzy
+    creak = np.convolve(raw, kernel, mode="same")
+    creak *= np.minimum(1.0, t / 0.05) * np.minimum(1.0, (t[-1] - t) / 0.12)
+    creak *= 0.55
+
+    thump = note(70.0, 0.20, [(1, 1.0), (2, 0.25)], decay=0.05)
+
+    scale = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50, 1318.51]
+    shimmer = [
+        (0.52 + 0.075 * i, 0.8 * bell(f, 0.40, decay=0.12)) for i, f in enumerate(scale)
+    ]
+    landing = 0.52 + 0.075 * len(scale)
+    shimmer += [
+        (landing, bell(1046.50, 0.95, decay=0.34)),
+        (landing, 0.6 * bell(1567.98, 0.90, decay=0.30)),
+        (landing, 0.4 * bell(2093.00, 0.85, decay=0.26)),
+    ]
+    return mix([(0.0, creak), (0.46, 0.9 * thump)] + shimmer, total_length=1.55)
 
 
 def soft_finish():
@@ -145,5 +196,6 @@ if __name__ == "__main__":
     write_ogg(correct(), "sfx_correct")
     write_ogg(wrong(), "sfx_wrong")
     write_ogg(lesson_complete(), "sfx_lesson_complete")
+    write_ogg(chest_open(), "sfx_chest_open")
     # Quieter than the others: it closes a result that is not being celebrated.
     write_ogg(soft_finish(), "sfx_soft_finish", peak=0.40)

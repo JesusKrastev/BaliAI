@@ -20,7 +20,7 @@ import javax.inject.Singleton
 object PostHogModule {
 
     /**
-     * Provides the singleton PostHog client used to mirror Firebase/Mixpanel events.
+     * Provides the singleton PostHog client used to mirror Firebase events.
      *
      * Application lifecycle events (installed, opened, updated, backgrounded) are on, which is
      * what makes retention measurable. Screen views are not captured automatically: the app is

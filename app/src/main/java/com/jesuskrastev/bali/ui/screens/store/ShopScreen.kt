@@ -235,7 +235,11 @@ fun ShopScreen(
         }
 
         uiState.chestReward?.let { reward ->
-            ChestOpeningOverlay(reward = reward, onDismiss = { viewModel.onEvent(ShopEvent.DismissChest) })
+            ChestOpeningOverlay(
+                reward = reward,
+                onDismiss = { viewModel.onEvent(ShopEvent.DismissChest) },
+                onOpening = { viewModel.onEvent(ShopEvent.ChestOpening) }
+            )
         }
 
         uiState.selectedItem?.let { selected ->

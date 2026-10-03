@@ -12,7 +12,6 @@ import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.perf.FirebasePerformance
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
 import com.jesuskrastev.bali.domain.model.NotificationCategory
-import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.onesignal.OneSignal
 import com.posthog.PostHogInterface
 import com.revenuecat.purchases.LogLevel
@@ -61,7 +60,6 @@ class BaliApplication : Application(), ImageLoaderFactory {
         initAppCheck()
         createNotificationChannels()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
-        MixpanelAPI.getInstance(this, BuildConfig.MIXPANEL_TOKEN, true)
         Purchases.logLevel = LogLevel.DEBUG
         val builder = PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY)
         Purchases.configure(

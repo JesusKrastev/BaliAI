@@ -4,21 +4,18 @@ import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.jesuskrastev.bali.BuildConfig
 import com.jesuskrastev.bali.domain.model.FirstStepReward
-import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.posthog.PostHogInterface
-import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 open class AnalyticsTracker @Inject constructor(
     private val firebase: FirebaseAnalytics,
-    private val mixpanel: MixpanelAPI,
     private val posthog: PostHogInterface
 ) {
 
     /**
-     * Sends [event] with the properties built by [params] to Firebase, Mixpanel and PostHog.
+     * Sends [event] with the properties built by [params] to Firebase and PostHog.
      *
      * Every event carries an `environment` property (`"debug"` or `"production"`, from
      * [BuildConfig.DEBUG]) so manual testing on a debug build can be filtered out of the real
@@ -31,11 +28,10 @@ open class AnalyticsTracker @Inject constructor(
         }
         val properties = bundleToMap(bundle)
         firebase.logEvent(event, bundle)
-        mixpanel.track(event, JSONObject(properties))
         posthog.capture(event = event, properties = properties)
     }
 
-    /** Converts a params [Bundle] into a plain map so Mixpanel and PostHog can share it. */
+    /** Converts a params [Bundle] into a plain map for PostHog. */
     private fun bundleToMap(bundle: Bundle): Map<String, Any> {
         val map = mutableMapOf<String, Any>()
         for (key in bundle.keySet()) {
@@ -47,12 +43,9 @@ open class AnalyticsTracker @Inject constructor(
 
     // ── USERS ───────────────────────────────────────────────────────────────
 
-    /** Identifies the user in Firebase, Mixpanel and PostHog, and opts Mixpanel into tracking. */
+    /** Identifies the user in Firebase and PostHog. */
     open fun identifyUser(userId: String, email: String? = null) {
         firebase.setUserId(userId)
-        mixpanel.identify(userId)
-        mixpanel.optInTracking()
-        email?.let { mixpanel.people.set("\$email", it) }
         posthog.identify(distinctId = userId, userProperties = email?.let { mapOf("email" to it) })
     }
 
@@ -62,7 +55,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun resetUser() {
         firebase.setUserId(null)
-        mixpanel.reset()
         posthog.reset()
         posthog.register(KEY_ENVIRONMENT, currentEnvironment())
     }
@@ -98,10 +90,6 @@ open class AnalyticsTracker @Inject constructor(
                 putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 putString(KEY_ENVIRONMENT, environment)
             }
-        )
-        mixpanel.track(
-            "screen_viewed",
-            JSONObject(mapOf("screen_name" to screenName, KEY_ENVIRONMENT to environment))
         )
         posthog.screen(screenTitle = screenName, properties = mapOf(KEY_ENVIRONMENT to environment))
     }
@@ -141,14 +129,13 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Attaches [profile] to every later event in Mixpanel and PostHog. Firebase has no
+     * Attaches [profile] to every later event in PostHog. Firebase has no
      * per-event properties; its user properties are capped at 25 and not needed for this.
      *
      * @param profile the answers to keep, keyed by property name
      */
     private fun registerProfile(profile: Map<String, String>) {
         if (profile.isEmpty()) return
-        mixpanel.registerSuperProperties(JSONObject(profile))
         profile.forEach { (key, value) -> posthog.register(key, value) }
     }
 
@@ -161,7 +148,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun onboardingCompleted() {
         log("onboarding_completed")
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -249,7 +235,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallPurchased(source: String = "onboarding") {
         log("paywall_purchased") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -260,7 +245,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallClosed(source: String = "onboarding") {
         log("paywall_closed") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -278,7 +262,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallBackgrounded(source: String = "onboarding") {
         log("paywall_backgrounded") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -376,7 +359,6 @@ open class AnalyticsTracker @Inject constructor(
         source: String = "onboarding"
     ) {
         log("paywall_purchase_completed") { putPurchaseDetails(plan, secondsOnPaywall, source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -429,7 +411,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallWinbackPurchased(secondsOnOffer: Int) {
         log("paywall_winback_purchased") { putInt("seconds_on_offer", secondsOnOffer) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -442,7 +423,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallWinbackClosed(secondsOnOffer: Int) {
         log("paywall_winback_closed") { putInt("seconds_on_offer", secondsOnOffer) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -457,7 +437,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallWinbackBackgrounded() {
         log("paywall_winback_backgrounded")
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -507,7 +486,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun subscriptionCancelReason(reasonId: String) {
         log("subscription_cancel_reason") { putString("reason", reasonId) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -517,7 +495,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun subscriptionManagementOpened() {
         log("subscription_management_opened")
-        mixpanel.flush()
         posthog.flush()
     }
 

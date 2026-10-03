@@ -145,6 +145,15 @@ class StatsScreenScreenshotTest {
     }
 
     @Test
+    fun captureStatsScreen_longHistory() = capture(
+        useCase(
+            listOf(18, 21, 20, 24, 23, 26, 25, 27, 24, 28, 26, 29, 28)
+                .mapIndexed { index, score -> exam(score, daysAgo = 25 - index * 2) } + topicPractice,
+            answers(listOf(10, 0, 20, 30, 0, 0, 30), 0.82f), profile, now
+        )
+    )
+
+    @Test
     fun captureStatsScreen_newUser() = capture(useCase(emptyList(), emptyList(), User(), now), User())
 
     @Test
