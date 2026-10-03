@@ -189,6 +189,18 @@ open class AnalyticsTracker @Inject constructor(
             studySlot?.let { putString("study_slot", it) }
         }
 
+    /**
+     * Tracks that the user switched a notification category on or off in Settings.
+     *
+     * @param category [com.jesuskrastev.bali.domain.model.NotificationCategory.key] of the category
+     * @param enabled true when it was switched on, false when it was silenced
+     */
+    open fun notificationCategoryChanged(category: String, enabled: Boolean) =
+        log("notification_category_changed") {
+            putString("category", category)
+            putBoolean("enabled", enabled)
+        }
+
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
     /**

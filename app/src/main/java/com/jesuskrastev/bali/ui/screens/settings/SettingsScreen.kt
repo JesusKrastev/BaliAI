@@ -18,6 +18,9 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
@@ -50,8 +53,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.util.LegalLinks
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
@@ -111,6 +117,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
+    // The user may have allowed or blocked notifications in the system settings while away.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationPermission() }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -131,6 +140,34 @@ fun SettingsScreen(
                     onClick = onManageSubscriptionClick
                 )
             )
+        )
+
+        SettingsSection(
+            title = "Notificaciones",
+            items = buildList {
+                if (uiState.notificationsBlocked) {
+                    add(
+                        SettingsRowSpec(
+                            icon = Icons.Rounded.NotificationsOff,
+                            label = "Android bloquea las notificaciones",
+                            description = "Toca para permitirlas",
+                            onClick = viewModel::requestNotificationPermission
+                        )
+                    )
+                }
+                NotificationCategory.entries.forEach { category ->
+                    val enabled = category !in uiState.disabledNotificationCategories
+                    add(
+                        SettingsRowSpec(
+                            icon = category.icon(),
+                            label = category.title,
+                            description = category.description,
+                            checked = enabled,
+                            onClick = { viewModel.setNotificationCategoryEnabled(category, !enabled) }
+                        )
+                    )
+                }
+            }
         )
 
         SettingsSection(
@@ -374,13 +411,25 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
  * @property checked null for a plain row that ends in a chevron; true or false for a switch row,
  *   which shows a [Switch] in that position. The whole row is tappable either way, so [onClick]
  *   is also what flips the switch.
+ * @property description smaller text under the label, or null for a one-line row
  */
 private data class SettingsRowSpec(
     val icon: ImageVector,
     val label: String,
     val checked: Boolean? = null,
+    val description: String? = null,
     val onClick: () -> Unit
 )
+
+/**
+ * The glyph Settings shows next to this notification category.
+ *
+ * @return the icon for the category's row
+ */
+private fun NotificationCategory.icon(): ImageVector = when (this) {
+    NotificationCategory.STUDY -> Icons.Rounded.NotificationsActive
+    NotificationCategory.PROMOTIONS -> Icons.Rounded.LocalOffer
+}
 
 /**
  * Small uppercase eyebrow label placed above a [SettingsGroup] — the same treatment used for
@@ -436,7 +485,8 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
                         label = item.label,
                         accentColor = MaterialTheme.colorScheme.primary,
                         labelColor = MaterialTheme.colorScheme.onSurface,
-                        checked = item.checked
+                        checked = item.checked,
+                        description = item.description
                     )
                 }
                 if (index != items.lastIndex) {
@@ -460,6 +510,7 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
  * @param labelColor color applied to the label text
  * @param checked null to end the row with a chevron; otherwise the state of the [Switch] shown
  *   instead. The switch only displays the state: the tap is handled by the row around it.
+ * @param description optional smaller text under the label
  */
 @Composable
 private fun SettingsRowContent(
@@ -467,7 +518,8 @@ private fun SettingsRowContent(
     label: String,
     accentColor: Color,
     labelColor: Color,
-    checked: Boolean? = null
+    checked: Boolean? = null,
+    description: String? = null
 ) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -480,14 +532,23 @@ private fun SettingsRowContent(
             Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = labelColor,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = labelColor
+            )
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
         if (checked != null) {
+            Spacer(Modifier.width(12.dp))
             Switch(checked = checked, onCheckedChange = null)
         } else {
             Icon(

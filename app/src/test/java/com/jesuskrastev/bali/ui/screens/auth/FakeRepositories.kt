@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.FirstStepsProgress
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
@@ -317,9 +318,24 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
     /** The latest saved study moment, or null if none was saved. */
     val savedSchedule: StudySchedule? get() = _studySchedule.value
 
+    private val _disabledCategories = MutableStateFlow<Set<NotificationCategory>?>(null)
+    override val disabledCategories: Flow<Set<NotificationCategory>?> = _disabledCategories
+
+    /** What Android currently says about showing notifications; tests flip it to simulate the system settings. */
+    var permissionGranted = true
+
+    /** The `openSettingsIfBlocked` value of every [requestPermission] call in order. */
+    val settingsFallbacks = mutableListOf<Boolean>()
+
     override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
-    override suspend fun requestPermission(): Boolean {
+    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
+        val disabled = _disabledCategories.value.orEmpty()
+        _disabledCategories.value = if (enabled) disabled - category else disabled + category
+    }
+    override fun isPermissionGranted(): Boolean = permissionGranted
+    override suspend fun requestPermission(openSettingsIfBlocked: Boolean): Boolean {
         permissionRequests++
+        settingsFallbacks.add(openSettingsIfBlocked)
         return grantsPermission
     }
     override fun optOut() { optedOut = true }

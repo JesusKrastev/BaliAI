@@ -3,8 +3,10 @@ package com.jesuskrastev.bali.data.repository
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
@@ -39,6 +41,10 @@ class OneSignalNotificationsRepository @Inject constructor(
         }
         .distinctUntilChanged()
 
+    override val disabledCategories: Flow<Set<NotificationCategory>?> = context.notificationsDataStore.data
+        .map { preferences -> preferences[KEY_DISABLED_CATEGORIES]?.let(NotificationCategory::fromKeys) }
+        .distinctUntilChanged()
+
     /**
      * Stores [schedule], replacing any earlier answer.
      *
@@ -53,13 +59,32 @@ class OneSignalNotificationsRepository @Inject constructor(
     }
 
     /**
+     * Stores the new choice for [category]. The first change saves the whole picture, so from
+     * then on this device is the one that says what is on and off.
+     *
+     * @param category the kind of notification to change
+     * @param enabled false to stop receiving it
+     */
+    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
+        context.notificationsDataStore.edit { preferences ->
+            val disabled = preferences[KEY_DISABLED_CATEGORIES].orEmpty().toMutableSet()
+            if (enabled) disabled.remove(category.key) else disabled.add(category.key)
+            preferences[KEY_DISABLED_CATEGORIES] = disabled
+        }
+    }
+
+    /** @return true when Android lets this app show notifications right now */
+    override fun isPermissionGranted(): Boolean = OneSignal.Notifications.permission
+
+    /**
      * Shows OneSignal's permission request and opts the push subscription back in when it is
      * granted, in case an earlier "Ahora no" opted it out.
      *
+     * @param openSettingsIfBlocked send the user to the system settings when no dialog can be shown
      * @return true when notifications can be shown; false when denied or the request failed
      */
-    override suspend fun requestPermission(): Boolean = try {
-        OneSignal.Notifications.requestPermission(fallbackToSettings = false).also { granted ->
+    override suspend fun requestPermission(openSettingsIfBlocked: Boolean): Boolean = try {
+        OneSignal.Notifications.requestPermission(fallbackToSettings = openSettingsIfBlocked).also { granted ->
             if (granted) OneSignal.User.pushSubscription.optIn()
         }
     } catch (e: CancellationException) {
@@ -98,5 +123,6 @@ class OneSignalNotificationsRepository @Inject constructor(
     private companion object {
         val KEY_STUDY_SLOT = stringPreferencesKey("study_slot")
         val KEY_STUDY_RHYTHM = stringPreferencesKey("study_rhythm")
+        val KEY_DISABLED_CATEGORIES = stringSetPreferencesKey("disabled_categories")
     }
 }

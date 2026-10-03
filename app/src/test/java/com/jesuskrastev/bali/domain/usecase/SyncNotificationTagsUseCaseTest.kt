@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.domain.usecase
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
@@ -9,6 +10,7 @@ import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_LAST_SESSION_AT
+import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_NOTIFICATIONS_OFF
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_PREMIUM_SINCE
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_STREAK_DAYS
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_STUDY_RHYTHM
@@ -126,6 +128,31 @@ class SyncNotificationTagsUseCaseTest {
     }
 
     @Test
+    fun `switched-off categories are sent in one tag, in a fixed order`() {
+        fun tagFor(vararg off: NotificationCategory) =
+            notificationTags(null, null, premiumKnown = false, schedule = null, disabledCategories = off.toSet())
+
+        assertThat(tagFor(NotificationCategory.STUDY)).containsEntry(TAG_NOTIFICATIONS_OFF, "study")
+        assertThat(tagFor(NotificationCategory.PROMOTIONS)).containsEntry(TAG_NOTIFICATIONS_OFF, "promos")
+        assertThat(tagFor(NotificationCategory.PROMOTIONS, NotificationCategory.STUDY))
+            .containsEntry(TAG_NOTIFICATIONS_OFF, "study,promos")
+    }
+
+    @Test
+    fun `turning every category back on removes the tag`() {
+        val tags = notificationTags(null, null, premiumKnown = false, schedule = null, disabledCategories = emptySet())
+
+        assertThat(tags).containsEntry(TAG_NOTIFICATIONS_OFF, null)
+    }
+
+    @Test
+    fun `a device that never opened the switches leaves the tag the account already has`() {
+        val tags = notificationTags(null, null, premiumKnown = false, schedule = null, disabledCategories = null)
+
+        assertThat(tags).doesNotContainKey(TAG_NOTIFICATIONS_OFF)
+    }
+
+    @Test
     fun `someone who never studied gets no last session`() {
         val tags = notificationTags(User(lastPracticeTimestamp = 0), null, premiumKnown = false, schedule = null)
 
@@ -194,6 +221,17 @@ class SyncNotificationTagsUseCaseTest {
         notifications.saveStudySchedule(schedule)
 
         assertThat(notifications.sentTags.last()).containsEntry(TAG_STUDY_SLOT, "night")
+    }
+
+    @Test
+    fun `silencing a category reaches OneSignal at once, and turning it on again clears it`() = runTest {
+        startSync(SwitchableAuthRepository("uid_1"))
+
+        notifications.setCategoryEnabled(NotificationCategory.STUDY, enabled = false)
+        assertThat(notifications.sentTags.last()).containsEntry(TAG_NOTIFICATIONS_OFF, "study")
+
+        notifications.setCategoryEnabled(NotificationCategory.STUDY, enabled = true)
+        assertThat(notifications.sentTags.last()).containsEntry(TAG_NOTIFICATIONS_OFF, null)
     }
 
     @Test
