@@ -93,6 +93,20 @@ class OnboardingStepsScreenshotTest {
     }
 
     @Test
+    fun captureIntroDark() = capture("intro_dark", darkTheme = true)
+
+    /** The other three intro cards, reached with the button, in the dark theme. */
+    @Test
+    fun captureIntroCardsDark() {
+        capture("intro_dark", darkTheme = true)
+        repeat(3) { page ->
+            composeTestRule.onNodeWithText("Siguiente →").performClick()
+            composeTestRule.mainClock.advanceTimeBy(2_000L)
+            composeTestRule.onRoot().captureRoboImage("build/onboarding-steps/intro_dark_${page + 2}.png")
+        }
+    }
+
+    @Test
     fun capturePain() {
         answerDiagnosisUpTo(OnboardingStep.Pain)
         capture("pain")
@@ -223,9 +237,9 @@ class OnboardingStepsScreenshotTest {
      *
      * @param name file name without extension
      */
-    private fun capture(name: String) {
+    private fun capture(name: String, darkTheme: Boolean = false) {
         composeTestRule.setContent {
-            BaliTheme(darkTheme = false) {
+            BaliTheme(darkTheme = darkTheme) {
                 SharedTransitionLayout {
                     AnimatedVisibility(visible = true) {
                         OnboardingScreen(

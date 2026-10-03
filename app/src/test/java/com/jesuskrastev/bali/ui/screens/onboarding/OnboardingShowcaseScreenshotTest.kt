@@ -44,12 +44,12 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Renders the real screens the onboarding intro (the chest) shows as "this is what you get", with sample
- * data, so the pictures in `res/drawable-nodpi/onboarding_shot_*.webp` come from the app itself.
+ * Renders the real screens the onboarding intro shows as "this is what you get", in the dark theme and
+ * with sample data, so the pictures in `res/drawable-nodpi/onboarding_shot_*.webp` come from the app itself.
  *
  * To refresh them after a redesign: `./gradlew recordRoborazziDebug --tests "*OnboardingShowcaseScreenshotTest"`
- * plus `StatsScreenScreenshotTest.captureStatsScreen_ready` for the statistics, then crop and
- * convert the PNGs in `app/build/onboarding-showcase/` and `app/build/outputs/roborazzi/` to WebP.
+ * plus `StatsScreenScreenshotTest.captureOnboardingShowcase` for the statistics, then convert the PNGs
+ * in `app/build/onboarding-showcase/` to WebP at 450×975.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -197,7 +197,7 @@ class OnboardingShowcaseScreenshotTest {
     }
 
     /**
-     * Draws [content] in the light theme and saves it under `build/onboarding-showcase/`.
+     * Draws [content] in the dark theme and saves it under `build/onboarding-showcase/`.
      *
      * @param name file name without extension
      * @param beforeCapture state change applied once the first frame is laid out
@@ -205,7 +205,7 @@ class OnboardingShowcaseScreenshotTest {
      */
     private fun capture(name: String, beforeCapture: () -> Unit = {}, content: @Composable () -> Unit) {
         composeTestRule.setContent {
-            BaliTheme(darkTheme = false) {
+            BaliTheme(darkTheme = true) {
                 Surface(color = MaterialTheme.colorScheme.background) { content() }
             }
         }
