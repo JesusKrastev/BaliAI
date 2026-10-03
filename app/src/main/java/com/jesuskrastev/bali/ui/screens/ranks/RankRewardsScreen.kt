@@ -106,7 +106,8 @@ fun RankRewardsScreen(onBackClick: () -> Unit, viewModel: RankRewardsViewModel =
         state = state,
         onBackClick = onBackClick,
         onClaim = viewModel::claim,
-        onMessageShown = viewModel::messageShown
+        onMessageShown = viewModel::messageShown,
+        onCelebrationShown = viewModel::celebrationShown
     )
 }
 
@@ -119,6 +120,7 @@ fun RankRewardsScreen(onBackClick: () -> Unit, viewModel: RankRewardsViewModel =
  * @param onBackClick closes the screen
  * @param onClaim collects the prize with that id
  * @param onMessageShown marks the snackbar message as shown
+ * @param onCelebrationShown closes the celebration of a collected prize
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +128,8 @@ fun RankRewardsContent(
     state: RankRewardsUiState,
     onBackClick: () -> Unit,
     onClaim: (String) -> Unit,
-    onMessageShown: () -> Unit
+    onMessageShown: () -> Unit,
+    onCelebrationShown: () -> Unit = {}
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.message) {
@@ -198,6 +201,8 @@ fun RankRewardsContent(
             }
         }
     }
+
+    state.celebration?.let { PrizeCelebrationOverlay(celebration = it, onDismiss = onCelebrationShown) }
 }
 
 private fun PathStop.key(): String = when (this) {

@@ -66,6 +66,7 @@ class HomePlanChipScreenshotTest {
                             streak = 12,
                             practicedToday = studiedToday,
                             coinsCount = 1250,
+                            rank = { RankPill(xp = 560, claimableCount = 2, onClick = {}) },
                             leading = { PlanChip(copy = copy, onClick = {}) }
                         )
                         Box(Modifier.fillMaxWidth()) {
