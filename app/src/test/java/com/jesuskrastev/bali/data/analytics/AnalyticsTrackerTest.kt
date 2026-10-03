@@ -5,7 +5,6 @@ import com.google.common.truth.Truth.assertThat
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
-import com.mixpanel.android.mpmetrics.MixpanelAPI
 import com.posthog.PostHogInterface
 import org.json.JSONObject
 import org.junit.Test
@@ -25,9 +24,8 @@ import org.robolectric.annotation.Config
 class AnalyticsTrackerTest {
 
     private val firebase = mock<FirebaseAnalytics>()
-    private val mixpanel = mock<MixpanelAPI>()
     private val posthog = mock<PostHogInterface>()
-    private val tracker = AnalyticsTracker(firebase, mixpanel, posthog)
+    private val tracker = AnalyticsTracker(firebase, posthog)
     private val environment = AnalyticsTracker.currentEnvironment()
 
     @Test
@@ -45,7 +43,6 @@ class AnalyticsTrackerTest {
         tracker.screenViewed("Home")
 
         verify(firebase).logEvent(eq(FirebaseAnalytics.Event.SCREEN_VIEW), any())
-        verify(mixpanel).track(eq("screen_viewed"), any<JSONObject>())
         verify(posthog).screen("Home", mapOf(AnalyticsTracker.KEY_ENVIRONMENT to environment))
     }
 
@@ -55,7 +52,6 @@ class AnalyticsTrackerTest {
 
         verify(posthog).register("exam_timing", "soon")
         verify(posthog).register("experience", "first")
-        verify(mixpanel).registerSuperProperties(any())
     }
 
     @Test
@@ -63,7 +59,6 @@ class AnalyticsTrackerTest {
         tracker.onboardingFlowCompleted()
 
         verify(posthog, never()).register(any(), any())
-        verify(mixpanel, never()).registerSuperProperties(any())
     }
 
     @Test
@@ -104,7 +99,6 @@ class AnalyticsTrackerTest {
 
         verify(firebase).logEvent(eq("subscription_cancel_reason"), bundle.capture())
         assertThat(bundle.firstValue.getString("reason")).isEqualTo("too_expensive")
-        verify(mixpanel).flush()
         verify(posthog).flush()
     }
 

@@ -30,7 +30,6 @@ jobs:
 
     env:
       ONE_SIGNAL_APP_ID: ${{ secrets.ONE_SIGNAL_APP_ID }}
-      MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
       REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}

@@ -11,7 +11,6 @@ import com.google.common.truth.Truth.assertThat
 import android.content.Context
 import org.mockito.kotlin.mock
 import com.google.firebase.analytics.FirebaseAnalytics
-import com.mixpanel.android.mpmetrics.MixpanelAPI
 
 class AuthViewModelTest {
 
@@ -22,7 +21,7 @@ class AuthViewModelTest {
     private val fakeTestResultRepository = FakeTestResultRepository()
     private val fakeAnswerRepository = FakeAnswerRepository()
     private val fakeAuthRepository = FakeAuthRepository()
-    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock())
+    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
     private val fakeMigrationManager = FakeFirestoreMigrationManager()
 
     private lateinit var viewModel: AuthViewModel
