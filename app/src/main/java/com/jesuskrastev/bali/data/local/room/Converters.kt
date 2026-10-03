@@ -5,6 +5,18 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class Converters {
+    /** Returns reward claim ids in [value] as a JSON array for Room. */
+    @TypeConverter
+    fun fromStringList(value: List<String>?): String = Json.encodeToString(value.orEmpty())
+
+    /** Returns reward claim ids from [value], or an empty list for malformed legacy data. */
+    @TypeConverter
+    fun toStringList(value: String?): List<String> = try {
+        if (value.isNullOrEmpty()) emptyList() else Json.decodeFromString(value)
+    } catch (error: Exception) {
+        emptyList()
+    }
+
     @TypeConverter
     fun fromLongList(value: List<Long>?): String {
         if (value == null) return "[]"

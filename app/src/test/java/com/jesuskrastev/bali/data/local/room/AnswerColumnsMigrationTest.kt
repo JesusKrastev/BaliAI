@@ -45,6 +45,11 @@ class AnswerColumnsMigrationTest {
         override fun migrate(database: SupportSQLiteDatabase) = Unit
     }
 
+    /** The simulated old file already has the current rank-reward column as well. */
+    private val rankColumnsAlreadyThere = object : Migration(19, 20) {
+        override fun migrate(database: SupportSQLiteDatabase) = Unit
+    }
+
     /**
      * Opens the test database file.
      *
@@ -54,7 +59,7 @@ class AnswerColumnsMigrationTest {
         val builder = Room.databaseBuilder(context, BaliDatabase::class.java, databaseName)
             .allowMainThreadQueries()
         if (withMigration) {
-            builder.addMigrations(BaliDatabase.MIGRATION_17_18, shopColumnsAlreadyThere)
+            builder.addMigrations(BaliDatabase.MIGRATION_17_18, shopColumnsAlreadyThere, rankColumnsAlreadyThere)
         }
         return builder.build()
     }
@@ -63,7 +68,7 @@ class AnswerColumnsMigrationTest {
      * Leaves a database file as version 17 had it: the current schema, except that `answers` is
      * the table without the three new columns (the shape the 8→9 migration last built), holding
      * one answer saved by that version, and `user_version` is 17. `users` keeps the coin-shop
-     * columns, which SQLite cannot drop, so the step to version 19 is replaced by an empty one.
+     * columns, which SQLite cannot drop, so the steps to versions 19 and 20 are empty here.
      */
     private fun createVersion17Database() {
         val fresh = open(withMigration = false)
@@ -104,7 +109,7 @@ class AnswerColumnsMigrationTest {
         val database = open(withMigration = true)
         database.openHelper.writableDatabase // opening is what runs the migration and the validation
 
-        assertThat(database.openHelper.readableDatabase.version).isEqualTo(19)
+        assertThat(database.openHelper.readableDatabase.version).isEqualTo(20)
         database.close()
     }
 

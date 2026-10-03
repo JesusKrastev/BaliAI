@@ -36,6 +36,8 @@ data class HomeUiState(
     val totalTests: Int = 0,
     val practiceDays: List<Long> = emptyList(),
     val xpLevel: Int = 1,
+    val xp: Int = 0,
+    val claimableRankRewards: Int = 0,
     val coinsCount: Int = 0,
     val mistakesCount: Int = 0,
     val streakFreezes: Int = 0,

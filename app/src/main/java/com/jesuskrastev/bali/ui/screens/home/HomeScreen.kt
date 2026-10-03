@@ -68,6 +68,8 @@ import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.NodeType
+import com.jesuskrastev.bali.domain.model.RankProgression
+import com.jesuskrastev.bali.ui.screens.ranks.badgeRes
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliFlameColors
 import kotlinx.coroutines.delay
@@ -89,6 +91,7 @@ import kotlin.math.sin
  *   when it is tapped or opened from the plan sheet's study button; exam nodes open the mock exam
  *   directly, since it costs no coins
  * @param onShopClick opens the coin shop
+ * @param onRanksClick opens the XP rank and rewards path
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the Chat tab (the first-steps "ask Bali" task)
  * @param onPlayGameClick starts a mini-game straight away (the first-steps game task)
@@ -102,6 +105,7 @@ fun HomeScreen(
     planViewModel: HomePlanViewModel = hiltViewModel(),
     onNodeTestClick: (String, String?, String, String) -> Unit = { _, _, _, _ -> },
     onShopClick: () -> Unit = {},
+    onRanksClick: () -> Unit = {},
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
     onPlayGameClick: () -> Unit = {},
@@ -128,26 +132,33 @@ fun HomeScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            UserStatusRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                streak = uiState.streak,
-                practicedToday = uiState.practicedToday,
-                coinsCount = uiState.coinsCount,
-                onCoinsClick = onShopClick,
-                onStreakClick = onStreakClick,
-                leading = {
-                    HomePlanChip(
-                        viewModel = planViewModel,
-                        onStartSession = nextNode?.let { node ->
-                            { onNodeTestClick(node.title, node.description, node.id, node.nodeType.name) }
-                        },
-                        onSeePlan = onSeePlanClick
-                    )
-                }
-            )
+            Column {
+                UserStatusRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    streak = uiState.streak,
+                    practicedToday = uiState.practicedToday,
+                    coinsCount = uiState.coinsCount,
+                    onCoinsClick = onShopClick,
+                    onStreakClick = onStreakClick,
+                    leading = {
+                        HomePlanChip(
+                            viewModel = planViewModel,
+                            onStartSession = nextNode?.let { node ->
+                                { onNodeTestClick(node.title, node.description, node.id, node.nodeType.name) }
+                            },
+                            onSeePlan = onSeePlanClick
+                        )
+                    }
+                )
+                RankJourneyButton(
+                    xp = uiState.xp,
+                    claimableCount = uiState.claimableRankRewards,
+                    onClick = onRanksClick
+                )
+            }
         },
         // Pinned right above the app's bottom bar so the day-0 tasks stay in sight while
         // scrolling; the Scaffold pads the path by its height so the end of the path stays
@@ -198,6 +209,36 @@ fun HomeScreen(
                 viewModel.generateNextPathNodesCount()
             }
         )
+    }
+}
+
+/** Draws a Home button for [xp] and [claimableCount], invoking [onClick] when tapped. */
+@Composable
+private fun RankJourneyButton(xp: Int, claimableCount: Int, onClick: () -> Unit) {
+    val rank = RankProgression.rankFor(xp)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Image(painterResource(rank.badgeRes()), contentDescription = null, modifier = Modifier.size(42.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Camino de rangos", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
+                Text("${rank.name} · $xp XP", style = MaterialTheme.typography.labelMedium)
+            }
+            Text(
+                if (claimableCount > 0) "$claimableCount premios" else "Ver premios",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
     }
 }
 
