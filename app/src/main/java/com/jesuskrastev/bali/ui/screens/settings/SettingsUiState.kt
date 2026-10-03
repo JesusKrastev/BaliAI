@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.settings
 
+import com.jesuskrastev.bali.domain.model.NotificationCategory
+
 /**
  * UI state for the Settings screen: the signed-in profile shown in its account section.
  *
@@ -8,11 +10,16 @@ package com.jesuskrastev.bali.ui.screens.settings
  * @property profilePictureUrl authenticated user's avatar URL, null when signed out or unavailable
  * @property isLoggedIn whether a user session is currently active
  * @property soundsEnabled whether the answer sound effects are on (they are until the user turns them off)
+ * @property disabledNotificationCategories the notification kinds the user switched off (all are on until they do)
+ * @property notificationsBlocked whether Android is blocking this app's notifications, which makes the
+ *   category switches useless until the user lets them through
  */
 data class SettingsUiState(
     val userName: String = "Futuro Conductor",
     val userEmail: String? = null,
     val profilePictureUrl: String? = null,
     val isLoggedIn: Boolean = false,
-    val soundsEnabled: Boolean = true
+    val soundsEnabled: Boolean = true,
+    val disabledNotificationCategories: Set<NotificationCategory> = emptySet(),
+    val notificationsBlocked: Boolean = false
 )

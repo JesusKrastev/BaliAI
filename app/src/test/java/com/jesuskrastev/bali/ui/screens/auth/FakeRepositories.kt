@@ -3,10 +3,12 @@ package com.jesuskrastev.bali.ui.screens.auth
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.EnablePushesResult
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.FirstStepsProgress
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
@@ -282,8 +284,12 @@ class FakeAnalyticsTracker(
     var completedProfile: Map<String, String>? = null
         private set
 
-    override fun notificationsPermissionAnswered(result: String, studySlot: String?) {
+    /** The `source` of each [notificationsAnswers] entry, in the same order. */
+    val notificationsAnswerSources = mutableListOf<String>()
+
+    override fun notificationsPermissionAnswered(result: String, studySlot: String?, source: String) {
         notificationsAnswers.add(result to studySlot)
+        notificationsAnswerSources.add(source)
     }
     override fun onboardingQuizAnswered(
         questionId: String,
@@ -338,6 +344,7 @@ class FakeAnalyticsTracker(
         firstStepsDismissedEvents.clear()
         firstStepsExamClicks = 0
         notificationsAnswers.clear()
+        notificationsAnswerSources.clear()
         quizAnswers.clear()
         introCards.clear()
         quizSkips = 0
@@ -372,10 +379,28 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
     /** The latest saved study moment, or null if none was saved. */
     val savedSchedule: StudySchedule? get() = _studySchedule.value
 
+    /** Whether a push would be shown; tests set it to simulate the permission and the opt-out. */
+    override val pushesAllowed = MutableStateFlow(true)
+
+    /** The categories whose channel the user turned off in Android's settings; tests fill it to simulate that. */
+    val disabledCategories = mutableSetOf<NotificationCategory>()
+
+    /** What [enablePushes] answers; [EnablePushesResult.ENABLED] also lets pushes through. */
+    var enableResult = EnablePushesResult.ENABLED
+
+    var enableRequests = 0
+        private set
+
     override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
+    override fun isCategoryEnabled(category: NotificationCategory): Boolean = category !in disabledCategories
     override suspend fun requestPermission(): Boolean {
         permissionRequests++
         return grantsPermission
+    }
+    override suspend fun enablePushes(): EnablePushesResult {
+        enableRequests++
+        if (enableResult == EnablePushesResult.ENABLED) pushesAllowed.value = true
+        return enableResult
     }
     override fun optOut() { optedOut = true }
     override fun identify(userId: String?) {
