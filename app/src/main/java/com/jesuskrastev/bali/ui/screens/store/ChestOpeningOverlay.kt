@@ -1,8 +1,9 @@
 package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -12,6 +13,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,8 +26,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,13 +36,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -72,17 +77,26 @@ private const val CHEST_OPENING_MARKER = "opening"
 /** Marker that loops the open chest's gentle idle shimmer (frames 37–60). */
 private const val CHEST_OPENED_MARKER = "opened_idle"
 
-/** How long the shut chest is seen before it starts to open, so the user registers it first. */
-private const val CLOSED_BEAT_MS = 500L
+/** Pause between two shakes of the shut chest, so it reads as "tap me" without nagging. */
+private const val SHAKE_PAUSE_MS = 1_100L
 
-/** Where the overlay is in its sequence: shut, lid opening, or open with the prize on show. */
+/** Once the prize is out, how long taps are ignored so the tap that opened it can't close it too. */
+private const val REVEAL_GUARD_MS = 700L
+
+/** Rotation keyframes, in degrees, of one shake of the shut chest. */
+private val SHAKE_KEYFRAMES = listOf(-9f, 9f, -7f, 7f, -4f, 4f, 0f)
+
+/** Tag of the overlay's full-screen tap target, for tests. */
+internal const val CHEST_OVERLAY_TAG = "chest_overlay"
+
+/** Where the overlay is in its sequence: shut and shaking, lid opening, or open with the prize on show. */
 private enum class ChestPhase { Closed, Opening, Opened }
 
 /**
- * Full-screen reveal of a surprise chest the user has just paid for: the shut chest waits a
- * beat, the lid opens with the Lottie animation `bali_chest_opening`, and then the prize pops out
- * above a button to collect it. The coins are already credited when this is shown, so leaving it
- * early (system back) loses nothing.
+ * Full-screen reveal of a surprise chest the user has just paid for, driven only by taps: the shut
+ * chest shakes until the user taps it, the lid opens with the Lottie animation
+ * `bali_chest_opening`, the prize pops out, and a second tap anywhere closes the reveal. The coins
+ * are already credited when this is shown, so leaving it early (system back) loses nothing.
  *
  * If the animation cannot be loaded the prize is shown straight away instead of hanging on an
  * empty screen.
@@ -99,6 +113,9 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
     val animatable = rememberLottieAnimatable()
     val haptics = LocalHapticFeedback.current
     var phase by remember { mutableStateOf(ChestPhase.Closed) }
+    var canClose by remember { mutableStateOf(false) }
+    val shake = remember { Animatable(0f) }
+    val squash = remember { Animatable(1f) }
 
     LaunchedEffect(composition, compositionResult.isFailure) {
         if (compositionResult.isFailure) {
@@ -106,24 +123,65 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
             return@LaunchedEffect
         }
         val loaded = composition ?: return@LaunchedEffect
-        animatable.snapTo(
-            composition = loaded,
-            progress = 0f
-        )
-        delay(CLOSED_BEAT_MS)
-        phase = ChestPhase.Opening
-        animatable.animate(
-            composition = loaded,
-            iterations = 1,
-            clipSpec = LottieClipSpec.Marker(CHEST_OPENING_MARKER)
-        )
-        phase = ChestPhase.Opened
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        animatable.animate(
-            composition = loaded,
-            iterations = LottieConstants.IterateForever,
-            clipSpec = LottieClipSpec.Marker(CHEST_OPENED_MARKER)
-        )
+        animatable.snapTo(composition = loaded, progress = 0f)
+    }
+
+    // The shut chest wobbles every so often, inviting the tap that opens it.
+    LaunchedEffect(phase, composition) {
+        if (phase != ChestPhase.Closed || composition == null) return@LaunchedEffect
+        while (true) {
+            delay(SHAKE_PAUSE_MS)
+            squash.animateTo(1.06f, tween(90))
+            SHAKE_KEYFRAMES.forEach { shake.animateTo(it, tween(55)) }
+            squash.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        }
+    }
+
+    // Tapping the shut chest plays the lid opening; then the prize shows and the open chest shimmers.
+    LaunchedEffect(phase) {
+        when (phase) {
+            ChestPhase.Closed -> Unit
+            ChestPhase.Opening -> {
+                shake.snapTo(0f)
+                squash.snapTo(1f)
+                composition?.let {
+                    animatable.animate(
+                        composition = it,
+                        iterations = 1,
+                        clipSpec = LottieClipSpec.Marker(CHEST_OPENING_MARKER)
+                    )
+                }
+                phase = ChestPhase.Opened
+            }
+            ChestPhase.Opened -> {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                composition?.let {
+                    animatable.animate(
+                        composition = it,
+                        iterations = LottieConstants.IterateForever,
+                        clipSpec = LottieClipSpec.Marker(CHEST_OPENED_MARKER)
+                    )
+                }
+            }
+        }
+    }
+
+    // The prize stays on screen a moment before a tap can close it.
+    LaunchedEffect(phase) {
+        if (phase != ChestPhase.Opened) return@LaunchedEffect
+        delay(REVEAL_GUARD_MS)
+        canClose = true
+    }
+
+    val onTap: () -> Unit = {
+        when (phase) {
+            ChestPhase.Closed -> if (composition != null) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                phase = ChestPhase.Opening
+            }
+            ChestPhase.Opening -> Unit
+            ChestPhase.Opened -> if (canClose) onDismiss()
+        }
     }
 
     Dialog(
@@ -136,6 +194,14 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
                 .background(BaliDarkBackground)
                 .background(
                     Brush.radialGradient(listOf(BaliAccentYellow.copy(alpha = 0.18f), Color.Transparent))
+                )
+                .testTag(CHEST_OVERLAY_TAG)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClickLabel = if (phase == ChestPhase.Opened) "Cerrar" else "Abrir el cofre",
+                    role = Role.Button,
+                    onClick = onTap
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -151,6 +217,12 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
                     progress = { animatable.progress },
                     modifier = Modifier
                         .size(300.dp)
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(0.5f, 0.85f)
+                            rotationZ = shake.value
+                            scaleX = squash.value
+                            scaleY = squash.value
+                        }
                         .semantics {
                             contentDescription =
                                 if (phase == ChestPhase.Opened) "Cofre abierto" else "Cofre sorpresa"
@@ -163,25 +235,48 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Present from the start so the layout is stable; it only answers once the chest is open.
-                Button(
-                    onClick = onDismiss,
-                    enabled = phase == ChestPhase.Opened,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("RECOGER", fontWeight = FontWeight.ExtraBold)
-                }
+                TapHint(
+                    text = when (phase) {
+                        ChestPhase.Closed -> "¡Toca el cofre para abrirlo!"
+                        ChestPhase.Opening -> null
+                        ChestPhase.Opened -> if (canClose) "Toca para continuar" else null
+                    }
+                )
             }
         }
     }
 }
 
 /**
- * The strip under the chest: a waiting message while it opens, then the prize popping in. Its
- * height is fixed so nothing jumps when the prize appears.
+ * Gently pulsing instruction under the chest; keeps its height when empty so nothing jumps.
+ *
+ * @param text what to tap for, or null to show nothing
+ */
+@Composable
+private fun TapHint(text: String?) {
+    val pulse = rememberInfiniteTransition(label = "tap_hint")
+    val alpha by pulse.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+        label = "tap_hint_alpha"
+    )
+    Box(modifier = Modifier.height(32.dp), contentAlignment = Alignment.Center) {
+        if (text != null) {
+            Text(
+                text = text,
+                modifier = Modifier.alpha(alpha),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+    }
+}
+
+/**
+ * The strip under the chest where the prize pops in. Its height is fixed so nothing jumps when
+ * the prize appears.
  *
  * @param isOpen whether the chest is open and the prize may show
  * @param reward coins or an inventory item granted by the chest
@@ -189,14 +284,6 @@ fun ChestOpeningOverlay(reward: ChestReward, onDismiss: () -> Unit) {
 @Composable
 private fun ChestRewardSlot(isOpen: Boolean, reward: ChestReward) {
     Box(modifier = Modifier.height(112.dp), contentAlignment = Alignment.Center) {
-        if (!isOpen) {
-            Text(
-                text = "Abriendo cofre…",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-        }
         AnimatedVisibility(
             visible = isOpen,
             enter = fadeIn() + scaleIn(
