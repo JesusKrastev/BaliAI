@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.jesuskrastev.bali.domain.model.DrivingTopic
-import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.ProgressStats
 import com.jesuskrastev.bali.domain.model.ReadinessLevel
 import com.jesuskrastev.bali.domain.model.ReadinessResult
@@ -58,7 +58,6 @@ import com.jesuskrastev.bali.domain.usecase.CalculateProgressStatsUseCase
 import com.jesuskrastev.bali.domain.usecase.CalculateReadinessUseCase
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 import com.jesuskrastev.bali.ui.theme.BaliAccentRed
-import com.jesuskrastev.bali.ui.theme.BaliBackgroundGradient
 
 /**
  * "Mis estadísticas": answers "will I pass?" and shows how the user's study is going — the time
@@ -90,8 +89,12 @@ fun StatsScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
+            // Same colour as the status bar above it, which AppNavigation paints with the background.
             CenterAlignedTopAppBar(
-                title = { Text("Mis estadísticas", fontWeight = FontWeight.Black) }
+                title = { Text("Mis estadísticas", fontWeight = FontWeight.Black) },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { paddingValues ->
@@ -127,10 +130,10 @@ internal fun StatsContent(
     onDateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // A plain background: a tinted one would start with a seam right under the top bar.
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(BaliBackgroundGradient())
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -143,7 +146,7 @@ internal fun StatsContent(
         )
         ReadinessHero(stats.readiness)
         RecentMocksCard(stats.readiness)
-        if (stats.readiness.history.isNotEmpty()) MockHistoryCard(stats.readiness)
+        if (stats.readiness.history.size >= 2) MockHistoryCard(stats.readiness)
         PracticeTotals(stats)
         TopicsCard(stats.topics)
         WeekCard(stats)
@@ -263,25 +266,43 @@ private fun NextStep(text: String, color: Color) {
 }
 
 /**
- * The latest five mock exams as dots, with the goal to reach before the real exam.
+ * The latest five mock exams as score tiles, with the goal to reach before the real exam as one
+ * segment per pass it asks for.
  *
  * @param readiness the verdict holding the latest mock exams
  */
 @Composable
 private fun RecentMocksCard(readiness: ReadinessResult) {
+    val goal = CalculateReadinessUseCase.RECENT_GOAL
+    val goalReached = readiness.passedInRecent >= goal
+    val goalColor = if (goalReached) BaliAccentGreen else MaterialTheme.colorScheme.primary
+
     StatsCard(title = "Tus últimos simulacros", subtitle = recentSummaryOf(readiness)) {
-        RecentMockDots(readiness.recent, CalculateReadinessUseCase.RECENT_WINDOW)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val goalReached = readiness.passedInRecent >= CalculateReadinessUseCase.RECENT_GOAL
-            StatsBar(
-                fraction = readiness.passedInRecent.toFloat() / CalculateReadinessUseCase.RECENT_GOAL,
-                color = if (goalReached) BaliAccentGreen else MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = recentGoalText(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        RecentMockTiles(readiness.recent, CalculateReadinessUseCase.RECENT_WINDOW)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = recentGoalText(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                if (goalReached) {
+                    Icon(
+                        imageVector = Icons.Rounded.CheckCircle,
+                        contentDescription = null,
+                        tint = BaliAccentGreen,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    text = recentGoalStatusOf(readiness),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Black
+                )
+            }
+            GoalSegments(filled = readiness.passedInRecent, total = goal, color = goalColor)
         }
     }
 }
@@ -289,15 +310,16 @@ private fun RecentMocksCard(readiness: ReadinessResult) {
 /**
  * Score of every mock exam over time, with the average, the best and the trend.
  *
- * @param readiness the verdict holding the exam history
+ * @param readiness the verdict holding the exam history, with at least two mock exams
  */
 @Composable
 private fun MockHistoryCard(readiness: ReadinessResult) {
+    val shown = readiness.history.takeLast(HISTORY_POINTS)
     StatsCard(
         title = "Evolución de los simulacros",
-        subtitle = "Aciertos sobre ${ExamRules.QUESTION_COUNT}, los últimos $HISTORY_BARS"
+        subtitle = historySubtitleOf(shown = shown.size, taken = readiness.history.size)
     ) {
-        MockHistoryChart(readiness.history.takeLast(HISTORY_BARS))
+        MockHistoryChart(shown)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             MiniStat(
                 value = readiness.averageScore?.let(::formatDecimal) ?: "—",
@@ -518,4 +540,4 @@ private fun ConsistencyCard(stats: ProgressStats) {
 }
 
 /** Mock exams the evolution chart draws. */
-private const val HISTORY_BARS = 10
+private const val HISTORY_POINTS = 10
