@@ -45,12 +45,14 @@ class ShopItemTextTest {
         assertThat(shopItemInfo(ShopItem.FiftyFifty)).contains("no se puede usar en el simulacro")
     }
 
+    /** Verifies the chest explains every reward family and the rarest probability. */
     @Test
-    fun `the surprise chest admits that it can lose coins`() {
+    fun `the surprise chest explains coins items and their probabilities`() {
         val info = shopItemInfo(ShopItem.SurpriseChest)
 
-        assertThat(info).contains("entre ${ShopCatalog.CHEST_MIN_REWARD} y ${ShopCatalog.CHEST_MAX_REWARD}")
-        assertThat(info).contains("ganando o perdiendo")
+        assertThat(info).contains("20, 40 u 80 monedas (65 %)")
+        assertThat(info).contains("una pista (14 %)")
+        assertThat(info).contains("doble de monedas (5 %)")
     }
 
     @Test

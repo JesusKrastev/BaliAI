@@ -160,14 +160,46 @@ class ShopInventoryRoomTest {
         assertThat(user().hints).isEqualTo(0)
     }
 
+    /** Verifies a coin chest reward is granted atomically with its charge. */
     @Test
-    fun `the chest charges its price and credits the prize in one statement`() = runBlocking {
+    fun `the chest charges its price and credits coins in one statement`() = runBlocking {
         insertUser(coins = 100)
 
-        assertThat(database.userDao().openSurpriseChest(cost = 60, reward = 75)).isEqualTo(1)
+        assertThat(
+            database.userDao().openSurpriseChest(
+                cost = 60,
+                coinReward = 75,
+                item = null,
+                quantity = 0
+            )
+        ).isEqualTo(1)
         assertThat(user().coins).isEqualTo(115)
-        assertThat(database.userDao().openSurpriseChest(cost = 200, reward = 90)).isEqualTo(0)
+        assertThat(
+            database.userDao().openSurpriseChest(
+                cost = 200,
+                coinReward = 90,
+                item = null,
+                quantity = 0
+            )
+        ).isEqualTo(0)
         assertThat(user().coins).isEqualTo(115)
+    }
+
+    /** Verifies an inventory chest reward is granted atomically with its charge. */
+    @Test
+    fun `the chest can grant an inventory item instead of coins`() = runBlocking {
+        insertUser(coins = 100)
+
+        val opened = database.userDao().openSurpriseChest(
+            cost = 60,
+            coinReward = 0,
+            item = "DOUBLE_XP",
+            quantity = 1
+        )
+
+        assertThat(opened).isEqualTo(1)
+        assertThat(user().coins).isEqualTo(40)
+        assertThat(user().doubleXpBoosts).isEqualTo(1)
     }
 
     @Test

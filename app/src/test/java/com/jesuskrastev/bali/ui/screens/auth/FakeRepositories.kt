@@ -1,6 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
 import com.jesuskrastev.bali.domain.model.FirstStepReward
@@ -93,11 +94,23 @@ class FakeUserRepository(
         return true
     }
 
-    /** Opens a fake surprise chest by charging [cost] and crediting its [reward]. */
-    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean {
+    /** Opens a fake surprise chest by charging [cost] and granting its [reward]. */
+    override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean {
         val user = _user.value ?: return false
         if (user.coins < cost) return false
-        _user.value = user.copy(coins = user.coins - cost + reward)
+        _user.value = when (reward) {
+            is ChestReward.Coins -> user.copy(coins = user.coins - cost + reward.amount)
+            is ChestReward.Inventory -> user.copy(
+                coins = user.coins - cost,
+                hints = user.hints + if (reward.item == ShopInventoryItem.HINT) reward.quantity else 0,
+                fiftyFifties = user.fiftyFifties +
+                    if (reward.item == ShopInventoryItem.FIFTY_FIFTY) reward.quantity else 0,
+                doubleXpBoosts = user.doubleXpBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_XP) reward.quantity else 0,
+                doubleCoinBoosts = user.doubleCoinBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_COINS) reward.quantity else 0
+            )
+        }
         return true
     }
 

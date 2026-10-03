@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.data.remote.firestore.dao
 
 import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -13,6 +14,7 @@ import com.google.firebase.firestore.snapshots
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -134,21 +136,31 @@ class FirestoreUserDao @Inject constructor(
     }
 
     /**
-     * Charges a surprise chest and credits its coin [reward] atomically.
+     * Charges a surprise chest and grants [reward] atomically.
      *
      * @param userId document owner
      * @param cost coins paid to open the chest
-     * @param reward random coin reward, picked by the caller
+     * @param reward coins or an inventory item picked by the caller
      * @return true if the chest opened, false when the user cannot afford it
      */
-    suspend fun openSurpriseChest(userId: String, cost: Int, reward: Int): Boolean {
+    @AddTrace(name = "open_surprise_chest")
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: ChestReward): Boolean {
         val docRef = collection.document(userId)
         return shopTransaction { transaction ->
-            val coins = transaction.get(docRef).getLong("coins") ?: 0L
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
             if (coins < cost) {
                 false
             } else {
-                transaction.set(docRef, mapOf("coins" to coins - cost + reward), SetOptions.merge())
+                val updates = mutableMapOf<String, Any>("coins" to coins - cost)
+                when (reward) {
+                    is ChestReward.Coins -> updates["coins"] = coins - cost + reward.amount
+                    is ChestReward.Inventory -> {
+                        val field = reward.item.firestoreField
+                        updates[field] = (snapshot.getLong(field) ?: 0L) + reward.quantity
+                    }
+                }
+                transaction.set(docRef, updates, SetOptions.merge())
                 true
             }
         }

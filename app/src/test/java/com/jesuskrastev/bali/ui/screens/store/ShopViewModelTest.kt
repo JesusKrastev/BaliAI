@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.store
 
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
+import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.model.StreakBet
@@ -189,30 +190,57 @@ class ShopViewModelTest {
         assertThat(state.canBetOnStreak).isFalse()
     }
 
+    /** Verifies one chest purchase charges once and persists whichever weighted reward was rolled. */
     @Test
-    fun `the surprise chest never pays more on average than it costs`() {
-        val average = (ShopCatalog.CHEST_MIN_REWARD + ShopCatalog.CHEST_MAX_REWARD) / 2.0
-
-        assertThat(average).isLessThan(ShopCatalog.SURPRISE_CHEST_COST.toDouble())
-        repeat(500) {
-            assertThat(ShopCatalog.rollChestReward())
-                .isIn(ShopCatalog.CHEST_MIN_REWARD..ShopCatalog.CHEST_MAX_REWARD)
-        }
-    }
-
-    @Test
-    fun `opening the surprise chest charges its price and credits the prize once`() = runTest {
+    fun `opening the surprise chest charges its price and grants its reward once`() = runTest {
         fakeUserRepository.insert(User(coins = 100))
 
         viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
         viewModel.onEvent(ShopEvent.ConfirmPurchase)
 
+        val state = viewModel.uiState.first { it.chestReward != null }
+        val reward = state.chestReward!!
         val user = fakeUserRepository.get().first()!!
-        val prize = user.coins - (100 - ShopCatalog.SURPRISE_CHEST_COST)
-        assertThat(prize).isAtLeast(ShopCatalog.CHEST_MIN_REWARD)
-        assertThat(prize).isAtMost(ShopCatalog.CHEST_MAX_REWARD)
-        assertThat(viewModel.uiState.first { it.purchaseFeedback != null }.purchaseFeedback)
-            .contains("$prize monedas")
+        when (reward) {
+            is ChestReward.Coins ->
+                assertThat(user.coins).isEqualTo(100 - ShopCatalog.SURPRISE_CHEST_COST + reward.amount)
+            is ChestReward.Inventory -> {
+                assertThat(user.coins).isEqualTo(100 - ShopCatalog.SURPRISE_CHEST_COST)
+                val owned = when (reward.item) {
+                    ShopInventoryItem.HINT -> user.hints
+                    ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties
+                    ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts
+                    ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts
+                }
+                assertThat(owned).isEqualTo(reward.quantity)
+            }
+        }
+        assertThat(state.purchaseFeedback).isNull()
+        assertThat(state.selectedItem).isNull()
+    }
+
+    @Test
+    fun `the chest prize stays on screen until the animation is dismissed`() = runTest {
+        fakeUserRepository.insert(User(coins = 100))
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+        assertThat(viewModel.uiState.first { it.chestReward != null }.chestReward).isNotNull()
+
+        viewModel.onEvent(ShopEvent.DismissChest)
+
+        assertThat(viewModel.uiState.first { it.chestReward == null }.chestReward).isNull()
+    }
+
+    @Test
+    fun `a chest the user cannot afford shows no animation and charges nothing`() = runTest {
+        fakeUserRepository.insert(User(coins = ShopCatalog.SURPRISE_CHEST_COST - 1))
+
+        viewModel.onEvent(ShopEvent.SelectItem(ShopItem.SurpriseChest))
+        viewModel.onEvent(ShopEvent.ConfirmPurchase)
+
+        val state = viewModel.uiState.first()
+        assertThat(state.chestReward).isNull()
+        assertThat(state.coinsCount).isEqualTo(ShopCatalog.SURPRISE_CHEST_COST - 1)
     }
 
     @Test
