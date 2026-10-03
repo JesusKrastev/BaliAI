@@ -33,7 +33,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SelectableDates
@@ -46,6 +45,9 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -54,12 +56,15 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.domain.model.ReadinessResult
 import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliDarkGray
+import com.jesuskrastev.bali.ui.theme.BaliGrayMedium
 import com.jesuskrastev.bali.ui.theme.BaliSecondary
 
 /** Most days left for which the strip of days is drawn: beyond it the dots would be too small to read. */
@@ -69,10 +74,10 @@ private const val STRIP_MAX_DAYS = 21
 private const val STRIP_LARGE_DOT_DAYS = 14
 
 /**
- * The statistics screen's top card: how long until the exam, said so it is felt. A large figure,
- * the stretch the student is in ("RECTA FINAL"), one dot per day that is left, and a message built
- * from what is really missing. It turns red in the last week. Without a date it asks for one,
- * since this is where the date is set.
+ * The statistics screen's top card: how long until the exam, said so it is felt. A large figure
+ * beside a calendar page of the day, the stretch the student is in ("RECTA FINAL"), one dot per day
+ * that is left, and a message built from what is really missing. It turns red in the last week.
+ * Without a date it asks for one, since this is where the date is set.
  *
  * @param plan the date to count down to, or an empty summary to ask for the exam date
  * @param readiness the verdict, for the mock exams still missing
@@ -107,7 +112,16 @@ internal fun ExamCountdownCard(
     ) {
         Column(
             modifier = Modifier
-                .background(Brush.verticalGradient(listOf(accent.copy(alpha = 0.28f), Color.Transparent)))
+                // A glow behind the figure rather than a wash over the whole card, which turned the slate brown.
+                .drawBehind {
+                    drawRect(
+                        Brush.radialGradient(
+                            colors = listOf(accent.copy(alpha = 0.32f), Color.Transparent),
+                            center = Offset(size.width * 0.2f, size.height * 0.15f),
+                            radius = size.width * 0.75f
+                        )
+                    )
+                }
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp)
         ) {
             if (copy == null) {
@@ -115,7 +129,7 @@ internal fun ExamCountdownCard(
             } else {
                 CountdownContent(
                     copy = copy,
-                    daysLeft = plan.daysLeft,
+                    plan = plan,
                     accent = accent,
                     studiedToday = studiedToday,
                     onDateClick = onDateClick
@@ -129,7 +143,7 @@ internal fun ExamCountdownCard(
  * The card when there is a date: label, figure, strip of days and message.
  *
  * @param copy the texts to show
- * @param daysLeft days until the date, which sizes the strip of days
+ * @param plan the date counted down to, which sizes the strip of days
  * @param accent colour of the figure, the label and the strip
  * @param studiedToday whether today already has a session, which shows on the strip's first dot
  * @param onDateClick opens the exam date picker
@@ -137,7 +151,7 @@ internal fun ExamCountdownCard(
 @Composable
 private fun CountdownContent(
     copy: CountdownCopy,
-    daysLeft: Int,
+    plan: PlanSummary,
     accent: Color,
     studiedToday: Boolean,
     onDateClick: () -> Unit
@@ -153,61 +167,55 @@ private fun CountdownContent(
         ChangeDateButton(onDateClick)
     }
 
-    CountdownFigure(copy = copy, accent = accent)
+    Spacer(Modifier.height(4.dp))
+    CountdownFigure(copy = copy, plan = plan, accent = accent)
 
-    if (daysLeft in 1..STRIP_MAX_DAYS) {
-        Spacer(Modifier.height(16.dp))
-        DaysStrip(daysLeft = daysLeft, studiedToday = studiedToday, accent = accent)
+    if (plan.daysLeft in 1..STRIP_MAX_DAYS) {
+        Spacer(Modifier.height(20.dp))
+        DaysStrip(
+            daysLeft = plan.daysLeft,
+            studiedToday = studiedToday,
+            accent = accent,
+            endLabel = if (plan.isExamDate) "EXAMEN" else "META"
+        )
     }
 
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 16.dp),
-        color = Color.White.copy(alpha = 0.1f)
-    )
-    Text(
-        text = copy.headline,
-        style = MaterialTheme.typography.titleLarge,
-        fontWeight = FontWeight.Black,
-        color = Color.White
-    )
-    Spacer(Modifier.height(6.dp))
-    Text(
-        text = copy.detail,
-        style = MaterialTheme.typography.bodyMedium,
-        color = Color.White.copy(alpha = 0.8f)
-    )
+    Spacer(Modifier.height(20.dp))
+    CountdownMessage(copy)
 }
 
 /**
- * The figure and what it counts. A number sits beside its caption to keep the card short; the
- * words "MAÑANA" and "HOY" are too wide for that, so they stack over it.
+ * The figure and what it counts. A number shares its row with a calendar page of the day; the
+ * words "MAÑANA" and "HOY" are too wide for that and stand alone, with the day written under them.
  *
  * @param copy the texts to show
- * @param accent colour of the figure
+ * @param plan the date counted down to, for the calendar page
+ * @param accent colour of the figure and the page's header
  */
 @Composable
-private fun CountdownFigure(copy: CountdownCopy, accent: Color) {
+private fun CountdownFigure(copy: CountdownCopy, plan: PlanSummary, accent: Color) {
     val isWord = copy.number.any { it.isLetter() }
-    val figure: @Composable () -> Unit = {
+    val target = plan.targetMillis
+
+    Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        if (isWord || target == null) {
+            CountdownNumber(text = copy.number, accent = accent, fontSize = 60.sp)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CountdownNumber(text = copy.number, accent = accent, fontSize = 88.sp, modifier = Modifier.weight(1f))
+                CalendarPageTile(page = calendarPageOf(target), description = copy.date, accent = accent)
+            }
+        }
+        Spacer(Modifier.height(6.dp))
         Text(
-            text = copy.number,
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = if (isWord) 60.sp else 88.sp,
-                lineHeight = if (isWord) 64.sp else 92.sp
-            ),
+            text = copy.unit,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Black,
-            color = accent
+            letterSpacing = 1.sp,
+            color = Color.White
         )
-    }
-    val caption: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = copy.unit,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.sp,
-                color = Color.White
-            )
+        // The calendar page already says an exam day; a promise ("Carnet antes del…") or a word figure needs it written.
+        if (isWord || !plan.isExamDate) {
             Text(
                 text = copy.date,
                 style = MaterialTheme.typography.bodyMedium,
@@ -215,20 +223,99 @@ private fun CountdownFigure(copy: CountdownCopy, accent: Color) {
             )
         }
     }
+}
 
-    if (isWord) {
-        Column(modifier = Modifier.semantics(mergeDescendants = true) {}) {
-            figure()
-            caption()
-        }
-    } else {
-        Row(
-            modifier = Modifier.semantics(mergeDescendants = true) {},
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            figure()
-            Box(modifier = Modifier.weight(1f)) { caption() }
+/**
+ * The big figure of the countdown.
+ *
+ * @param text the days left, or "MAÑANA" / "HOY"
+ * @param accent its colour
+ * @param fontSize its size: smaller for the words, which are wider
+ * @param modifier layout modifier
+ */
+@Composable
+private fun CountdownNumber(text: String, accent: Color, fontSize: TextUnit, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.displayLarge.copy(fontSize = fontSize, lineHeight = fontSize * 1.05f),
+        fontWeight = FontWeight.Black,
+        color = accent,
+        modifier = modifier
+    )
+}
+
+/**
+ * A tear-off calendar page with the day counted down to: the month on a coloured header, the day
+ * large and the weekday under it.
+ *
+ * @param page the day, split into its three lines
+ * @param description the day written out, read by screen readers instead of the three lines
+ * @param accent colour of the header
+ */
+@Composable
+private fun CalendarPageTile(page: CalendarPage, description: String, accent: Color) {
+    Column(
+        modifier = Modifier
+            .width(84.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White)
+            .clearAndSetSemantics { contentDescription = description },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = page.month,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.5.sp,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(accent)
+                .padding(vertical = 5.dp)
+        )
+        Text(
+            text = page.day,
+            style = MaterialTheme.typography.displaySmall.copy(fontSize = 36.sp, lineHeight = 40.sp),
+            fontWeight = FontWeight.Black,
+            color = BaliSecondary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Text(
+            text = page.weekday,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = BaliGrayMedium,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 10.dp)
+        )
+    }
+}
+
+/**
+ * The urgency message and what it means for today, on a faint panel so it reads as one block.
+ *
+ * @param copy the texts to show
+ */
+@Composable
+private fun CountdownMessage(copy: CountdownCopy) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.07f),
+        contentColor = Color.White
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = copy.headline,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black
+            )
+            Text(
+                text = copy.detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.78f)
+            )
         }
     }
 }
@@ -307,39 +394,61 @@ internal fun ChangeDateButton(onClick: () -> Unit, contentColor: Color = Color.W
 /**
  * One dot per day from today to the exam, so the time that is left can be seen shrinking: today
  * first (a check once studied, a breathing ring while pending), the days in between, and a flag
- * on the exam day. Decorative: the texts already say the same, so it is hidden from screen readers.
+ * on the exam day, with both ends named under them. Decorative: the texts already say the same,
+ * so it is hidden from screen readers.
  *
  * @param daysLeft days until the date, 1 or more
  * @param studiedToday whether today already has a session
  * @param accent colour of today's mark and the flag
+ * @param endLabel name of the last day, under the flag
  */
 @Composable
-private fun DaysStrip(daysLeft: Int, studiedToday: Boolean, accent: Color) {
+private fun DaysStrip(daysLeft: Int, studiedToday: Boolean, accent: Color, endLabel: String) {
     val pulse = rememberPendingPulse()
     val dot = if (daysLeft <= STRIP_LARGE_DOT_DAYS) 12.dp else 8.dp
     val today = dot + 8.dp
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clearAndSetSemantics {},
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = Modifier.clearAndSetSemantics {},
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        TodayMark(studied = studiedToday, size = today, accent = accent, pulse = pulse)
-        repeat(daysLeft - 1) {
-            Box(
-                modifier = Modifier
-                    .size(dot)
-                    .background(Color.White.copy(alpha = 0.18f), CircleShape)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TodayMark(studied = studiedToday, size = today, accent = accent, pulse = pulse)
+            repeat(daysLeft - 1) {
+                Box(
+                    modifier = Modifier
+                        .size(dot)
+                        .background(Color.White.copy(alpha = 0.18f), CircleShape)
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.Flag,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(today)
             )
         }
-        Icon(
-            imageVector = Icons.Rounded.Flag,
-            contentDescription = null,
-            tint = accent,
-            modifier = Modifier.size(today)
-        )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "HOY",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                color = Color.White.copy(alpha = 0.6f)
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                text = endLabel,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp,
+                color = accent
+            )
+        }
     }
 }
 

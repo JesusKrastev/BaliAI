@@ -1,5 +1,7 @@
 package com.jesuskrastev.bali.ui.screens.stats
 
+import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.domain.model.MockExam
 import com.jesuskrastev.bali.domain.model.ReadinessLevel
 import com.jesuskrastev.bali.domain.model.ReadinessResult
 import com.jesuskrastev.bali.domain.usecase.CalculateReadinessUseCase
@@ -85,12 +87,118 @@ fun recentSummaryOf(readiness: ReadinessResult): String = when (readiness.recent
 }
 
 /**
- * Describes the target for the latest mock exams, adjusted when fewer than the window exist.
+ * Describes the target for the latest mock exams.
  *
  * @return the goal, e.g. "Objetivo antes del examen: ${CalculateReadinessUseCase.RECENT_GOAL} de ${CalculateReadinessUseCase.RECENT_WINDOW}"
  */
 fun recentGoalText(): String =
     "Objetivo antes del examen: ${CalculateReadinessUseCase.RECENT_GOAL} de ${CalculateReadinessUseCase.RECENT_WINDOW}"
+
+/**
+ * Says how far the latest mock exams are from the goal, beside the goal's segmented bar.
+ *
+ * @param readiness the verdict holding the latest mock exams
+ * @return "Cumplido" once the goal is met, otherwise the passes still missing, e.g. "Faltan 2"
+ */
+fun recentGoalStatusOf(readiness: ReadinessResult): String {
+    val missing = CalculateReadinessUseCase.RECENT_GOAL - readiness.passedInRecent
+    return when {
+        missing <= 0 -> "Cumplido"
+        missing == 1 -> "Falta 1"
+        else -> "Faltan $missing"
+    }
+}
+
+/**
+ * Counts the questions a mock exam got wrong, which is how the DGT exam is judged.
+ *
+ * @param exam the mock exam
+ * @return e.g. "2 fallos" or "1 fallo"
+ */
+fun mistakesText(exam: MockExam): String = plural(exam.total - exam.score, "fallo")
+
+/**
+ * Spoken description of one slot of the latest mock exams.
+ *
+ * @param exam the mock exam, or null for a slot still to take
+ * @return e.g. "Aprobado: 28 aciertos, 2 fallos"
+ */
+fun mockSlotDescriptionOf(exam: MockExam?): String = when {
+    exam == null -> "Simulacro por hacer"
+    exam.passed -> "Aprobado: ${plural(exam.score, "acierto")}, ${mistakesText(exam)}"
+    else -> "Suspendido: ${plural(exam.score, "acierto")}, ${mistakesText(exam)}"
+}
+
+/**
+ * Subtitle of the mock exam evolution chart.
+ *
+ * @param shown mock exams the chart draws
+ * @param taken mock exams taken in total
+ * @return e.g. "Aciertos de tus últimos 10 simulacros", or "Aciertos de tus 4 simulacros" when it draws all of them
+ */
+fun historySubtitleOf(shown: Int, taken: Int): String =
+    if (taken > shown) "Aciertos de tus últimos $shown simulacros" else "Aciertos de tus ${plural(shown, "simulacro")}"
+
+/**
+ * Spoken description of the evolution chart, which is otherwise only drawn.
+ *
+ * @param exams the mock exams the chart draws, oldest first
+ * @return e.g. "Aciertos de cada simulacro, del más antiguo al último: 25, 28 y 30. Se aprueba con 27."
+ */
+fun historyDescriptionOf(exams: List<MockExam>): String {
+    val scores = exams.map { it.score.toString() }
+    val list = if (scores.size < 2) scores.joinToString() else scores.dropLast(1).joinToString() + " y " + scores.last()
+    return "Aciertos de cada simulacro, del más antiguo al último: $list. Se aprueba con ${ExamRules.PASS_SCORE}."
+}
+
+/**
+ * Lowest score the evolution chart's axis shows: a round number at least five below the pass mark,
+ * so the pass band never fills the chart, and low enough for the worst score.
+ *
+ * @param exams the mock exams the chart draws
+ * @return a multiple of 5 from 0 up
+ */
+fun historyFloorOf(exams: List<MockExam>): Int {
+    val lowest = minOf(exams.minOfOrNull { it.score } ?: ExamRules.PASS_SCORE, ExamRules.PASS_SCORE - 5)
+    return (lowest.coerceAtLeast(0) / 5) * 5
+}
+
+/**
+ * Writes a day short, for chart axes.
+ *
+ * @param millis any instant on the day
+ * @return e.g. "5 oct"
+ */
+fun shortDayText(millis: Long): String =
+    SimpleDateFormat("d MMM", SPANISH).format(Date(millis)).replace(".", "")
+
+/**
+ * The day a countdown points at, as a tear-off calendar page shows it.
+ *
+ * @property month the month, abbreviated and in capitals, e.g. "OCT"
+ * @property day the day of the month, e.g. "19"
+ * @property weekday the day of the week in capitals, e.g. "LUNES"
+ */
+data class CalendarPage(
+    val month: String,
+    val day: String,
+    val weekday: String
+)
+
+/**
+ * Splits a day into the three lines of a calendar page.
+ *
+ * @param millis any instant on the day
+ * @return the page for that day
+ */
+fun calendarPageOf(millis: Long): CalendarPage {
+    val date = Date(millis)
+    return CalendarPage(
+        month = SimpleDateFormat("MMM", SPANISH).format(date).replace(".", "").uppercase(SPANISH),
+        day = SimpleDateFormat("d", SPANISH).format(date),
+        weekday = SimpleDateFormat("EEEE", SPANISH).format(date).uppercase(SPANISH)
+    )
+}
 
 /**
  * What the countdown card says for one date.
@@ -255,7 +363,7 @@ fun trendText(trend: Float): String {
  * @return e.g. "25,4" or "27"
  */
 fun formatDecimal(value: Float): String {
-    val text = String.format(java.util.Locale.US, "%.1f", value)
+    val text = String.format(Locale.US, "%.1f", value)
     return text.removeSuffix(".0").replace('.', ',')
 }
 
