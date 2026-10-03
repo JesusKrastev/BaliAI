@@ -16,6 +16,7 @@ import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
 import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -37,6 +38,37 @@ class FirestoreUserDao @Inject constructor(
         const val FIRST_STEPS_STARTED_AT = "firstStepsStartedAt"
         const val FIRST_STEPS_DONE = "firstStepsDone"
         const val FIRST_STEPS_DISMISSED = "firstStepsDismissed"
+    }
+
+    /** Returns whether [userId] earned and claimed [reward] in one Firestore transaction. */
+    @AddTrace(name = "claim_rank_reward")
+    suspend fun claimRankReward(userId: String, reward: RankReward): Boolean {
+        val docRef = collection.document(userId)
+        return try {
+            firestore.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val xp = snapshot.getLong("xp") ?: 0L
+                val claimed = (snapshot.get("claimedRankRewards") as? List<*>)
+                    ?.filterIsInstance<String>().orEmpty()
+                if (xp < reward.requiredXp || reward.id in claimed) {
+                    false
+                } else {
+                    transaction.set(
+                        docRef,
+                        mapOf(
+                            "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
+                            "claimedRankRewards" to (claimed + reward.id)
+                        ),
+                        SetOptions.merge()
+                    )
+                    true
+                }
+            }.await()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            FirebaseCrashlytics.getInstance().recordException(error)
+            throw error
+        }
     }
 
     // --- User Operations ---

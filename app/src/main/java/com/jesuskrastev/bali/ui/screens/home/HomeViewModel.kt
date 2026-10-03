@@ -14,6 +14,7 @@ import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.RankProgression
 import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.repository.AuthRepository
@@ -164,6 +165,10 @@ class HomeViewModel @Inject constructor(
                 totalTests = totalTests,
                 practiceDays = user.practiceDays,
                 xpLevel = user.level,
+                xp = user.xp,
+                claimableRankRewards = RankProgression.rewards.count { reward ->
+                    reward.requiredXp <= user.xp && reward.id !in user.claimedRankRewards
+                },
                 mistakesCount = typedMistakes.size,
                 coinsCount = user.coins,
                 streakFreezes = streak.freezes,

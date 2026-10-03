@@ -33,6 +33,15 @@ class UserRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository
 ) : UserRepository {
 
+    /** Returns whether [reward] was collected through the active Firestore or Room profile. */
+    override suspend fun claimRankReward(reward: com.jesuskrastev.bali.domain.model.RankReward): Boolean =
+        withContext(Dispatchers.IO) {
+            withAuthRouting(
+                actionRemote = { userId -> firestoreUserDao.claimRankReward(userId, reward) },
+                actionLocal = { userDao.claimRankReward(reward) }
+            )
+        }
+
     override fun get(): Flow<User?> = authRepository.currentUserFlow.flatMapLatest { userId ->
         if (userId != null) {
             firestoreUserDao.getUser(userId).map { it?.toDomain() }
