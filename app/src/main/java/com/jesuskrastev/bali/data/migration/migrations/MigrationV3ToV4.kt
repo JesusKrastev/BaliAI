@@ -32,6 +32,5 @@ class MigrationV3ToV4 @Inject constructor(
             "lastEnergyUpdateTimestamp" to FieldValue.delete()
         )
         userRef.update(updates).await()
-        println("Migration V4: Removed 'energy' and 'lastEnergyUpdateTimestamp' fields for user $userId")
     }
 }

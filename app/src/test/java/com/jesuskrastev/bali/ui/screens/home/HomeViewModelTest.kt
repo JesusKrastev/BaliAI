@@ -13,7 +13,6 @@ import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestResult
-import com.jesuskrastev.bali.domain.util.DateTimeHelper
 import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
 import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
@@ -47,7 +46,6 @@ class HomeViewModelTest {
     private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val dateTimeHelper: DateTimeHelper = mock()
 
     private val fakeGenerateInitialPathUseCase = GenerateInitialPathUseCase(fakePathRepository, fakeAuthRepository)
     private val fakeGenerateNextPathNodesUseCase = GenerateNextPathNodesUseCase(mock(), fakeUserRepository, fakePathRepository)
@@ -77,7 +75,6 @@ class HomeViewModelTest {
             generateNextPathNodesUseCase = fakeGenerateNextPathNodesUseCase,
             generateInitialPathUseCase = fakeGenerateInitialPathUseCase,
             analyticsTracker = fakeAnalyticsTracker,
-            dateTimeHelper = dateTimeHelper,
             remoteConfigProvider = remoteConfigProvider,
             settleStreak = SettleStreakUseCase(fakeUserRepository),
             pendingFirstStepRewards = pendingRewards,

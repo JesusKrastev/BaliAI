@@ -16,8 +16,8 @@ import javax.inject.Inject
  * No hay nada que rellenar, y es a propósito: la inscripción se hace al crear la cuenta
  * (`AuthViewModel`), así que las cuentas que ya existen se quedan sin `firstStepsStartedAt` y no
  * ven la barra. Esta migración NO debe escribir `firstStepsStartedAt`: también se ejecuta sobre
- * las cuentas recién creadas (su documento empieza sin `schemaVersion`, es decir en v1) y pisarlo
- * les quitaría la barra. Si algún día se decide enseñársela a los suscriptores que ya existen, se
+ * las cuentas creadas antes de que los documentos nuevos se sellaran con su `schemaVersion` (su
+ * documento empieza en v1) y pisarlo les quitaría la barra. Si algún día se decide enseñársela a los suscriptores que ya existen, se
  * hará en una migración posterior que inscriba solo a quien no tenga el campo.
  *
  * La clase existe porque la regla del repo pide una migración para cada cambio de estructura y

@@ -7,7 +7,7 @@ import com.jesuskrastev.bali.domain.model.LessonNode
 import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import kotlinx.coroutines.flow.first
-import kotlinx.serialization.json.Json
+import com.jesuskrastev.bali.domain.util.GeminiJson
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -26,8 +26,13 @@ open class GenerateNextPathNodesUseCase @Inject constructor(
     private val userRepository: UserRepository,
     private val pathRepository: PathRepository,
 ) {
-    private val jsonContent = Json { ignoreUnknownKeys = true }
-
+    /**
+     * Asks Gemini for the next [count] lessons and saves them after the last one on the path; the
+     * first generated lesson starts unlocked.
+     *
+     * @param count how many lessons to generate
+     * @return the lessons that were saved
+     */
     open suspend operator fun invoke(count: Int = 5): List<LessonNode> {
         val user = userRepository.get().first() ?: throw Exception("Usuario no encontrado")
         val userId = user.id
@@ -60,14 +65,8 @@ open class GenerateNextPathNodesUseCase @Inject constructor(
         val response = gemini.generateContent(prompt)
         val rawText = response.text ?: throw Exception("Sin respuesta de Gemini")
 
-        val jsonStartIndex = rawText.indexOf('{')
-        val jsonEndIndex = rawText.lastIndexOf('}')
-        if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato JSON inválido desde AI")
-
-        val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
-        val root = jsonContent.parseToJsonElement(jsonString).jsonObject
-        
-        val nodesArray = root["nodes"]?.jsonArray ?: throw Exception("No se encontró el array nodes")
+        val nodesArray = GeminiJson.parseObject(rawText)["nodes"]?.jsonArray
+            ?: throw Exception("No se encontró el array nodes")
 
         val generatedNodes = nodesArray.mapIndexed { index, element ->
             val obj = element.jsonObject

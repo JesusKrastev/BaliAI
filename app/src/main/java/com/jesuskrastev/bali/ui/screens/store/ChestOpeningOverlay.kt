@@ -68,9 +68,6 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliDarkBackground
 import kotlinx.coroutines.delay
 
-/** Marker of `bali_chest_opening.json` that holds the lid shut: frame 0, a single still frame. */
-private const val CHEST_CLOSED_MARKER = "closed_idle"
-
 /** Marker that plays the lid opening and the glow rising out of the chest (frames 1–37). */
 private const val CHEST_OPENING_MARKER = "opening"
 

@@ -40,9 +40,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
 import javax.inject.Inject
 
@@ -279,13 +276,27 @@ class TestViewModel @Inject constructor(
             TestEvent.NextQuestion -> nextQuestion()
             TestEvent.UseHint -> useHint()
             TestEvent.UseFiftyFifty -> useFiftyFifty()
-            is TestEvent.FinishTest -> {
-                viewModelScope.launch {
-                    val result = calculateResult()
-                    testFinished = true
-                    event.onResult(result)
-                }
+            is TestEvent.FinishTest -> finishTest(event.onResult)
+        }
+    }
+
+    /**
+     * Scores the test and hands the summary to [onResult]. A second call before [retry] is
+     * ignored, so a double tap on the last button cannot pay the rewards twice.
+     *
+     * @param onResult receives the summary once everything is saved
+     */
+    private fun finishTest(onResult: (TestSummary) -> Unit) {
+        if (testFinished) return
+        testFinished = true
+        viewModelScope.launch {
+            val summary = try {
+                calculateResult()
+            } catch (error: Exception) {
+                testFinished = false
+                throw error
             }
+            onResult(summary)
         }
     }
 
@@ -326,7 +337,7 @@ class TestViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val lastTests = testResultRepository.getRecent().first()
-                val totalTests = testResultRepository.count()
+                val totalTests = testResultRepository.count().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
                 val difficultTopics =
                     user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
@@ -398,17 +409,9 @@ class TestViewModel @Inject constructor(
 
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
-                val jsonStartIndex = rawText.indexOf('{')
-                val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato inválido")
-
-                val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
-                val root = jsonContent.parseToJsonElement(jsonString).jsonObject
-
-                val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic
-                ?: "Práctica General"
-                
+                val category = GeminiQuestionParser.selectedCategory(rawText) ?: currentTopic ?: "Práctica General"
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
+                require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
 
                 startTime = System.currentTimeMillis()
                 _uiState.update {
@@ -678,10 +681,6 @@ class TestViewModel @Inject constructor(
             newStreakDays = newStreakDays,
             isFirstWin = isFirstWin
         )
-    }
-
-    override fun onCleared() {
-        super.onCleared()
     }
 
     companion object {

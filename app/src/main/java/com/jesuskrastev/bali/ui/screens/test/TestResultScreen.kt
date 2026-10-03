@@ -32,6 +32,7 @@ import com.airbnb.lottie.compose.*
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.review.InAppReviewEffect
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
+import com.jesuskrastev.bali.ui.util.formatClock
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -123,8 +124,6 @@ fun TestResultScreen(
     secondaryActionLabel: String? = null,
     onSecondaryActionClick: () -> Unit = {},
 ) {
-    val minutes = durationSeconds / 60
-    val seconds = durationSeconds % 60
 
     val headline = remember { ResultHeadline.of(isFirstWin, isNewRecord, leveledUp) }
     val tier = remember { ResultTier.of(kind, accuracy, score, total) }
@@ -293,7 +292,7 @@ fun TestResultScreen(
                             ResultStatCard(
                                 modifier = Modifier.weight(1f),
                                 label = "Tiempo",
-                                value = String.format("%02d:%02d", minutes, seconds),
+                                value = formatClock(durationSeconds),
                                 icon = Icons.Rounded.Timer,
                                 color = MaterialTheme.colorScheme.primary
                             )

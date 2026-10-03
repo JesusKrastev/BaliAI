@@ -3,8 +3,6 @@ package com.jesuskrastev.bali.ui.screens.exam
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,7 +11,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -24,24 +21,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.OptionCard
 import com.jesuskrastev.bali.ui.screens.test.QuizProgressTitle
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
-import java.util.Locale
+import com.jesuskrastev.bali.ui.util.formatClock
 
 /** Remaining exam time, in seconds, under which the timer turns to the error color. */
 private const val LOW_TIME_WARNING_SECONDS = 300
@@ -81,7 +73,7 @@ fun ExamScreen(
                         ) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = formatTime(uiState.timeLeftSeconds),
+                                text = formatClock(uiState.timeLeftSeconds),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = if (uiState.timeLeftSeconds < LOW_TIME_WARNING_SECONDS) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
@@ -389,6 +381,3 @@ fun QuestionReviewGrid(
     }
 }
 
-/** Formats [seconds] as `mm:ss`. */
-private fun formatTime(seconds: Int): String =
-    String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)

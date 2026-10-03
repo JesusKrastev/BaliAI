@@ -8,7 +8,6 @@ import com.google.firebase.firestore.firestore
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.persistentCacheSettings
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import dagger.Module
@@ -51,10 +50,6 @@ object FirebaseModule {
             minimumFetchIntervalInSeconds = 3600 // Fetch cada hora
         }
         remoteConfig.setConfigSettingsAsync(configSettings)
-        val defaultValues = mapOf(
-            "weekly_goal" to 5
-        )
-        remoteConfig.setDefaultsAsync(defaultValues)
         return remoteConfig
     }
 }

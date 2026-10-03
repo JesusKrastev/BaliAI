@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
-import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig

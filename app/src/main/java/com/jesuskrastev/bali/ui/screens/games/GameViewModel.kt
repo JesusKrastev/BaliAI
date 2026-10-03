@@ -69,6 +69,9 @@ class GameViewModel @Inject constructor(
 
     private var sessionStartMs = 0L
 
+    /** True from the last round until its rewards are published, so a late extra round pays nothing twice. */
+    private var isGrantingRewards = false
+
     /** Game types already rewarded once this ViewModel's lifetime — replaying one earns reduced XP. */
     private val rewardedGames = mutableSetOf<GameType>()
 
@@ -76,6 +79,7 @@ class GameViewModel @Inject constructor(
     @AddTrace(name = "start_dgt_minigame")
     fun startSession(game: GameType) {
         sessionStartMs = System.currentTimeMillis()
+        isGrantingRewards = false
         _uiState.value = GameSessionUiState(game = game, sessionSeed = Random.nextLong())
         analyticsTracker.gameStarted(game.id)
     }
@@ -88,10 +92,11 @@ class GameViewModel @Inject constructor(
      */
     fun recordRound(won: Boolean) {
         val state = _uiState.value
-        if (state.isFinished) return
+        if (state.isFinished || isGrantingRewards) return
         val newScore = state.score + if (won) 1 else 0
         if (state.roundIndex == state.totalRounds - 1) {
             _uiState.update { it.copy(score = newScore) }
+            isGrantingRewards = true
             viewModelScope.launch { grantSessionRewards(newScore) }
         } else {
             _uiState.update { it.copy(roundIndex = it.roundIndex + 1, score = newScore) }

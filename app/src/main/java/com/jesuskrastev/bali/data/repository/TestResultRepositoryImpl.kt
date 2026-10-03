@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,23 +44,7 @@ class TestResultRepositoryImpl @Inject constructor(
     }
 
 
-    /**
-     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
-     * Both actions run on [Dispatchers.IO].
-     */
-    private suspend inline fun <T> withAuthRouting(
-        crossinline actionRemote: suspend (String) -> T,
-        crossinline actionLocal: suspend () -> T
-    ): T = withContext(Dispatchers.IO) {
-        val userId = authRepository.currentUser()
-        if (userId != null) {
-            actionRemote(userId)
-        } else {
-            actionLocal()
-        }
-    }
-
-    override suspend fun insert(result: TestResult): String = withAuthRouting(
+    override suspend fun insert(result: TestResult): String = authRepository.withAuthRouting(
         actionRemote = { userId ->
             firestoreUserDao.insertTestResult(userId, result.toFirestore())
             result.id

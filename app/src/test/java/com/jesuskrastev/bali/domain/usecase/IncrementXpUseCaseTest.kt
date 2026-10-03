@@ -1,7 +1,6 @@
 package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.domain.model.TestMode
-import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest

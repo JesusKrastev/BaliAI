@@ -35,7 +35,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 10, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 20, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.13.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config)
 - **AI**: Google Generative AI SDK 0.9.0 (Gemini)

@@ -201,7 +201,7 @@ object OnboardingConfig {
      * @param slot the part of the day the user picked
      * @return the hour as the app writes times, e.g. "21:00"
      */
-    fun reminderTimeLabel(slot: StudySlot): String = "%d:00".format(slot.hour)
+    fun reminderTimeLabel(slot: StudySlot): String = "${slot.hour}:00"
 
     /**
      * When the user likes to study, keyed by the option label. The hour is part of the label
