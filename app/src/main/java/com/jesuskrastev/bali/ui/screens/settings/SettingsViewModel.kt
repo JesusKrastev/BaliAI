@@ -79,7 +79,7 @@ class SettingsViewModel @Inject constructor(
             isLoggedIn = isLoggedIn,
             soundsEnabled = preferences.soundsEnabled,
             disabledNotificationCategories = preferences.disabledCategories,
-            notificationsBlocked = !preferences.pushesAllowed
+            notificationsEnabled = preferences.pushesAllowed
         )
     }.stateIn(
         scope = viewModelScope,
@@ -110,11 +110,26 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Follows the notifications switch in Settings.
+     *
+     * @param enabled true to let pushes through again (see [enableNotifications]); false to opt
+     *   this install out, so OneSignal sends it nothing until the user switches them back on
+     */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        if (enabled) {
+            enableNotifications()
+        } else {
+            notificationsRepository.optOut()
+            analyticsTracker.notificationsSwitchedOff()
+        }
+    }
+
+    /**
      * Lets notifications through again: opts back in, shows the system dialog, or, when Android
      * will not show it any more, asks the screen to open the system settings. The outcome is
      * logged with `source = settings`, apart from the onboarding's answers.
      */
-    fun enableNotifications() {
+    private fun enableNotifications() {
         viewModelScope.launch {
             val result = notificationsRepository.enablePushes()
             analyticsTracker.notificationsPermissionAnswered(

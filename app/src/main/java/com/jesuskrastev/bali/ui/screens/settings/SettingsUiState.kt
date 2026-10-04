@@ -11,8 +11,9 @@ import com.jesuskrastev.bali.domain.model.NotificationCategory
  * @property isLoggedIn whether a user session is currently active
  * @property soundsEnabled whether the answer sound effects are on (they are until the user turns them off)
  * @property disabledNotificationCategories the notification kinds the user switched off (all are on until they do)
- * @property notificationsBlocked whether Android is blocking this app's notifications, which makes the
- *   category switches useless until the user lets them through
+ * @property notificationsEnabled whether pushes reach this install: Android allows the app's notifications
+ *   and the user has not turned them off in the app (with the Settings switch or the onboarding's
+ *   "Ahora no"). While false no category delivers anything, whatever its channel says
  */
 data class SettingsUiState(
     val userName: String = "Futuro Conductor",
@@ -21,5 +22,5 @@ data class SettingsUiState(
     val isLoggedIn: Boolean = false,
     val soundsEnabled: Boolean = true,
     val disabledNotificationCategories: Set<NotificationCategory> = emptySet(),
-    val notificationsBlocked: Boolean = false
+    val notificationsEnabled: Boolean = true
 )

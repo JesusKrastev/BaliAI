@@ -164,7 +164,7 @@ open class AnalyticsTracker @Inject constructor(
 
     /**
      * Tracks an answer to the offer of notifications: the onboarding's reminders screen, or the
-     * "Activar notificaciones" button in Settings.
+     * notifications switch in Settings turned on.
      *
      * @param result `granted` (Android allows them now), `denied` (refused the system dialog),
      *   `declined` (tapped "Ahora no" in onboarding, no system dialog shown) or `system_settings`
@@ -178,6 +178,15 @@ open class AnalyticsTracker @Inject constructor(
             putString("source", source)
             studySlot?.let { putString("study_slot", it) }
         }
+
+    /**
+     * Tracks the user turning notifications off with the switch in Settings, which opts this
+     * install out of every push. Turning them back on is logged by [notificationsPermissionAnswered]
+     * with `source = settings`.
+     */
+    open fun notificationsSwitchedOff() = log("notifications_switched_off") {
+        putString("source", "settings")
+    }
 
     /**
      * Tracks an answer to the onboarding mini-test, the user's first taste of the product.

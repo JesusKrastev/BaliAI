@@ -6,6 +6,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -22,13 +27,13 @@ import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -139,34 +144,41 @@ fun SettingsScreen(
 
         ProfileCard(uiState = uiState, onAuthClick = onAuthClick)
 
-        SettingsSection(
-            title = "Suscripción",
-            items = listOf(
-                SettingsRowSpec(
-                    icon = Icons.Rounded.CreditCard,
-                    label = "Gestionar suscripción",
-                    onClick = onManageSubscriptionClick
-                )
-            )
-        )
-
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingsSectionLabel("Notificaciones")
-            if (uiState.notificationsBlocked) {
-                EnableNotificationsPrompt(onEnableClick = viewModel::enableNotifications)
-            }
             SettingsGroup(
-                NotificationCategory.entries.map { category ->
-                    // While Android blocks the app, no channel delivers anything, whatever its own switch says.
-                    val isOn = !uiState.notificationsBlocked && category !in uiState.disabledNotificationCategories
+                listOf(
                     SettingsRowSpec(
-                        icon = category.icon(),
-                        label = category.title,
-                        description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
-                        onClick = { context.openNotificationSettings(category) }
+                        icon = if (uiState.notificationsEnabled) Icons.Rounded.Notifications else Icons.Rounded.NotificationsOff,
+                        label = "Recibir notificaciones",
+                        description = if (uiState.notificationsEnabled) {
+                            "Elige abajo qué avisos quieres"
+                        } else {
+                            "No te avisaremos a tu hora de estudio ni si tu racha está en peligro"
+                        },
+                        checked = uiState.notificationsEnabled,
+                        onClick = { viewModel.setNotificationsEnabled(!uiState.notificationsEnabled) }
                     )
-                }
+                )
             )
+            // Each kind has its own Android channel; they only matter while notifications are on.
+            AnimatedVisibility(
+                visible = uiState.notificationsEnabled,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                SettingsGroup(
+                    NotificationCategory.entries.map { category ->
+                        val isOn = category !in uiState.disabledNotificationCategories
+                        SettingsRowSpec(
+                            icon = category.icon(),
+                            label = category.title,
+                            description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
+                            onClick = { context.openNotificationSettings(category) }
+                        )
+                    }
+                )
+            }
         }
 
         SettingsSection(
@@ -227,6 +239,17 @@ fun SettingsScreen(
                     icon = Icons.Rounded.Description,
                     label = "Términos y condiciones",
                     onClick = { context.openLink(LegalLinks.TERMS) }
+                )
+            )
+        )
+
+        SettingsSection(
+            title = "Suscripción",
+            items = listOf(
+                SettingsRowSpec(
+                    icon = Icons.Rounded.CreditCard,
+                    label = "Gestionar suscripción",
+                    onClick = onManageSubscriptionClick
                 )
             )
         )
@@ -460,52 +483,6 @@ private fun Context.openAppNotificationSettings() {
         startActivityOrFalse(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
         )
-    }
-}
-
-/**
- * Message shown while Android blocks the app's notifications, asking the user to turn them
- * on: without them the study reminders and the streak warning never arrive.
- *
- * @param onEnableClick asks for the permission, or opens the system settings when the dialog
- *   can no longer be shown
- */
-@Composable
-private fun EnableNotificationsPrompt(onEnableClick: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.primaryContainer
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Rounded.NotificationsOff,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    "Activa las notificaciones",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Text(
-                "Sin ellas no podemos avisarte a tu hora de estudio ni cuando tu racha esté en peligro, " +
-                    "y es fácil que se te pase un día. Te llevará un toque.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-            Button(onClick = onEnableClick, modifier = Modifier.fillMaxWidth()) {
-                Text("Activar notificaciones", fontWeight = FontWeight.Bold)
-            }
-        }
     }
 }
 
