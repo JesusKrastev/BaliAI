@@ -21,6 +21,7 @@ class FakeSoundEffects(enabled: Boolean = true) : SoundEffects {
         private set
     var chestOpenPlays = 0
         private set
+    val pickupPitches = mutableListOf<Float>()
 
     override val isEnabled: Flow<Boolean> = enabledState
 
@@ -46,5 +47,9 @@ class FakeSoundEffects(enabled: Boolean = true) : SoundEffects {
 
     override fun playChestOpen() {
         chestOpenPlays++
+    }
+
+    override fun playPickup(pitch: Float) {
+        pickupPitches += pitch
     }
 }

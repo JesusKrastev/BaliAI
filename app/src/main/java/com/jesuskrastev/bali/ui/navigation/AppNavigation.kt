@@ -34,6 +34,7 @@ import com.jesuskrastev.bali.ui.screens.home.HomeViewModel
 import com.jesuskrastev.bali.ui.screens.games.GamePlayScreen
 import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
+import com.jesuskrastev.bali.ui.screens.games.drive.BaliDriveScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingScreen
 import com.jesuskrastev.bali.ui.screens.onboarding.OnboardingViewModel
 import com.jesuskrastev.bali.ui.screens.subscription.CancelSubscriptionScreen
@@ -202,10 +203,16 @@ fun AppNavigation(
 
             composable<GamePlayRoute> { backStackEntry ->
                 val route: GamePlayRoute = backStackEntry.toRoute()
-                GamePlayScreen(
-                    game = GameType.fromId(route.gameId),
-                    onBackClick = { navController.popBackStack() },
-                )
+                val game = GameType.fromId(route.gameId)
+                if (game == GameType.DRIVE) {
+                    // A continuous one-minute run, not five rounds: it has its own screen and loop.
+                    BaliDriveScreen(onExit = { navController.popBackStack() })
+                } else {
+                    GamePlayScreen(
+                        game = game,
+                        onBackClick = { navController.popBackStack() },
+                    )
+                }
             }
 
             composable<SettingsRoute> {

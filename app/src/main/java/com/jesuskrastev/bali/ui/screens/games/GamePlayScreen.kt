@@ -99,6 +99,8 @@ fun GamePlayScreen(
                         GameType.SENAL -> SenalRelampagoGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                         GameType.LEGAL_O_MULTA -> LegalOMultaGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                         GameType.PELIGRO -> EncuentraElPeligroGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
+                        // Routed to BaliDriveScreen by AppNavigation: a continuous run, not five rounds.
+                        GameType.DRIVE -> Unit
                         GameType.PRIORIDAD_CRUCE -> PrioridadCruceGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                     }
                 }

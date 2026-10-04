@@ -13,6 +13,9 @@ released as CC0 1.0 (public domain) together with this script.
                              scale and ringing out on a high chord: a surprise chest opening
     sfx_soft_finish.ogg      two quiet, round notes rising a fourth (G4 -> C5): the result screen
                              of a failed exam or a low score, a calm "done" with no fanfare
+    sfx_pickup.ogg           a tiny two-note "pling" (E6 -> B6): a star collected in Bali Drive.
+                             The app replays it at a rising playback rate for consecutive stars,
+                             so a streak climbs in pitch
 
 Usage (needs numpy and ffmpeg on the PATH):
 
@@ -169,6 +172,18 @@ def soft_finish():
     )
 
 
+def pickup():
+    """Tiny bright "pling": E6 then B6 thirty milliseconds apart, short enough to fire several
+    times a second. Bali Drive raises its playback rate step by step during a star streak."""
+    return mix(
+        [
+            (0.000, bell(1318.51, 0.12, decay=0.05)),
+            (0.030, bell(1975.53, 0.20, decay=0.08)),
+        ],
+        total_length=0.24,
+    )
+
+
 def write_ogg(samples, name, peak=PEAK):
     """Normalises [samples] to [peak] and encodes it as mono OGG Vorbis at OUT_DIR/<name>.ogg."""
     samples = samples / np.max(np.abs(samples)) * peak
@@ -199,3 +214,5 @@ if __name__ == "__main__":
     write_ogg(chest_open(), "sfx_chest_open")
     # Quieter than the others: it closes a result that is not being celebrated.
     write_ogg(soft_finish(), "sfx_soft_finish", peak=0.40)
+    # Quieter too: it can fire several times a second during a star streak.
+    write_ogg(pickup(), "sfx_pickup", peak=0.38)

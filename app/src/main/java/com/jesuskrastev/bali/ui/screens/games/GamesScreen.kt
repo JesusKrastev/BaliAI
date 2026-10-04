@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jesuskrastev.bali.R
+import com.jesuskrastev.bali.ui.screens.games.drive.BaliDriveCover
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
@@ -53,7 +54,7 @@ fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) 
     var selectedDifficulty by remember { mutableStateOf<GameDifficulty?>(null) }
     val visibleGames = GameType.entries
         .filter { selectedDifficulty == null || GAME_DIFFICULTY[it] == selectedDifficulty }
-        .sortedBy { GAME_DIFFICULTY[it]?.ordinal ?: GameDifficulty.entries.size }
+        .sortedWith(compareBy<GameType> { it != GameType.DRIVE }.thenBy { GAME_DIFFICULTY[it]?.ordinal ?: GameDifficulty.entries.size })
 
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         ArcadeBackdrop(modifier = Modifier.matchParentSize())
@@ -72,7 +73,7 @@ fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) 
             )
             GameCatalogueHeader()
             visibleGames.forEach { game ->
-                val featured = game == GameType.PUNTOS_CARNE && selectedDifficulty == null
+                val featured = game == GameType.DRIVE && selectedDifficulty == null
                 GameCover(
                     game = game,
                     onClick = { onGameClick(game) },
@@ -210,7 +211,7 @@ private fun GameCatalogueHeader() {
             fontWeight = FontWeight.Black,
         )
         Text(
-            text = "Cada partida tiene $ROUNDS_PER_SESSION rondas rápidas.",
+            text = "Partidas rápidas: un minuto o menos.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -243,6 +244,7 @@ private enum class GameDifficulty(val label: String, val background: Color, val 
 
 /** Maps every mini-game to the difficulty pill shown on its catalogue card. */
 private val GAME_DIFFICULTY: Map<GameType, GameDifficulty> = mapOf(
+    GameType.DRIVE to GameDifficulty.FACIL,
     GameType.PUNTOS_CARNE to GameDifficulty.DIFICIL,
     GameType.SENAL to GameDifficulty.FACIL,
     GameType.LEGAL_O_MULTA to GameDifficulty.MEDIA,
@@ -286,7 +288,9 @@ private fun GameCover(
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.32f)),
     ) {
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
-            if (coverResource != null) {
+            if (game == GameType.DRIVE) {
+                BaliDriveCover(Modifier.fillMaxSize())
+            } else if (coverResource != null) {
                 Image(
                     painter = painterResource(coverResource),
                     contentDescription = "Portada 2D de ${game.title} con Bali",
@@ -324,8 +328,11 @@ private fun GameCover(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 StatPill(text = difficulty.label, background = difficulty.background, content = difficulty.content)
+                if (game == GameType.DRIVE) {
+                    StatPill(text = "NUEVO", background = BaliPrimary, content = Color.White)
+                }
                 StatPill(
-                    text = "$ROUNDS_PER_SESSION RONDAS",
+                    text = game.lengthLabel,
                     background = Color.Black.copy(alpha = 0.38f),
                     content = Color.White,
                 )
