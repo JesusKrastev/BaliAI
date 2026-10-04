@@ -171,6 +171,7 @@ fun CancelSubscriptionScreen(
                     CancelStep.Progress -> ProgressStep(progress)
                     CancelStep.Reason -> ReasonStep(
                         selected = reason,
+                        stats = progress.stats,
                         onSelect = viewModel::selectReason,
                         onSuggestionsClick = onSuggestionsClick
                     )
@@ -189,7 +190,7 @@ private fun ProgressStep(state: CancelProgressUiState) {
     Header(
         title = "¿Seguro que quieres dejarlo?",
         subtitle = if (hasProgress) {
-            "Mira todo lo que ya has conseguido. Sería una pena tirarlo ahora."
+            "Esto es lo que has construido con Bali hasta hoy."
         } else {
             "Aún no le has sacado todo el partido a Bali. Esto es lo que te estás perdiendo."
         }
@@ -358,12 +359,14 @@ private fun LossCard(state: CancelProgressUiState) {
  * Step 2: the survey, and an answer to the reason picked.
  *
  * @param selected the reason picked so far, or null
+ * @param stats the user's figures, used to ground the answer in what they have done
  * @param onSelect invoked with the reason tapped
  * @param onSuggestionsClick opens the suggestions screen
  */
 @Composable
 private fun ReasonStep(
     selected: CancelReason?,
+    stats: ProgressStats?,
     onSelect: (CancelReason) -> Unit,
     onSuggestionsClick: () -> Unit
 ) {
@@ -405,29 +408,61 @@ private fun ReasonStep(
     }
 
     AnimatedVisibility(visible = selected != null && selected != CancelReason.Other) {
-        selected?.let { ReasonReply(it, onSuggestionsClick) }
+        selected?.let { ReasonReply(it, stats, onSuggestionsClick) }
     }
 }
 
 /**
- * Bali's answer to a cancellation reason.
+ * Bali's answer to a cancellation reason. It never offers a discount: whoever is not using the app
+ * does not care what it costs, so each "no lo uso" reason is answered with the thing that mends
+ * that part of the habit, and whoever has simply finished or can wait is let go kindly.
  *
  * @param reason the reason picked; [CancelReason.Other] has no answer
+ * @param stats the user's figures, or null while they load
+ * @return the title and body of the answer, or null when the reason has none
+ */
+internal fun reasonReply(reason: CancelReason, stats: ProgressStats?): Pair<String, String>? = when (reason) {
+    CancelReason.PassedExam ->
+        "¡Enhorabuena por el carnet!" to "Nos alegra muchísimo haberte ayudado a conseguirlo. Mucha suerte en la carretera."
+    CancelReason.TooExpensive ->
+        "Suspender sale más caro" to "Repetir el examen supone volver a pagar la tasa de la DGT y, muchas veces, más clases. Un mes de Bali cuesta menos que una clase práctica de autoescuela."
+    CancelReason.Forgot ->
+        "Dale un momento fijo" to "Lo que crea el hábito es un momento concreto: el desayuno, el trayecto o justo antes de dormir. Con 5 minutos basta. Activa los recordatorios en Ajustes y te avisamos a esa hora."
+    CancelReason.Repetitive ->
+        "Cambia de modo" to "No hace falta repetir el mismo test: alterna simulacros de examen, repaso de fallos y minijuegos, y sube por el camino de premios con el XP que ganes."
+    CancelReason.NotWorking -> notWorkingReply(stats)
+    CancelReason.ExamFarAway ->
+        "Está bien parar" to "Si el examen aún queda lejos, cancelar ahora y volver más cerca de la fecha es una decisión razonable. Podrás suscribirte de nuevo cuando quieras."
+    CancelReason.MissingSomething ->
+        "Cuéntanos qué echas en falta" to "Leemos todas las sugerencias, y muchas acaban convertidas en funciones de la app."
+    CancelReason.Other -> null
+}
+
+private fun notWorkingReply(stats: ProgressStats?): Pair<String, String> {
+    if (stats == null || stats.totalQuestions == 0) {
+        return "Aún no has visto lo que Bali puede hacer" to
+            "Haz un simulacro: te dice tu probabilidad de aprobar y qué temas repasar primero."
+    }
+    val facts = buildList {
+        add("Has respondido ${stats.totalQuestions} preguntas")
+        stats.accuracy?.let { add("aciertas el ${(it * 100).roundToInt()} %") }
+    }.joinToString(" y ") + "."
+    val chance = stats.readiness.passProbability
+        ?.let { " Con tus simulacros, aprobarías aproximadamente ${(it * 100).roundToInt()} de cada 100 exámenes." }
+        .orEmpty()
+    return "Mira lo que ya se nota" to "$facts$chance Repasar los fallos es lo que más hace subir la nota."
+}
+
+/**
+ * Shows [reasonReply] for a reason.
+ *
+ * @param reason the reason picked
+ * @param stats the user's figures, or null while they load
  * @param onSuggestionsClick opens the suggestions screen
  */
 @Composable
-private fun ReasonReply(reason: CancelReason, onSuggestionsClick: () -> Unit) {
-    val (title, body) = when (reason) {
-        CancelReason.PassedExam ->
-            "¡Enhorabuena por el carnet!" to "Nos alegra muchísimo haberte ayudado a conseguirlo. Mucha suerte en la carretera."
-        CancelReason.TooExpensive ->
-            "Suspender sale más caro" to "Repetir el examen supone volver a pagar la tasa de la DGT y, muchas veces, más clases. Un mes de Bali cuesta menos que una clase práctica de autoescuela."
-        CancelReason.NotUsing ->
-            "Con 10 minutos al día basta" to "Una sesión corta al día mantiene tu racha y te deja listo para el examen. Activa los recordatorios en Ajustes y te avisamos."
-        CancelReason.MissingSomething ->
-            "Cuéntanos qué echas en falta" to "Leemos todas las sugerencias, y muchas acaban convertidas en funciones de la app."
-        CancelReason.Other -> return
-    }
+private fun ReasonReply(reason: CancelReason, stats: ProgressStats?, onSuggestionsClick: () -> Unit) {
+    val (title, body) = reasonReply(reason, stats) ?: return
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
