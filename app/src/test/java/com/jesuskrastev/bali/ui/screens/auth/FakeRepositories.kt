@@ -410,7 +410,10 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
         if (enableResult == EnablePushesResult.ENABLED) pushesAllowed.value = true
         return enableResult
     }
-    override fun optOut() { optedOut = true }
+    override fun optOut() {
+        optedOut = true
+        pushesAllowed.value = false
+    }
     override fun identify(userId: String?) {
         identifiedUsers.add(userId)
         calls.add("identify:$userId")
