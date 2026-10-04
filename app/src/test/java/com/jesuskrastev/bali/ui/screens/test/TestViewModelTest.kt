@@ -92,7 +92,11 @@ class TestViewModelTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
         
         val mockResponse: GenerateContentResponse = mock()
-        whenever(mockResponse.text).thenReturn("{\"selectedCategory\": \"Spanish\", \"questions\": []}")
+        whenever(mockResponse.text).thenReturn(
+            "{\"selectedCategory\": \"Spanish\", \"questions\": [" +
+                "{\"text\": \"¿Pregunta?\", \"options\": [\"a\", \"b\", \"c\"], " +
+                "\"correctAnswerIndex\": 0, \"explanation\": \"Porque sí.\"}]}"
+        )
         whenever(mockGemini.generateContent(any<String>())).thenReturn(mockResponse)
 
         viewModel.setTopic("Spanish")

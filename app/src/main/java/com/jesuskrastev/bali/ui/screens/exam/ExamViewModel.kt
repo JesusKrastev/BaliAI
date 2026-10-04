@@ -37,9 +37,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
 import javax.inject.Inject
 
@@ -162,13 +159,7 @@ class ExamViewModel @Inject constructor(
             is ExamEvent.GoToQuestion -> goToQuestion(event.index)
             ExamEvent.NextQuestion -> nextQuestion()
             ExamEvent.PreviousQuestion -> previousQuestion()
-            is ExamEvent.FinishExam -> {
-                viewModelScope.launch {
-                    val result = calculateResult()
-                    examFinished = true
-                    event.onResult(result)
-                }
-            }
+            is ExamEvent.FinishExam -> finishExam(event.onResult)
 
             ExamEvent.ToggleQuestionReview -> toggleReviewGrid()
             ExamEvent.CheckAnswer -> checkAnswer()
@@ -194,6 +185,27 @@ class ExamViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Scores the exam and hands the summary to [onResult]. A second call before [retry] is
+     * ignored, so a double tap on the last button cannot pay the rewards twice.
+     *
+     * @param onResult receives the summary once everything is saved
+     */
+    private fun finishExam(onResult: (TestSummary) -> Unit) {
+        if (examFinished) return
+        examFinished = true
+        viewModelScope.launch {
+            val summary = try {
+                calculateResult()
+            } catch (error: Exception) {
+                examFinished = false
+                throw error
+            }
+            onResult(summary)
+        }
+    }
+
+    /** Throws the current exam away and generates a fresh one. */
     private fun retry() {
         timerJob?.cancel()
         sessionStreak = 0
@@ -215,14 +227,15 @@ class ExamViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics ?: "Ninguno específico (distribución estándar)"
-                val studentLevel = user?.level
+                val difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() }
+                    ?: "Ninguno específico (distribución estándar)"
+                val studentLevel = user?.level ?: 1
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val daysToExam = user?.examDateMillis?.let {
                     val diffMillis = it - System.currentTimeMillis()
                     (diffMillis / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
                 }
-                val totalTests = testResultRepository.count()
+                val totalTests = testResultRepository.count().first()
                 val examUrgency = if (daysToExam != null && daysToExam in 1..15) {
                     "¡El examen es en $daysToExam días! Sé estricto y pon preguntas de alta probabilidad de fallo."
                 } else {
@@ -278,6 +291,7 @@ class ExamViewModel @Inject constructor(
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
+                require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
 
                 startTime = System.currentTimeMillis()
                 examEndAtMillis = System.currentTimeMillis() + EXAM_DURATION_SECONDS * 1000L
@@ -296,16 +310,32 @@ class ExamViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Counts the clock down to [examEndAtMillis] once a second and flags [ExamUiState.isTimeUp]
+     * when it runs out. The reading comes from the wall clock rather than from counting ticks,
+     * so a delayed tick (the phone dozing, the app in the background) cannot hand out extra time.
+     */
     private fun startTimer() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            while (_uiState.value.timeLeftSeconds > 0) {
+            while (true) {
+                val secondsLeft = secondsUntilDeadline()
+                _uiState.update { it.copy(timeLeftSeconds = secondsLeft) }
+                if (secondsLeft == 0) break
                 delay(1000)
-                _uiState.update { it.copy(timeLeftSeconds = it.timeLeftSeconds - 1) }
             }
             _uiState.update { it.copy(isTimeUp = true) }
         }
     }
+
+    /**
+     * Whole seconds left until [examEndAtMillis], rounded up so the clock shows 00:00 only when
+     * the time is really over.
+     *
+     * @return the seconds left, never negative
+     */
+    private fun secondsUntilDeadline(): Int =
+        ((examEndAtMillis - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0)
 
     private fun selectOption(optionIndex: Int) {
         if (_uiState.value.isAnswerChecked) return

@@ -61,7 +61,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 19, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 20, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
@@ -188,11 +188,12 @@ the edge cases live in the brain: `05-Patrones\patron-ramas-git.md` and D-024.
 - Each migration class must implement `FirestoreMigration` (from `domain/migration/`), providing `targetVersion: Int`, `description: String`, and `suspend fun migrate(userId: String)`.
 - Register each new migration in `FirestoreMigrationsModule` using `@IntoSet` so `FirestoreMigrationManager` picks it up automatically. Ensure `provideEmptyMigrations()` remains in the module to satisfy Hilt when no migrations are bound.
 - NEVER modify Firestore structure directly without a corresponding migration. Treat schema changes the same way you would a Room database migration.
+- A new account's document is created already stamped with the current schema version (`UserRepositoryImpl.uploadAll` writes `schemaVersion = FirestoreMigrationManager.getTargetSchemaVersion()`), so migrations only ever run on documents older than the app. Keep that stamp: `MigrationV1ToV2`/`V2ToV3` delete results and reset XP, and would wipe a new account on its second launch. `FirestoreMigrationManager` also never assumes a version it could not read (offline): it skips migrations until the next launch.
 
 ## Important Rules
 
 - **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
-- **First-steps bar state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV11ToV12` must NEVER write `firstStepsStartedAt`: it also runs on accounts just created (their document starts at schema v1) and would switch their bar off.
+- **First-steps bar state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV11ToV12` must NEVER write `firstStepsStartedAt`: it still runs on accounts created before new documents were stamped with their schema version (their document starts at v1) and would switch their bar off.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.

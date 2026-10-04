@@ -6,7 +6,6 @@ import com.google.firebase.analytics.FirebaseAnalytics
 import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.posthog.PostHogInterface
-import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.any

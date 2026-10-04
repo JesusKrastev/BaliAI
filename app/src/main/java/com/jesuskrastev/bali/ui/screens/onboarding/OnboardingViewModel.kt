@@ -16,6 +16,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 import kotlin.random.Random
 
@@ -249,7 +250,7 @@ class OnboardingViewModel @Inject constructor(
      * @return a name such as `o07_future_impact`
      */
     private fun funnelEventName(position: Int, slug: String): String =
-        "o%02d_%s".format(position + 1, slug)
+        String.format(Locale.ROOT, "o%02d_%s", position + 1, slug)
 
     /**
      * Entry point for every user interaction in the onboarding flow.

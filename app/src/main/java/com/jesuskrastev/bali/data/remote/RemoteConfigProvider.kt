@@ -22,9 +22,4 @@ class RemoteConfigProvider @Inject constructor(
             FirebaseCrashlytics.getInstance().recordException(e)
         }
     }
-
-    /** Returns the configured weekly session goal, defaulting to 5 when unset. */
-    fun getWeeklyGoal(): Int {
-        return remoteConfig.getLong("weekly_goal").toInt().let { if (it == 0) 5 else it }
-    }
 }

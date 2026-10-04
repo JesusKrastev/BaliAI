@@ -41,7 +41,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
             }
             .okHttpClient(okHttpClient)
             .crossfade(true)
-            .logger(DebugLogger())
+            .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
             .build()
     }
 
@@ -60,7 +60,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
         initAppCheck()
         createNotificationChannels()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
-        Purchases.logLevel = LogLevel.DEBUG
+        Purchases.logLevel = if (BuildConfig.DEBUG) LogLevel.DEBUG else LogLevel.WARN
         val builder = PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY)
         Purchases.configure(
             builder

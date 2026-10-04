@@ -67,13 +67,6 @@ object LevelCalculator {
     }
 
     /**
-     * XP necesario para el siguiente nivel
-     */
-    fun xpForNextLevel(currentLevel: Int): Int {
-        return xpForLevel(currentLevel + 1)
-    }
-
-    /**
      * XP restante para alcanzar el siguiente nivel
      */
     fun xpRemainingForNextLevel(totalXp: Int): Int {

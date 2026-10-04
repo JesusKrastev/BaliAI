@@ -141,14 +141,19 @@ class AuthRepositoryImpl @Inject constructor() : AuthRepository {
             val result = auth.fetchSignInMethodsForEmail(email).await()
             result.signInMethods?.isNotEmpty() == true
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             false
         }
     }
 
+    /**
+     * Closes the Firebase session first, so it ends even when no Activity can be found, and then
+     * forgets the Google credential so the account picker is offered again next time.
+     */
     override suspend fun signOut(context: Context) {
-        val activity = context.findActivity() ?: return
         auth.signOut()
-        CredentialManager.create(activity).clearCredentialState(ClearCredentialStateRequest())
+        CredentialManager.create(context.findActivity() ?: context)
+            .clearCredentialState(ClearCredentialStateRequest())
     }
 
     private fun Context.findActivity(): Activity? = when (this) {

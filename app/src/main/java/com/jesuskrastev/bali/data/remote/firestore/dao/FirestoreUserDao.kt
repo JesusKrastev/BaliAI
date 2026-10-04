@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
-import android.util.Log
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig
@@ -44,30 +43,24 @@ class FirestoreUserDao @Inject constructor(
     @AddTrace(name = "claim_rank_reward")
     suspend fun claimRankReward(userId: String, reward: RankReward): Boolean {
         val docRef = collection.document(userId)
-        return try {
-            firestore.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val xp = snapshot.getLong("xp") ?: 0L
-                val claimed = (snapshot.get("claimedRankRewards") as? List<*>)
-                    ?.filterIsInstance<String>().orEmpty()
-                if (xp < reward.requiredXp || reward.id in claimed) {
-                    false
-                } else {
-                    transaction.set(
-                        docRef,
-                        mapOf(
-                            "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
-                            "claimedRankRewards" to (claimed + reward.id)
-                        ),
-                        SetOptions.merge()
-                    )
-                    true
-                }
-            }.await()
-        } catch (error: Exception) {
-            if (error is CancellationException) throw error
-            FirebaseCrashlytics.getInstance().recordException(error)
-            throw error
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val xp = snapshot.getLong("xp") ?: 0L
+            val claimed = (snapshot.get("claimedRankRewards") as? List<*>)
+                ?.filterIsInstance<String>().orEmpty()
+            if (xp < reward.requiredXp || reward.id in claimed) {
+                false
+            } else {
+                transaction.set(
+                    docRef,
+                    mapOf(
+                        "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
+                        "claimedRankRewards" to (claimed + reward.id)
+                    ),
+                    SetOptions.merge()
+                )
+                true
+            }
         }
     }
 
@@ -124,13 +117,13 @@ class FirestoreUserDao @Inject constructor(
 
     /**
      * Runs [block] as one Firestore transaction, reporting a failure to Crashlytics before
-     * rethrowing it. Shop writes are transactions because they read the balance or the stock
-     * they change; unlike [incrementCoins] they need a connection.
+     * rethrowing it. Shop and reward writes are transactions because they read the balance or
+     * the stock they change; unlike [incrementCoins] they need a connection.
      *
      * @param block the reads and writes of the transaction
      * @return what [block] returned
      */
-    private suspend fun <T> shopTransaction(block: (Transaction) -> T): T =
+    private suspend fun <T> reportedTransaction(block: (Transaction) -> T): T =
         try {
             firestore.runTransaction { transaction -> block(transaction) }.await()
         } catch (error: Exception) {
@@ -150,7 +143,7 @@ class FirestoreUserDao @Inject constructor(
     suspend fun purchaseInventoryItem(userId: String, item: ShopInventoryItem, cost: Int): Boolean {
         val docRef = collection.document(userId)
         val field = item.firestoreField
-        return shopTransaction { transaction ->
+        return reportedTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             val coins = snapshot.getLong("coins") ?: 0L
             if (coins < cost) {
@@ -178,7 +171,7 @@ class FirestoreUserDao @Inject constructor(
     @AddTrace(name = "open_surprise_chest")
     suspend fun openSurpriseChest(userId: String, cost: Int, reward: ChestReward): Boolean {
         val docRef = collection.document(userId)
-        return shopTransaction { transaction ->
+        return reportedTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             val coins = snapshot.getLong("coins") ?: 0L
             if (coins < cost) {
@@ -208,7 +201,7 @@ class FirestoreUserDao @Inject constructor(
     suspend fun consumeInventoryItem(userId: String, item: ShopInventoryItem): Boolean {
         val field = item.firestoreField
         val docRef = collection.document(userId)
-        return shopTransaction { transaction ->
+        return reportedTransaction { transaction ->
             val count = transaction.get(docRef).getLong(field) ?: 0L
             if (count <= 0) {
                 false
@@ -229,7 +222,7 @@ class FirestoreUserDao @Inject constructor(
      */
     suspend fun placeStreakBet(userId: String, cost: Int, target: Int): Boolean {
         val docRef = collection.document(userId)
-        return shopTransaction { transaction ->
+        return reportedTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             val coins = snapshot.getLong("coins") ?: 0L
             val hasBet = (snapshot.getLong("streakBetTarget") ?: 0L) > 0
@@ -255,7 +248,7 @@ class FirestoreUserDao @Inject constructor(
      */
     suspend fun claimStreakBet(userId: String, payout: Int): Boolean {
         val docRef = collection.document(userId)
-        return shopTransaction { transaction ->
+        return reportedTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             if ((snapshot.getLong("streakBetTarget") ?: 0L) <= 0) {
                 false
@@ -381,6 +374,7 @@ class FirestoreUserDao @Inject constructor(
         answers: List<AnswerFirestore>
     ) {
         val operations = mutableListOf<(WriteBatch) -> Unit>()
+        val answersByTest = answers.groupBy { it.testId }
 
         operations.add { batch ->
             batch.set(collection.document(userId), user, SetOptions.merge())
@@ -394,7 +388,7 @@ class FirestoreUserDao @Inject constructor(
                 batch.set(testResultRef, result)
             }
 
-            answers.filter { it.testId == result.id }.forEach { answer ->
+            answersByTest[result.id].orEmpty().forEach { answer ->
                 val answerRef = collection.document(userId).collection("answers").document()
                 operations.add { batch ->
                     batch.set(answerRef, answer.copy(testId = firestoreTestId))

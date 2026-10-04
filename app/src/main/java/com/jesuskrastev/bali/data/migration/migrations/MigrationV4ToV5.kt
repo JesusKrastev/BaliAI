@@ -36,6 +36,5 @@ class MigrationV4ToV5 @Inject constructor(
             "studyTime" to FieldValue.delete()
         )
         userRef.update(updates).await()
-        println("Migration V5: Removed unused onboarding fields for user $userId")
     }
 }

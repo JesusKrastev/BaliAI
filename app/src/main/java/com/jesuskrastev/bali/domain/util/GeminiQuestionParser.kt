@@ -1,18 +1,14 @@
 package com.jesuskrastev.bali.domain.util
 
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.random.Random
 
 /**
- * Parses Gemini's response into a list of [QuestionUiState].
- *
- * The model is asked for schema-constrained JSON, but the text is still scanned for the
- * outermost JSON object so an older or degraded reply with preamble around it still
- * parses rather than costing a generation and giving nothing back.
+ * Parses Gemini's response into a list of [QuestionUiState]; see [GeminiJson] for how the JSON is
+ * found in the reply.
  *
  * It also shuffles each question's options. Asking the model for a random answer position
  * does not work — measured over a 30-question exam, the correct answer landed on option B
@@ -22,11 +18,15 @@ import kotlin.random.Random
  */
 object GeminiQuestionParser {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        allowTrailingComma = true
-    }
+    /**
+     * Reads the category the model says it picked for the session.
+     *
+     * @param rawText the model's reply; JSON, optionally wrapped in other text.
+     * @return the `selectedCategory` the model reported, or null when it left it out.
+     * @throws IllegalArgumentException when the text holds no JSON object at all.
+     */
+    fun selectedCategory(rawText: String): String? =
+        GeminiJson.parseObject(rawText)["selectedCategory"]?.jsonPrimitive?.content
 
     /**
      * Reads the questions out of a model response, shuffling the options of each one.
@@ -37,12 +37,7 @@ object GeminiQuestionParser {
      * @throws IllegalArgumentException when the text holds no JSON object at all.
      */
     fun parse(rawText: String, random: Random = Random.Default): List<QuestionUiState> {
-        val start = rawText.indexOf('{')
-        val end = rawText.lastIndexOf('}')
-        require(start != -1 && end != -1) { "No valid JSON block found in Gemini response" }
-
-        val jsonString = rawText.substring(start, end + 1)
-        val root = json.parseToJsonElement(jsonString).jsonObject
+        val root = GeminiJson.parseObject(rawText)
 
         return root["questions"]?.jsonArray?.mapNotNull { element ->
             runCatching {

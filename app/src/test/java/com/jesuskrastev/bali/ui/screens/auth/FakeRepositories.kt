@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.update
 
 class FakeUserRepository(
     hasCompletedOnboarding: Boolean = true,
-    private val userExists: Boolean = true
+    private val userExists: Boolean = true,
+    private val uploadSucceeds: Boolean = true
 ) : UserRepository {
     /** Claims an earned rank prize once in the in-memory test profile. */
     override suspend fun claimRankReward(reward: RankReward): Boolean {
@@ -200,7 +201,7 @@ class FakeUserRepository(
 
     override suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit> {
         uploadedUsers.add(user)
-        return Result.success(Unit)
+        return if (uploadSucceeds) Result.success(Unit) else Result.failure(IllegalStateException("Upload failed"))
     }
 
     override suspend fun updateFcmToken(token: String) {}
@@ -238,16 +239,23 @@ class FakePathRepository : PathRepository {
 
 class FakeAuthRepository(
     isLoggedIn: Boolean = true,
-    private val currentUserId: String? = "user_123"
+    private val currentUserId: String? = "user_123",
+    private val existsInAuthFailure: Throwable? = null
 ) : AuthRepository {
+    /** How many times the session was closed. */
+    var signOutCount = 0
+        private set
+
     override val isLoggedIn: Flow<Boolean> = flowOf(isLoggedIn)
     override val currentUserFlow: Flow<String?> = flowOf(currentUserId)
     override suspend fun getGoogleIdTokenAndEmail(context: android.content.Context): Result<Pair<String, String>> {
         return Result.success("token" to "test@example.com")
     }
     override suspend fun signInWithGoogleCredential(idToken: String): Result<Unit> = Result.success(Unit)
-    override suspend fun existsInAuth(email: String): Boolean = true
-    override suspend fun signOut(context: android.content.Context) {}
+    override suspend fun existsInAuth(email: String): Boolean = existsInAuthFailure?.let { throw it } ?: true
+    override suspend fun signOut(context: android.content.Context) {
+        signOutCount++
+    }
     override suspend fun currentUser(): String? = currentUserId
     override val currentUserEmailFlow: Flow<String?> = flowOf("test@example.com")
     override val currentUserPhotoUrlFlow: Flow<String?> = flowOf(null)
