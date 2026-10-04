@@ -1,13 +1,14 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
 import com.google.common.truth.Truth.assertThat
+import com.jesuskrastev.bali.ui.screens.onboarding.steps.NarrativeScene
 import org.junit.Test
 
 class OnboardingNarrativesTest {
 
-    private val arc = listOf(OnboardingStep.Pain, OnboardingStep.Gain)
+    private val block = listOf(OnboardingStep.Problem, OnboardingStep.Risk, OnboardingStep.Solution)
 
-    /** Every combination of the answers the arc reads, plus all of them unanswered. */
+    /** Every combination of the answers the block reads, plus all of them unanswered. */
     private val profiles: List<OnboardingData> = buildList {
         add(OnboardingData())
         OnboardingConfig.motivations.forEach { motivation ->
@@ -28,48 +29,110 @@ class OnboardingNarrativesTest {
         }
     }
 
+    /** All answers in, plus a mini-test with the first question right and the other two wrong. */
+    private fun withQuiz(concern: String): OnboardingData {
+        val questions = OnboardingQuiz.questionsFor(concern)
+        return OnboardingData(
+            motivation = OnboardingConfig.MOTIVATION_INDEPENDENCE,
+            theoryBlocker = OnboardingConfig.BLOCKER_NO_PROGRESS,
+            experience = OnboardingConfig.EXPERIENCE_FIRST_TIME,
+            concern = concern,
+            quizAnswers = questions.mapIndexed { i, q ->
+                val right = i == 0
+                QuizAnswer(q.id, if (right) q.correctIndex else (q.correctIndex + 1) % q.options.size, right)
+            }
+        )
+    }
+
     @Test
-    fun `every screen of the arc has copy for every combination of answers`() {
+    fun `every screen of the block has copy and a scene for every combination of answers`() {
         profiles.forEach { data ->
-            arc.forEach { step ->
+            block.forEach { step ->
                 val narrative = OnboardingNarratives.forStep(step, data)!!
                 assertThat(narrative.headline).isNotEmpty()
                 assertThat(narrative.content.body).isNotEmpty()
                 assertThat(narrative.content.body).doesNotContain("null")
+                assertThat(narrative.content.scene).isNotNull()
+                assertThat(narrative.content.animation).isNull()
             }
         }
     }
 
     @Test
-    fun `the arc changes with the answers`() {
-        arc.forEach { step ->
-            val bodies = profiles.map { OnboardingNarratives.forStep(step, it)!!.content.body }.toSet()
-            assertThat(bodies.size).isGreaterThan(1)
+    fun `the problem and the risk show a different scene for each answer`() {
+        val problemScenes = OnboardingConfig.theoryBlockers.map {
+            OnboardingNarratives.forStep(OnboardingStep.Problem, OnboardingData(theoryBlocker = it))!!.content.scene
         }
+        val riskScenes = OnboardingConfig.concerns.map {
+            OnboardingNarratives.forStep(OnboardingStep.Risk, OnboardingData(concern = it))!!.content.scene
+        }
+
+        assertThat(problemScenes.toSet()).hasSize(OnboardingConfig.theoryBlockers.size)
+        assertThat(riskScenes.toSet()).hasSize(OnboardingConfig.concerns.size)
     }
 
     @Test
-    fun `the pain names the blocker and the cost of the user's own reason`() {
-        val pain = OnboardingNarratives.forStep(
-            OnboardingStep.Pain,
-            OnboardingData(
-                motivation = OnboardingConfig.MOTIVATION_WORK,
-                theoryBlocker = OnboardingConfig.BLOCKER_NO_START
-            )
+    fun `the problem mirrors the blocker and names a second attempt`() {
+        val first = OnboardingNarratives.forStep(
+            OnboardingStep.Problem,
+            OnboardingData(theoryBlocker = OnboardingConfig.BLOCKER_NO_START, experience = OnboardingConfig.EXPERIENCE_FIRST_TIME)
+        )!!
+        val retry = OnboardingNarratives.forStep(
+            OnboardingStep.Problem,
+            OnboardingData(theoryBlocker = OnboardingConfig.BLOCKER_NO_PROGRESS, experience = OnboardingConfig.EXPERIENCE_RETRY)
         )!!
 
-        assertThat(pain.headline).contains("por dónde empezar")
-        assertThat(pain.content.body).contains("trabajo")
+        assertThat(first.headline).contains("por dónde empezar")
+        assertThat(retry.headline).contains("suspendiste")
+        assertThat(retry.headline).contains("sin ver avance")
     }
 
     @Test
-    fun `the gain shows what the user's reason looks like with the licence`() {
-        val gain = OnboardingNarratives.forStep(
-            OnboardingStep.Gain,
-            OnboardingData(motivation = OnboardingConfig.MOTIVATION_FREEDOM)
-        )!!
+    fun `the risk quotes the mini-test score`() {
+        val notReady = OnboardingNarratives.forStep(OnboardingStep.Risk, withQuiz(OnboardingConfig.CONCERN_NOT_READY))!!
+        val silly = OnboardingNarratives.forStep(OnboardingStep.Risk, withQuiz(OnboardingConfig.CONCERN_SILLY_MISTAKES))!!
 
-        assertThat(gain.content.body).contains("escapada")
+        assertThat(notReady.content.body).contains("|1 de 3|")
+        assertThat(silly.content.body).contains("|2 de 3|")
+    }
+
+    @Test
+    fun `the risk does without the score when the test was skipped`() {
+        val risk = OnboardingNarratives.forStep(OnboardingStep.Risk, OnboardingData(concern = OnboardingConfig.CONCERN_NOT_READY))!!
+
+        assertThat(risk.content.body).doesNotContain(" de 0")
+        assertThat(risk.content.body).doesNotContain("Hoy")
+    }
+
+    @Test
+    fun `the solution answers each problem named, and the failed topics of the test`() {
+        val data = withQuiz(OnboardingConfig.CONCERN_EXAM_MISMATCH)
+        val scene = OnboardingNarratives.forStep(OnboardingStep.Solution, data)!!.content.scene as NarrativeScene.Solved
+        val failedTopics = data.failedQuizQuestions().map { it.topic }.distinct()
+
+        assertThat(scene.rows).hasSize(3)
+        assertThat(scene.rows[0].problem).isEqualTo("Estudio y no avanzo")
+        assertThat(scene.rows[1].fix).contains("Simulacros de 30 preguntas")
+        failedTopics.forEach { assertThat(scene.rows[2].problem).contains(it) }
+    }
+
+    @Test
+    fun `the solution has no test row when nothing was failed`() {
+        val scene = OnboardingNarratives.forStep(OnboardingStep.Solution, OnboardingData())!!.content.scene as NarrativeScene.Solved
+
+        assertThat(scene.rows).hasSize(2)
+    }
+
+    @Test
+    fun `the licence's why only closes the solution`() {
+        val work = OnboardingData(motivation = OnboardingConfig.MOTIVATION_WORK)
+
+        assertThat(OnboardingNarratives.forStep(OnboardingStep.Solution, work)!!.content.body).contains("puertas")
+        listOf(OnboardingStep.Problem, OnboardingStep.Risk).forEach { step ->
+            val text = OnboardingNarratives.forStep(step, work)!!.let { it.headline + it.content.body }.lowercase()
+            assertThat(text).doesNotContain("trabajo")
+            assertThat(text).doesNotContain("te lleven")
+        }
     }
 
     @Test
@@ -78,25 +141,18 @@ class OnboardingNarrativesTest {
         val gendered = listOf("el único", "la única", "listo", "lista para", "preparado", "preparada", "eres el siguiente")
 
         profiles.forEach { data ->
-            arc.forEach { step ->
+            block.forEach { step ->
                 val narrative = OnboardingNarratives.forStep(step, data)!!
-                val text = (narrative.headline + " " + narrative.content.body).lowercase()
+                val rows = (narrative.content.scene as? NarrativeScene.Solved)?.rows.orEmpty()
+                    .joinToString(" ") { it.problem + " " + it.fix }
+                val text = (narrative.headline + " " + narrative.content.body + " " + rows).lowercase()
                 gendered.forEach { word -> assertThat(text).doesNotContain(word) }
             }
         }
     }
 
     @Test
-    fun `the pain and the gain never show the same picture`() {
-        profiles.forEach { data ->
-            val pain = OnboardingNarratives.forStep(OnboardingStep.Pain, data)!!.content.animation
-            val gain = OnboardingNarratives.forStep(OnboardingStep.Gain, data)!!.content.animation
-            assertThat(pain).isNotEqualTo(gain)
-        }
-    }
-
-    @Test
-    fun `steps outside the arc have no narrative`() {
+    fun `steps outside the block have no narrative`() {
         assertThat(OnboardingNarratives.forStep(OnboardingStep.Name, OnboardingData())).isNull()
         assertThat(OnboardingNarratives.forStep(OnboardingStep.Quiz, OnboardingData())).isNull()
     }

@@ -91,9 +91,6 @@ class OnboardingReducer {
             OnboardingStep.Quiz -> quizHeadline(quizIndex)
             OnboardingStep.QuizResult -> quizResultHeadline(data)
 
-            // La solución: StepMethodComparison oculta la mascota y pone su propio título.
-            OnboardingStep.MethodComparison -> ""
-
             // El plan
             OnboardingStep.Name -> "Vamos a montar tu plan. Antes, ¿|cómo te llamas|? 👋"
             OnboardingStep.ExamDate ->

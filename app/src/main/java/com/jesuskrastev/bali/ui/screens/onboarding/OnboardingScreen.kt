@@ -247,8 +247,8 @@ private fun OnboardingStepContent(
             // exam date calendar needs the full width of a small phone.
             .padding(horizontal = if (state.currentStep in FULL_WIDTH_STEPS) 0.dp else 24.dp)
     ) { step ->
-        // Every screen of the emotional arc shares the same one-idea layout, with copy written
-        // for the answers given so far.
+        // Problem, risk and solution share the same one-idea layout, with copy and scene picked
+        // by the answers given so far.
         val narrative = OnboardingNarratives.forStep(step, state.data)
         if (narrative != null) {
             StepNarrative(content = narrative.content)
@@ -300,7 +300,6 @@ private fun OnboardingStepContent(
                 }
             }
             OnboardingStep.QuizResult -> StepQuizResult(state.data)
-            OnboardingStep.MethodComparison -> StepMethodComparison(state.data)
             OnboardingStep.Name -> StepName(state.data.name ?: "", viewModel)
             OnboardingStep.ExamDate -> StepExamDate(
                 examDate = state.data.examDate,
@@ -355,7 +354,6 @@ private val FULL_WIDTH_STEPS = setOf(OnboardingStep.Processing, OnboardingStep.E
  */
 private fun shouldShowMascot(step: OnboardingStep): Boolean = when (step) {
     OnboardingStep.Intro,
-    OnboardingStep.MethodComparison,
     OnboardingStep.Comparison,
     OnboardingStep.Processing,
     OnboardingStep.PlanReveal -> false
@@ -383,9 +381,9 @@ private fun shouldShowBottomButton(step: OnboardingStep): Boolean =
  */
 private fun getButtonText(step: OnboardingStep): String = when (step) {
     OnboardingStep.Name -> "Empezar mi plan 🚀"
-    OnboardingStep.Pain -> "Sí, es justo eso →"
-    OnboardingStep.MethodComparison -> "Ese es mi camino 🚀"
-    OnboardingStep.Gain -> "Eso quiero ✨"
+    OnboardingStep.Problem -> "Sí, me pasa eso →"
+    OnboardingStep.Risk -> "No quiero que me pase →"
+    OnboardingStep.Solution -> "Montar mi plan 🚀"
     OnboardingStep.Comparison -> "A por ello 💪"
     OnboardingStep.QuizResult -> "Seguir →"
     OnboardingStep.PlanReveal -> "Este es mi plan 🎯"

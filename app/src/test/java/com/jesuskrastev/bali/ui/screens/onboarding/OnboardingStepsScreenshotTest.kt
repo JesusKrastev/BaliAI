@@ -28,7 +28,6 @@ import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import com.jesuskrastev.bali.ui.screens.stats.pickerMillisFromLocalDay
 import java.util.concurrent.TimeUnit
 
 /**
@@ -69,7 +68,6 @@ class OnboardingStepsScreenshotTest {
     fun captureQuizQuestion() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         capture("quiz_question")
     }
 
@@ -77,7 +75,6 @@ class OnboardingStepsScreenshotTest {
     fun captureQuizExplanation() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.onEvent(OnboardingEvent.AnswerQuiz(1))
         capture("quiz_explanation")
     }
@@ -109,37 +106,31 @@ class OnboardingStepsScreenshotTest {
         }
     }
 
+    /** The problem, risk and solution block, for the answers of [answerQuiz], in both themes. */
     @Test
-    fun capturePain() {
-        answerDiagnosisUpTo(OnboardingStep.Concern)
-        viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
-        capture("pain")
-    }
+    fun captureProblem() = captureBlock(OnboardingStep.Problem, "problem")
 
     @Test
-    fun capturePainDark() {
-        answerDiagnosisUpTo(OnboardingStep.Concern)
-        viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
-        capture("pain_dark", darkTheme = true)
-    }
+    fun captureProblemDark() = captureBlock(OnboardingStep.Problem, "problem_dark", darkTheme = true)
 
     @Test
-    fun captureRoadToTheExam() {
+    fun captureRisk() = captureBlock(OnboardingStep.Risk, "risk")
+
+    @Test
+    fun captureRiskDark() = captureBlock(OnboardingStep.Risk, "risk_dark", darkTheme = true)
+
+    @Test
+    fun captureSolution() = captureBlock(OnboardingStep.Solution, "solution")
+
+    @Test
+    fun captureSolutionDark() = captureBlock(OnboardingStep.Solution, "solution_dark", darkTheme = true)
+
+    private fun captureBlock(step: OnboardingStep, name: String, darkTheme: Boolean = false) {
         answerQuiz()
+        // Off the result, then through the block until [step].
         viewModel.onEvent(OnboardingEvent.GoToNextStep)
-        capture("method")
-    }
-
-    @Test
-    fun captureGain() {
-        answerUpToGain()
-        capture("gain")
-    }
-
-    @Test
-    fun captureGainDark() {
-        answerUpToGain()
-        capture("gain_dark", darkTheme = true)
+        while (viewModel.uiState.value.currentStep != step) viewModel.onEvent(OnboardingEvent.GoToNextStep)
+        capture(name, darkTheme)
     }
 
     @Test
@@ -234,29 +225,16 @@ class OnboardingStepsScreenshotTest {
     private fun answerQuiz() {
         answerDiagnosisUpTo(OnboardingStep.Concern)
         viewModel.onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.CONCERN_SILLY_MISTAKES))
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
         viewModel.uiState.value.data.quizQuestions().forEachIndexed { index, question ->
             viewModel.onEvent(OnboardingEvent.AnswerQuiz(if (index == 1) 0 else question.correctIndex))
             viewModel.onEvent(OnboardingEvent.NextQuizQuestion)
         }
     }
 
-    /** Takes the test and taps through the result and the road, landing on the name. */
+    /** Takes the test and taps through the result, the problem, the risk and the solution, landing on the name. */
     private fun answerUpToName() {
         answerQuiz()
-        repeat(2) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
-    }
-
-    /** Answers the plan's questions as Lucía, with an exam in 16 days, landing on the gain. */
-    private fun answerUpToGain() {
-        answerUpToName()
-        viewModel.onEvent(OnboardingEvent.SetName("Lucía"))
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
-        viewModel.onEvent(OnboardingEvent.SetExamDate(pickerMillisFromLocalDay(System.currentTimeMillis() + TimeUnit.DAYS.toMillis(16))))
-        viewModel.onEvent(OnboardingEvent.SelectProvince("Almería"))
-        viewModel.onEvent(OnboardingEvent.GoToNextStep)
-        viewModel.onEvent(OnboardingEvent.SelectWeeklyStudy(OnboardingConfig.WEEKLY_STUDY_OFTEN))
-        viewModel.onEvent(OnboardingEvent.SelectStudyTime(OnboardingConfig.studyTimes.keys.last()))
+        repeat(4) { viewModel.onEvent(OnboardingEvent.GoToNextStep) }
     }
 
     /**
