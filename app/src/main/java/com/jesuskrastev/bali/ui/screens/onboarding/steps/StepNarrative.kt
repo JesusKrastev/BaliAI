@@ -49,7 +49,7 @@ import com.jesuskrastev.bali.ui.theme.BaliTheme
 private const val TEXT_ENTRANCE_DELAY_MS = 220
 
 /**
- * Single-idea onboarding screen used by the emotional arc: the pain and the gain.
+ * Single-idea onboarding screen: the problem, risk and solution block, and the reminders offer.
  *
  * The headline is delivered by the mascot bubble above, so this body carries only the
  * visual and one line. There is deliberately no card: the copy sits straight on the
@@ -144,7 +144,9 @@ private fun NarrativeVisual(content: NarrativeContent, appear: Float) {
             scene = content.scene,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(260.dp)
+                // The solved rows grow with the user's words; the other scenes lay out against a
+                // fixed box (a bounded height inside this scrolling column).
+                .then(if (content.scene is NarrativeScene.Solved) Modifier.heightIn(min = 260.dp) else Modifier.height(260.dp))
                 .graphicsLayer {
                     alpha = appear
                     scaleX = 0.88f + 0.12f * appear

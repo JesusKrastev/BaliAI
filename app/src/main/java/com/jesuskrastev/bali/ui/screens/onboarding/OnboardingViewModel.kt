@@ -87,9 +87,8 @@ data class OnboardingData(
  * A single screen of the onboarding flow.
  *
  * The flow is deliberately built as an emotional arc rather than a questionnaire:
- * what Bali is → the user's "why" and what it costs → diagnosis → a three-question test of their
- * own worry → the road from that score to the exam → the life the licence unlocks → the concrete
- * plan → close.
+ * what Bali is → the user's "why" → diagnosis → a three-question test of their own worry → their
+ * problem, what it risks and Bali as the answer, built from those answers → the concrete plan → close.
  *
  * @param analyticsName slug of the step in analytics; empty for terminal states that are
  *   not part of the funnel. The position prefix is added when the event is logged, so
@@ -123,10 +122,10 @@ sealed class OnboardingStep(val analyticsName: String = "") {
     data object Quiz : OnboardingStep("quiz")
     data object QuizResult : Informational("quiz_result")
 
-    // ── El arco: what blocks the user and what it costs, the way out, and the life after ──
-    data object Pain : Informational("pain")
-    data object MethodComparison : Informational("method_comparison")
-    data object Gain : Informational("gain")
+    // ── Problema → riesgo → solución: the user's answers handed back to them, then Bali ──
+    data object Problem : Informational("problem")
+    data object Risk : Informational("risk")
+    data object Solution : Informational("solution")
 
     // ── El plan ────────────────────────────────────────────────────────────
     // The name opens this block: the whole emotional arc is answered with taps, and the
@@ -193,15 +192,18 @@ class OnboardingViewModel @Inject constructor(
         // El porqué
         OnboardingStep.Motivation, OnboardingStep.TheoryBlocker,
         // Diagnóstico: the experience comes first because the real failure rate and the test
-        // result both speak to it. The pain closes it, once enough is known to make it personal.
+        // result both speak to it.
         OnboardingStep.Experience, OnboardingStep.Comparison, OnboardingStep.Readiness,
-        OnboardingStep.Concern, OnboardingStep.Pain,
-        // La prueba, then the road from its score to the exam
+        OnboardingStep.Concern,
+        // La prueba
         OnboardingStep.Quiz, OnboardingStep.QuizResult,
-        OnboardingStep.MethodComparison,
-        // El plan; the gain comes once name, date and pace are in, so it speaks of their own day
+        // Problema → riesgo → solución, together and only now: blocker, attempt, worry and test
+        // score are all in, so the three screens can be about this user's problem. The solution
+        // hands over to the plan ("Vamos a montar tu plan").
+        OnboardingStep.Problem, OnboardingStep.Risk, OnboardingStep.Solution,
+        // El plan
         OnboardingStep.Name, OnboardingStep.ExamDate, OnboardingStep.Province,
-        OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime, OnboardingStep.Gain,
+        OnboardingStep.WeeklyStudy, OnboardingStep.StudyTime,
         OnboardingStep.Notifications, OnboardingStep.LearningPreference,
         // Cierre
         OnboardingStep.SocialProof, OnboardingStep.Processing, OnboardingStep.PlanReveal,

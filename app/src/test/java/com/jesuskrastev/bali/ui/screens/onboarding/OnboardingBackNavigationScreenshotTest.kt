@@ -105,8 +105,8 @@ class OnboardingBackNavigationScreenshotTest {
             onEvent(OnboardingEvent.SelectConcern(OnboardingConfig.concerns.first()))
             // The mini-test is skipped, and its result with it.
             onEvent(OnboardingEvent.SkipQuiz)
-            // The road to the exam and the gain lead to the name.
-            repeat(2) { onEvent(OnboardingEvent.GoToNextStep) }
+            // The problem, the risk and the solution lead to the name.
+            repeat(3) { onEvent(OnboardingEvent.GoToNextStep) }
             onEvent(OnboardingEvent.SetName("Jesus"))
             onEvent(OnboardingEvent.GoToNextStep)
             onEvent(OnboardingEvent.SetExamDate(null))

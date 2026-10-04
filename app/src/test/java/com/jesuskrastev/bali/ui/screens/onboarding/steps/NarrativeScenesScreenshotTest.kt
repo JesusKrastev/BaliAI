@@ -19,8 +19,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Captures the hand-drawn scenes of the emotional arc at the moments that matter: the red stamp
- * landing on a lost offer, and the green one on the offer won.
+ * Captures each hand-drawn scene of the problem → risk → solution block at a moment where it reads:
+ * mid-loop for the problem and risk scenes, fully solved for the solution.
  */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w360dp-h400dp-xhdpi")
@@ -44,8 +44,43 @@ class NarrativeScenesScreenshotTest {
     }
 
     @Test
-    fun offerLostStamped() = capture(NarrativeScene.JobOffersLost, 1_600, "lost")
+    fun topicPile() = capture(NarrativeScene.TopicPile, 3_000, "topic_pile")
 
     @Test
-    fun offerWon() = capture(NarrativeScene.JobOfferWon, 2_000, "won")
+    fun sameMistake() = capture(NarrativeScene.SameMistake, 2_400, "same_mistake")
+
+    @Test
+    fun scatteredWeek() = capture(NarrativeScene.ScatteredWeek, 1_500, "scattered_week")
+
+    @Test
+    fun coinFlipApto() = capture(NarrativeScene.CoinFlip, 300, "coin_flip_apto")
+
+    @Test
+    fun coinFlipNoApto() = capture(NarrativeScene.CoinFlip, 1_400, "coin_flip_no_apto")
+
+    @Test
+    fun mismatch() = capture(NarrativeScene.Mismatch, 1_300, "mismatch")
+
+    @Test
+    fun trapWord() = capture(NarrativeScene.TrapWord, 2_200, "trap_word")
+
+    @Test
+    fun solved() = capture(
+        NarrativeScene.Solved(
+            listOf(
+                SolvedRow("Estudio y no avanzo", "Ves cuánto te falta para aprobar"),
+                SolvedRow("Que el examen me pille por sorpresa", "Simulacros de 30 preguntas, como el real"),
+                SolvedRow("Fallaste: Agentes y Semáforos", "Lo reforzamos en tu plan")
+            )
+        ),
+        4_000,
+        "solved"
+    )
+
+    @Test
+    fun solvingMidway() = capture(
+        NarrativeScene.Solved(listOf(SolvedRow("No sé por dónde empezar", "Un camino ordenado, tema a tema"))),
+        650,
+        "solving"
+    )
 }
