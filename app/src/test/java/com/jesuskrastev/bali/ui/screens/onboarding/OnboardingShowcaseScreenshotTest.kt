@@ -108,8 +108,6 @@ class OnboardingShowcaseScreenshotTest {
                         uiState = state,
                         onOptionSelect = {},
                         onCheckClick = {},
-                        onUseHint = {},
-                        onUseFiftyFifty = {},
                         onNextClick = {}
                     )
                 }

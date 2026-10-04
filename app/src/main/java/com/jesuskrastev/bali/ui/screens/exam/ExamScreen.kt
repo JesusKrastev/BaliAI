@@ -32,6 +32,7 @@ import com.jesuskrastev.bali.ui.screens.test.ErrorView
 import com.jesuskrastev.bali.ui.screens.test.LoadingView
 import com.jesuskrastev.bali.ui.screens.test.OptionCard
 import com.jesuskrastev.bali.ui.screens.test.QuizProgressTitle
+import com.jesuskrastev.bali.ui.screens.test.StreakCheer
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import com.jesuskrastev.bali.ui.util.formatClock
 
@@ -123,6 +124,14 @@ fun ExamScreen(
                     ExamContent(
                         uiState = uiState,
                         onOptionSelect = { viewModel.onEvent(ExamEvent.SelectOption(it)) }
+                    )
+                    StreakCheer(
+                        currentIndex = uiState.currentQuestionIndex,
+                        sessionStreak = uiState.sessionStreak,
+                        isAnswerChecked = uiState.isAnswerChecked,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = 12.dp)
                     )
                 }
             }
