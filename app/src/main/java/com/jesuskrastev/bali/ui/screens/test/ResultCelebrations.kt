@@ -15,9 +15,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.EmojiEvents
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -250,11 +247,10 @@ internal fun NewRecordOverlay(
         confettiOnce = passed,
         onDismiss = onDismiss
     ) {
-        Icon(
-            imageVector = Icons.Rounded.EmojiEvents,
+        Image(
+            painter = painterResource(id = R.drawable.exam_new_record_trophy),
             contentDescription = null,
-            tint = BaliAccentYellow,
-            modifier = Modifier.size(140.dp)
+            modifier = Modifier.size(160.dp)
         )
     }
 }
