@@ -19,7 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -227,91 +226,6 @@ fun TestScreen(
                     )
                 }
             }
-        }
-    }
-}
-
-/** Full-screen loading state shown while the AI prepares the questions: a bobbing mascot and a spinner. */
-@Composable
-fun LoadingView() {
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    val translateY by infiniteTransition.animateFloat(
-        initialValue = -15f,
-        targetValue = 15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "translation"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(180.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationY = translateY
-                    }
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            Text(
-                text = "Estoy preparando un test para ti...",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Solo tomará unos segundos",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.alpha(0.7f)
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            CircularProgressIndicator(
-                modifier = Modifier.size(36.dp),
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 3.5.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            )
         }
     }
 }
