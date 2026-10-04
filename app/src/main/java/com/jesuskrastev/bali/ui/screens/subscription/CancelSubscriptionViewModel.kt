@@ -38,13 +38,20 @@ enum class CancelStep(val analyticsName: String) {
 /**
  * Answers to "¿Por qué quieres cancelar?".
  *
+ * "No lo uso" is not one answer but four, one per place where a study habit breaks (the cue never
+ * fired, the routine never formed, the reward went flat, the value never showed), and each needs a
+ * different reply, so they are asked apart. A discount answers none of them.
+ *
  * @property id stable name reported as `subscription_cancel_reason`
  * @property label the option as the user reads it
  */
 enum class CancelReason(val id: String, val label: String) {
     PassedExam("passed_exam", "Ya he aprobado el examen"),
     TooExpensive("too_expensive", "Me parece caro"),
-    NotUsing("not_using", "No lo uso lo suficiente"),
+    Forgot("forgot", "Se me olvida o no encuentro el momento"),
+    Repetitive("repetitive", "Se me hace repetitivo"),
+    NotWorking("not_working", "No noto que me ayude a aprobar"),
+    ExamFarAway("exam_far_away", "Aún me queda mucho para el examen"),
     MissingSomething("missing_something", "Le falta algo que necesito"),
     Other("other", "Otro motivo")
 }
