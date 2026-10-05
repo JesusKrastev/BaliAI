@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import org.junit.Test
 
 class DriveEngineTest {
@@ -172,50 +173,53 @@ class DriveEngineTest {
     }
 
     @Test
-    fun `power-ups are collected and their timers run out`() {
-        val engine = DriveEngine(seed = 3)
-        val events = mutableListOf<DriveEvent>()
-        while (events.none { it is DriveEvent.PowerUpCollected } && engine.drivingTime < 120f) {
-            val (steer, brake) = examinerInput(engine)
-            engine.update(TEST_FRAME, steer, brake)
-            events += engine.drainEvents()
-        }
-        val kind = events.filterIsInstance<DriveEvent.PowerUpCollected>().single().kind
-        if (kind == PowerUpKind.SHIELD) {
-            assertThat(engine.shield).isTrue()
-        } else {
-            assertThat(engine.isActive(kind)).isTrue()
-            repeat(((kind.seconds + 0.5f) / TEST_FRAME).toInt()) { engine.update(TEST_FRAME, 0f, false) }
-            assertThat(engine.isActive(kind)).isFalse()
+    fun `every kind of power-up can be collected on the way and the timed ones run out`() {
+        PowerUpKind.entries.forEach { kind ->
+            val engine = DriveEngine(seed = 3)
+            val target = engine.powerUps.first { it.kind == kind }
+
+            val events = engine.drive(until = { target.collected }) { examinerFetching(it, target) }
+
+            assertThat(events.filterIsInstance<DriveEvent.PowerUpCollected>().map { it.kind }).contains(kind)
+            if (kind == PowerUpKind.SHIELD) {
+                assertThat(engine.shield).isTrue()
+            } else {
+                assertThat(engine.isActive(kind)).isTrue()
+                engine.drive(maxSeconds = kind.seconds + 4 * FAULT_PAUSE_SECONDS, until = { !it.isActive(kind) }, driver = ::examinerInput)
+                assertThat(engine.isActive(kind)).isFalse()
+            }
         }
     }
 
     @Test
-    fun `the shield keeps the streak through one fault`() {
-        val engine = DriveEngine(seed = 3)
-        // Drive carefully until the shield is picked up somewhere on the route.
-        val shieldAt = engine.powerUps.first { it.kind == PowerUpKind.SHIELD }
-        engine.drive { e ->
-            val (steer, brake) = examinerInput(e)
-            val goForIt = !shieldAt.collected && shieldAt.y - e.car.y in 0f..3f
-            (if (goForIt) shieldAt.x - e.car.targetX else steer) to brake
-        }.let { assertThat(shieldAt.collected).isTrue() }
+    fun `the shield keeps the streak through one fault and only one`() {
+        // A seed whose shield is not the opening treat, so there is a streak to protect when it is picked up.
+        val seed = (1L..50L).first { s -> DriveEngine(s).powerUps.indexOfFirst { it.kind == PowerUpKind.SHIELD } > 0 }
+        val engine = DriveEngine(seed)
+        val shield = engine.powerUps.first { it.kind == PowerUpKind.SHIELD }
+        engine.drive(until = { it.shield }) { examinerFetching(it, shield) }
+        assertThat(engine.shield).isTrue()
+        assertThat(engine.combo).isGreaterThan(0)
 
-        val fresh = DriveEngine(seed = 3)
-        var comboBefore = 0
-        val events = fresh.drive { e ->
-            val (steer, brake) = examinerInput(e)
-            val goForIt = !fresh.powerUps.first { it.kind == PowerUpKind.SHIELD }.collected &&
-                fresh.powerUps.first { it.kind == PowerUpKind.SHIELD }.y - e.car.y in 0f..3f
-            if (e.shield && e.combo > 0) comboBefore = e.combo
-            // Once shielded with a streak, ignore the next red light / STOP / pedestrian.
-            val reckless = e.shield && e.combo > 0
-            (if (goForIt) fresh.powerUps.first { it.kind == PowerUpKind.SHIELD }.x - e.car.targetX else steer) to (brake && !reckless)
+        // Now drive carelessly: no steering, no braking, until the first rule is broken.
+        var streakBeforeFault = 0
+        val events = engine.drive(until = { it.lastFault != null }) { e ->
+            streakBeforeFault = e.combo
+            0f to false
         }
-        val saved = events.indexOfFirst { it == DriveEvent.ShieldSaved }
-        assertThat(saved).isAtLeast(0)
-        assertThat(fresh.lastFault).isNotNull()
-        assertThat(comboBefore).isGreaterThan(0)
+
+        assertThat(events).contains(DriveEvent.ShieldSaved)
+        assertThat(engine.lastFaultShielded).isTrue()
+        assertThat(engine.shield).isFalse()
+        assertThat(engine.combo).isAtLeast(streakBeforeFault)
+
+        // The shield is spent: the next fault breaks the streak.
+        val firstFault = engine.lastFault
+        engine.drive(until = { it.lastFault !== firstFault }) { 0f to false }
+
+        assertThat(engine.lastFault).isNotSameInstanceAs(firstFault)
+        assertThat(engine.lastFaultShielded).isFalse()
+        assertThat(engine.combo).isEqualTo(0)
     }
 
     @Test
@@ -260,26 +264,135 @@ class DriveEngineTest {
     }
 
     @Test
-    fun `an overtaken car stays solid so swerving back into it is a crash and never a drive-through`() {
-        val engine = DriveEngine(seed = 5)
-        val lead = engine.situations.filterIsInstance<LeadCarSituation>().first()
+    fun `a barrier that already cost a fault stays solid, so steering back into it is a crash and never a drive-through`() {
+        val engine = DriveEngine(seed = 5, route = listOf(SituationKind.ROADWORKS))
+        val works = engine.situations.single() as RoadworksSituation
+        var faults = 0
 
         val events = engine.drive { e ->
-            val (steer, brake) = examinerInput(e)
-            val car = lead.lead
-            when {
-                // Overtake on the left...
-                e.nextSituation() === lead && car != null -> (laneCenter(if (laneOf(car.x) == 0) 1 else 0) - e.car.targetX) to false
-                // ...then cut straight back into its lane while still alongside it.
-                lead.status == SituationStatus.PASSED && car != null && car.y - e.car.y in -1.5f..0.5f ->
-                    (car.x - e.car.targetX) to false
-                else -> steer to brake
-            }
+            // Drives straight into the works (a fault), then, once moved out of the way, straight back in.
+            if (e.phase == DrivePhase.DRIVING) faults = e.summary().faults.size
+            val blocked = works.blockedLanes.minOrNull()?.let { laneCenter(it) }
+            (if (faults >= 1 && blocked != null) blocked - e.car.targetX else 0f) to false
         }
 
-        assertThat(events.filterIsInstance<DriveEvent.Faulted>().map { it.message }).contains(RULE_CRASH)
-        val after = lead.lead
-        if (after != null) assertThat(after.box().overlaps(engine.car.box())).isFalse()
+        assertThat(events.filterIsInstance<DriveEvent.Faulted>().map { it.message }.take(2))
+            .containsExactly(RULE_ROADWORKS, RULE_CRASH).inOrder()
+        assertThat(works.barriers().none { it.overlaps(engine.car.box()) }).isTrue()
+    }
+
+    @Test
+    fun `any three situations in a row can be driven without a fault and nothing crosses anything`() {
+        val kinds = SituationKind.entries
+        var seed = 0L
+        kinds.forEach { a -> kinds.forEach { b -> kinds.forEach { c ->
+            val route = listOf(a, b, c)
+            val engine = DriveEngine(seed++, route = route)
+            val overlaps = mutableListOf<String>()
+
+            val events = engine.drive(maxSeconds = 120f) { e ->
+                overlaps += e.visibleOverlaps()
+                examinerInput(e)
+            }
+
+            assertWithMessage("route $route").that(engine.phase).isEqualTo(DrivePhase.FINISHED)
+            assertWithMessage("route $route").that(events.filterIsInstance<DriveEvent.Faulted>().map { it.message }).isEmpty()
+            assertWithMessage("route $route").that(overlaps.distinct()).isEmpty()
+        } } }
+    }
+
+    @Test
+    fun `no actor drives through another one on screen, whoever is driving`() {
+        val drivers = mapOf<String, (DriveEngine) -> Pair<Float, Boolean>>(
+            "examiner" to { examinerInput(it) },
+            "patient" to { examinerInput(it, overtakesScooters = false) },
+            "waiting" to ::waitingInput,
+            "careless" to { 0f to false },
+        )
+        drivers.forEach { (name, driver) ->
+            (1L..40L).forEach { seed ->
+                val engine = DriveEngine(seed)
+                val overlaps = mutableListOf<String>()
+
+                engine.drive { e ->
+                    overlaps += e.visibleOverlaps()
+                    driver(e)
+                }
+
+                assertWithMessage("$name, seed $seed").that(overlaps.distinct()).isEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun `no actor drives on past the end of its own situation into the next one`() {
+        listOf<(DriveEngine) -> Pair<Float, Boolean>>({ examinerInput(it) }, { examinerInput(it, false) }, { 0f to false }).forEach { driver ->
+            (1L..40L).forEach { seed ->
+                val engine = DriveEngine(seed)
+                var furthest = 0f
+
+                engine.drive { e ->
+                    e.situations.forEach { situation ->
+                        situation.obstacles().forEach { furthest = maxOf(furthest, it.top - situation.layoutEnd) }
+                    }
+                    driver(e)
+                }
+
+                // A car or a rider may stick out a little past the marked end, never a whole car.
+                assertWithMessage("seed $seed").that(furthest).isAtMost(1f)
+            }
+        }
+    }
+
+    @Test
+    fun `whoever drives, a run always reaches the finish`() {
+        val drivers = mapOf<String, (DriveEngine) -> Pair<Float, Boolean>>(
+            "waiting" to ::waitingInput,
+            "careless" to { 0f to false },
+        )
+        drivers.forEach { (name, driver) ->
+            (1L..40L).forEach { seed ->
+                val engine = DriveEngine(seed)
+                engine.drive(maxSeconds = 300f, driver = driver)
+                assertWithMessage("$name, seed $seed").that(engine.phase).isEqualTo(DrivePhase.FINISHED)
+            }
+        }
+    }
+
+    @Test
+    fun `the car in front pulls over and parks in the parking lane instead of driving on`() {
+        (1L..10L).forEach { seed ->
+            val engine = DriveEngine(seed, route = listOf(SituationKind.LEAD_CAR, SituationKind.ROADWORKS))
+            val situation = engine.situations.first() as LeadCarSituation
+
+            val events = engine.drive(until = { situation.lead?.x == PARKED_X }) { examinerInput(it) }
+
+            val lead = situation.lead
+            assertWithMessage("seed $seed").that(events.filterIsInstance<DriveEvent.Faulted>()).isEmpty()
+            assertWithMessage("seed $seed").that(lead).isNotNull()
+            // Parked beside the traffic lanes, like every other parked car.
+            assertWithMessage("seed $seed").that(lead!!.x).isEqualTo(PARKED_X)
+            assertWithMessage("seed $seed").that(lead.speed).isEqualTo(0f)
+            assertWithMessage("seed $seed").that(lead.box().left).isAtLeast(LANES.toFloat())
+        }
+    }
+
+    @Test
+    fun `a driver who hangs back behind a scooter sees it turn up onto the pavement`() {
+        (1L..10L).forEach { seed ->
+            val engine = DriveEngine(seed, route = listOf(SituationKind.SCOOTER, SituationKind.ROADWORKS))
+            val scooter = engine.situations.first() as ScooterSituation
+            var furthestRight = 0f
+
+            val events = engine.drive { e ->
+                if (scooter.visible) furthestRight = maxOf(furthestRight, scooter.riderX)
+                examinerInput(e, overtakesScooters = false)
+            }
+
+            assertWithMessage("seed $seed").that(events.filterIsInstance<DriveEvent.Faulted>()).isEmpty()
+            assertWithMessage("seed $seed").that(furthestRight).isGreaterThan(PARKING_EDGE)
+            assertWithMessage("seed $seed").that(scooter.visible).isFalse()
+        }
     }
 
     @Test

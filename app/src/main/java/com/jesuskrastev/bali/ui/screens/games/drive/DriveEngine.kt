@@ -53,6 +53,12 @@ private const val PERFECT_RUN_POINTS = 300
 private const val SLOW_MOTION_FACTOR = 0.55f
 private const val MAGNET_RANGE = 3.5f
 
+/** Centre x of the parking lane, where a car that pulls over ends up. */
+const val PARKED_X = (LANES + PARKING_EDGE) / 2
+
+/** How far ahead of the car the screen shows the road; anything further is off the top edge. */
+const val VISIBLE_AHEAD = 8.7f
+
 /** Speed limit of a zone 30, in world units per second (30 km/h). */
 const val ZONE_30_SPEED = 30f / KMH_PER_UNIT
 
@@ -134,6 +140,9 @@ class PlayerCar {
  */
 class Vehicle(var x: Float, var y: Float, var speed: Float, val color: Int, val horizontal: Boolean = false) {
     var braking = false
+
+    /** Sideways speed in lanes per second (positive is to the right), so the car can be drawn turning. */
+    var drift = 0f
 
     /** Collision box; [x], [y] are its centre. */
     fun box(): Box = if (horizontal) {
@@ -251,8 +260,15 @@ data class DriveSummary(
  * @param seed picks the order of situations and the star patterns
  * @param bestScore personal best, to announce [DriveEvent.NewRecord] once it is beaten
  * @param showHints whether to emit [DriveEvent.Hint] as each situation approaches
+ * @param route fixed order of situations, or null for the usual shuffled route (tests use it to
+ *   try every combination of neighbouring situations)
  */
-class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHints: Boolean = false) {
+class DriveEngine(
+    seed: Long,
+    private val bestScore: Int = 0,
+    private val showHints: Boolean = false,
+    private val route: List<SituationKind>? = null,
+) {
     private val random = Random(seed)
 
     val car = PlayerCar()
@@ -604,10 +620,12 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     }
 
     /**
-     * Lays out the route: the first two situations teach the two controls (roadworks: steer;
-     * crosswalk: brake), then a shuffle of the rest with no kind twice in a row.
+     * Picks the order of a run: the first two situations teach the two controls (roadworks: steer;
+     * crosswalk: brake), then one of each kind in a shuffle with no kind twice in a row.
+     *
+     * @return the kinds of the route, in driving order
      */
-    private fun buildRoute(): List<Situation> {
+    private fun shuffledKinds(): List<SituationKind> {
         // One of each after the opening: about a minute of driving.
         val pool = listOf(
             SituationKind.STOP, SituationKind.TRAFFIC_LIGHT, SituationKind.LEAD_CAR,
@@ -620,6 +638,16 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         while (kinds.zipWithNext().any { (a, b) -> a == b } && attempts++ < 100) {
             kinds = opening + pool.shuffled(random)
         }
+        return kinds
+    }
+
+    /**
+     * Lays out the route with the gaps between situations and builds each one.
+     *
+     * @return the situations, in driving order
+     */
+    private fun buildRoute(): List<Situation> {
+        val kinds = route ?: shuffledKinds()
         var free = 10f
         var lightCount = 0
         return kinds.map { kind ->
@@ -951,20 +979,26 @@ class TrafficLightSituation(y: Float, startsRed: Boolean, private val crossColor
     }
 }
 
-/** A slower car ahead that brakes hard: keep enough distance to stop behind it (or change lane). */
+/**
+ * A slower car ahead that brakes hard: keep enough distance to stop behind it (or change lane).
+ * Once it has been stopped a moment it pulls over to the right and parks like any other car, so it
+ * never drives on into the next situation.
+ */
 class LeadCarSituation(y: Float, private val color: Int) : Situation(SituationKind.LEAD_CAR, y) {
     var lead: Vehicle? = null
         private set
-    private var stage = 0 // 0 waiting, 1 cruising, 2 braking, 3 holding, 4 leaving
+    private var stage = 0 // 0 waiting, 1 cruising, 2 braking, 3 holding, 4 pulling over, 5 parked
     private var timer = 0f
     private var minGap = Float.MAX_VALUE
     private var overtook = false
     private var done = false
 
     override val layoutStart: Float get() = y - 6.6f
-    override val layoutEnd: Float get() = y + 8f
-    override val parkingClearStart: Float get() = Float.MAX_VALUE
-    override val parkingClearEnd: Float get() = -Float.MAX_VALUE
+    override val layoutEnd: Float get() = y + 10f
+
+    // Where it parks, the bays are left empty.
+    override val parkingClearStart: Float get() = y + 4.8f
+    override val parkingClearEnd: Float get() = layoutEnd
 
     override fun update(dt: Float, car: PlayerCar, checkRules: Boolean): String? {
         if (stage == 0) {
@@ -983,21 +1017,32 @@ class LeadCarSituation(y: Float, private val color: Int) : Situation(SituationKi
                 if (lead.speed == 0f) { stage = 3; timer = 0f }
             }
             3 -> if (timer > 1.3f) { stage = 4; lead.braking = false }
-            4 -> lead.speed = min(5.5f, lead.speed + 3f * dt)
+            4 -> pullOver(lead, dt)
         }
         lead.y += lead.speed * dt
-        if (stage == 4 && gap > 8.5f) {
-            // Gone over the horizon before it reaches the next situation.
-            this.lead = null
-            done = true
-            return null
-        }
         if (!checkRules) return null
         val sameLane = abs(lead.x - car.x) < CAR_WIDTH
         if (sameLane && gap > -CAR_LENGTH) minGap = min(minGap, gap)
         if (car.rear > lead.y + CAR_LENGTH / 2) overtook = true
-        if (stage == 4 && gap > 7f) done = true
         return if (lead.box().overlaps(car.box())) RULE_LEAD_CAR else null
+    }
+
+    /**
+     * Creeps forward and sideways into the parking lane; once there the car is parked for good.
+     *
+     * @param lead the car in front
+     * @param dt seconds since the last frame
+     */
+    private fun pullOver(lead: Vehicle, dt: Float) {
+        lead.speed = if (lead.y < y + 8.2f) PULL_OVER_CREEP else 0f
+        lead.drift = PULL_OVER_DRIFT
+        lead.x = min(PARKED_X, lead.x + PULL_OVER_DRIFT * dt)
+        if (lead.x >= PARKED_X) {
+            stage = 5
+            lead.speed = 0f
+            lead.drift = 0f
+            done = true
+        }
     }
 
     override fun isCleared(car: PlayerCar): Boolean = done || overtook
@@ -1009,10 +1054,17 @@ class LeadCarSituation(y: Float, private val color: Int) : Situation(SituationKi
     override fun clearAfterFault(car: PlayerCar) {
         val lead = lead ?: return
         lead.y = max(lead.y, car.y + 1.6f + CAR_LENGTH / 2)
-        lead.speed = 4f
         lead.braking = false
         stage = 4
         done = true
+    }
+
+    private companion object {
+        /** Forward speed while pulling over, in world units per second. */
+        const val PULL_OVER_CREEP = 0.9f
+
+        /** Sideways speed while pulling over, in lanes per second. */
+        const val PULL_OVER_DRIFT = 1.6f
     }
 }
 
@@ -1087,7 +1139,8 @@ class BallSituation(y: Float, style: Int) : Situation(SituationKind.BALL, y) {
 
 /**
  * A scooter (or bike) riding slowly in the player's lane: overtake it by changing lane, leaving
- * at least 1.5 m (about 0.4 lanes) of space, or wait behind until it turns off.
+ * at least 1.5 m (about 0.4 lanes) of space, or hang back behind it and it turns up onto the
+ * pavement by itself.
  */
 class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(SituationKind.SCOOTER, y) {
     var riderX = 0f
@@ -1104,11 +1157,15 @@ class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(
     private var gone = false
     private var overtaken = false
     private var early: Boolean? = null
+    private var followedFor = 0f
+    private var turningOff = false
 
     override val layoutStart: Float get() = y - 8.8f
-    override val layoutEnd: Float get() = y + 8f
-    override val parkingClearStart: Float get() = Float.MAX_VALUE
-    override val parkingClearEnd: Float get() = -Float.MAX_VALUE
+    override val layoutEnd: Float get() = y + 10f
+
+    // The rider may cross the parking lane on its way to the pavement.
+    override val parkingClearStart: Float get() = y - 1f
+    override val parkingClearEnd: Float get() = layoutEnd
 
     /** The rider and the 1.5 m around them that a passing car must keep clear. */
     fun safetyBox(): Box = Box(riderX - 0.11f - 0.4f, riderY - 0.25f - 0.35f, riderX + 0.11f + 0.4f, riderY + 0.3f)
@@ -1125,9 +1182,10 @@ class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(
         timer += dt
         wobble += dt * 5f
         riderY += riderSpeed * dt
-        // Never cuts across the lanes: it leaves over the top edge if not overtaken, or off the
-        // bottom edge once left behind, so it never rides into the next situation.
-        if ((riderY - car.y > 9.3f && timer > 2f) || riderY < car.y - 2.4f) {
+        followBehaviour(dt, car)
+        // Leaves over the top edge if not overtaken, off the bottom edge once left behind, or off
+        // the road to the right: it never rides into the next situation.
+        if ((riderY - car.y > 9.3f && timer > 2f) || riderY < car.y - 2.4f || riderX > OFF_ROAD_X || riderY > layoutEnd) {
             gone = true
             visible = false
         }
@@ -1140,6 +1198,20 @@ class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(
         return if (safetyBox().overlaps(car.box())) RULE_SCOOTER else null
     }
 
+    /**
+     * Turns the rider off to the right once a car has been hanging back right behind it for a
+     * moment, instead of letting it ride on at walking pace for ever.
+     *
+     * @param dt seconds since the last frame
+     * @param car the player's car
+     */
+    private fun followBehaviour(dt: Float, car: PlayerCar) {
+        val directlyBehind = abs(car.x - riderX) < 0.7f && riderY - 0.6f - car.y > 0.2f
+        followedFor = if (directlyBehind && car.speed < riderSpeed + 0.7f) followedFor + dt else 0f
+        if (followedFor > TURN_OFF_AFTER) turningOff = true
+        if (turningOff) riderX += TURN_OFF_RATE * dt
+    }
+
     override fun isCleared(car: PlayerCar): Boolean = gone || overtaken
 
     override fun bonus(): String? = if (overtaken && early == true) "¡Adelantamiento de libro!" else null
@@ -1149,13 +1221,28 @@ class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(
 
     override fun clearAfterFault(car: PlayerCar) {
         overtaken = true
-        // The car stopped dead; the rider speeds off ahead, faster than the car, out of sight.
+        // The car stopped dead; the rider speeds off ahead, faster than the car, and turns off.
         riderY = max(riderY, car.y + 1.2f)
         riderSpeed = 5f
+        turningOff = true
+    }
+
+    private companion object {
+        /** Seconds a car must hang back behind the rider before it turns off. */
+        const val TURN_OFF_AFTER = 0.8f
+
+        /** Sideways speed while turning off, in lanes per second. */
+        const val TURN_OFF_RATE = 2.2f
+
+        /** Beyond this x the rider is off the screen, up on the pavement, and is removed. */
+        const val OFF_ROAD_X = PARKING_EDGE + 2.4f
     }
 }
 
-/** An ambulance with its siren on, closing in from behind in the player's lane: move out of it. */
+/**
+ * An ambulance with its siren on, closing in from behind in the player's lane: move out of it. It
+ * is quick and, once by, floors it, so it is over the horizon before the next situation.
+ */
 class AmbulanceSituation(y: Float) : Situation(SituationKind.AMBULANCE, y) {
     var ambulance: Vehicle? = null
         private set
@@ -1165,7 +1252,9 @@ class AmbulanceSituation(y: Float) : Situation(SituationKind.AMBULANCE, y) {
     private var movedAt = -1f
     private var passed = false
 
-    override val layoutEnd: Float get() = y + 10f
+    override val layoutEnd: Float get() = y + ZONE_LENGTH
+
+    // It drives along the traffic lanes only.
     override val parkingClearStart: Float get() = Float.MAX_VALUE
     override val parkingClearEnd: Float get() = -Float.MAX_VALUE
 
@@ -1180,14 +1269,17 @@ class AmbulanceSituation(y: Float) : Situation(SituationKind.AMBULANCE, y) {
             if (car.y < y) return null
             spawned = true
             lane = laneOf(car.targetX)
-            ambulance = Vehicle(laneCenter(lane), car.y - 6.2f, max(car.speed, 2f) + 3.2f, color = -1)
+            // Spawned off the bottom edge, so it is only ever seen driving in.
+            ambulance = Vehicle(laneCenter(lane), car.y - SPAWN_BEHIND, max(car.speed, 2f) + CLOSING_SPEED, color = -1)
         }
         val ambulance = ambulance ?: return null
         timer += dt
-        ambulance.speed = max(ambulance.speed, car.speed + 2.5f)
+        val target = car.speed + if (passed) FLEEING_SPEED else CLOSING_SPEED
+        ambulance.speed += (target - ambulance.speed).coerceIn(-ACCELERATION_LIMIT * dt, ACCELERATION_LIMIT * dt)
         ambulance.y += ambulance.speed * dt
-        // Gone over the top edge, before it can reach whatever comes next.
-        if (ambulance.y - car.y > 9.5f) this.ambulance = null
+        // Gone over the top edge (or the end of its stretch of road) before it reaches what comes next.
+        val rear = ambulance.y - CAR_LENGTH / 2
+        if (rear - car.y > VISIBLE_AHEAD + 0.2f || rear > layoutEnd) this.ambulance = null
         if (!checkRules) return null
         val inLane = car.x + CAR_WIDTH / 2 > lane + 0.05f && car.x - CAR_WIDTH / 2 < lane + 0.95f
         if (!inLane && movedAt < 0f) movedAt = timer
@@ -1206,6 +1298,23 @@ class AmbulanceSituation(y: Float) : Situation(SituationKind.AMBULANCE, y) {
     override fun clearAfterFault(car: PlayerCar) {
         ambulance?.let { it.y = car.y + 2f }
         passed = true
+    }
+
+    private companion object {
+        /** Long enough for the ambulance to leave through the top edge before the zone ends. */
+        const val ZONE_LENGTH = 21f
+
+        /** How far behind the car it spawns: off the bottom edge, so it is only seen driving in. */
+        const val SPAWN_BEHIND = 7.6f
+
+        /** Speed over the car's while closing in from behind. */
+        const val CLOSING_SPEED = 4.5f
+
+        /** Speed over the car's once it is by. */
+        const val FLEEING_SPEED = 7.5f
+
+        /** Most its speed may change per second, so the change of pace looks like driving. */
+        const val ACCELERATION_LIMIT = 12f
     }
 }
 

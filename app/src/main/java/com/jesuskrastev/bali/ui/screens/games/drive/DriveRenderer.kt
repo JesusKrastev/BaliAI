@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -100,7 +102,7 @@ object DrivePalette {
     val Green = Color(0xFF22C55E)
     val SignBlue = Color(0xFF2563EB)
     val SignRed = Color(0xFFDC2626)
-    val Zone30 = Color(0xFF6B5A5E)
+    val Zone30 = Color(0x3DE11D48)
     val Shield = Color(0xFF38BDF8)
     val Magnet = Color(0xFFEF4444)
     val Slow = Color(0xFFA78BFA)
@@ -251,9 +253,10 @@ private val QUAD_PATH = Path()
  */
 fun DrawScope.drawDriveWorld(engine: DriveEngine, fx: DriveFx, p: DriveProjection, art: DriveArt, time: Float) {
     drawGround(engine, p)
-    drawMarkings(engine, p, art)
+    drawMarkings(engine, p, art, time)
     drawSkids(fx, p)
     drawSprites(engine, p, art, time)
+    drawSirenWarning(engine, p, time)
     drawEffects(fx, p)
 }
 
@@ -290,6 +293,9 @@ private fun DrawScope.drawGround(engine: DriveEngine, p: DriveProjection) {
     }
     quad(p, LANES.toFloat(), p.nearY, PARKING_EDGE, p.farY, DrivePalette.Parking)
     quad(p, 0f, p.nearY, LANES.toFloat(), p.farY, DrivePalette.Road)
+    for (situation in engine.situations) {
+        if (situation is Zone30Situation) quad(p, 0f, situation.y, LANES.toFloat(), situation.layoutEnd, DrivePalette.Zone30)
+    }
     quad(p, -0.08f, p.nearY, 0f, p.farY, DrivePalette.Kerb)
     quad(p, PARKING_EDGE, p.nearY, PARKING_EDGE + 0.08f, p.farY, DrivePalette.Kerb)
 }
@@ -303,8 +309,14 @@ private fun DriveEngine.isJunction(y: Float, margin: Float = 0f): Boolean = situ
     }
 }
 
-/** Lane lines, the cross streets of junctions (drawn over the avenue's edge lines), zebras, stop lines, "STOP" lettering, closed-lane hatching and the start/finish checks. */
-private fun DrawScope.drawMarkings(engine: DriveEngine, p: DriveProjection, art: DriveArt) {
+/**
+ * Lane lines, the cross streets of junctions (drawn over the avenue's edge lines), zebras, stop
+ * lines, "STOP" and "30" lettering, closed-lane hatching, the 1.5 m zone around a scooter rider
+ * and the start/finish checks.
+ *
+ * @param time seconds since the run started, for the pulse of the scooter's safety zone
+ */
+private fun DrawScope.drawMarkings(engine: DriveEngine, p: DriveProjection, art: DriveArt, time: Float) {
     val white = DrivePalette.Marking.copy(alpha = 0.9f)
     quad(p, 0.06f, p.nearY, 0.12f, p.farY, white)
     quad(p, 2.88f, p.nearY, 2.94f, p.farY, white)
@@ -350,9 +362,14 @@ private fun DrawScope.drawMarkings(engine: DriveEngine, p: DriveProjection, art:
             }
             is TrafficLightSituation -> quad(p, 0f, situation.y - 0.08f, LANES.toFloat(), situation.y + 0.04f, white)
             is Zone30Situation -> {
-                quad(p, 0f, situation.y, LANES.toFloat(), situation.layoutEnd, DrivePalette.Zone30)
                 quad(p, 0f, situation.y, LANES.toFloat(), situation.y + 0.1f, white)
-                for (lane in 0 until LANES) drawRoadText(p, laneCenter(lane), situation.y + 0.8f, 0.5f, DrivePalette.Marking, art.thirty)
+                for (lane in 0 until LANES) {
+                    drawRoadRing(p, laneCenter(lane), situation.y + 0.8f)
+                    drawRoadText(p, laneCenter(lane), situation.y + 0.8f, 0.5f, DrivePalette.Marking, art.thirty)
+                }
+            }
+            is ScooterSituation -> if (situation.visible && situation.status == SituationStatus.UPCOMING) {
+                drawSafetyZone(p, situation.safetyBox(), time)
             }
             is RoadworksSituation -> situation.blockedLanes.forEach { lane ->
                 var stripe = situation.y + 0.2f
@@ -378,6 +395,71 @@ private fun DrawScope.drawRoadText(p: DriveProjection, x: Float, y: Float, heigh
         scale(k * 1.25f, k * 0.8f, Offset.Zero)
     }) {
         drawText(text, color = color.copy(alpha = 0.92f), topLeft = Offset(-text.size.width / 2f, -text.size.height / 2f))
+    }
+}
+
+/** Red ring painted flat on the road around the "30" at ([x], [y]), like the speed-limit paint on a real street. */
+private fun DrawScope.drawRoadRing(p: DriveProjection, x: Float, y: Float) {
+    if (y < p.nearY || y > p.farY) return
+    val s = p.scale(y)
+    withTransform({ translate(p.sx(x, y), p.sy(y)); scale(s, s, Offset.Zero) }) {
+        drawOval(DrivePalette.SignRed.copy(alpha = 0.85f), Offset(-0.43f, -0.27f), Size(0.86f, 0.54f), style = Stroke(0.07f))
+    }
+}
+
+/**
+ * The 1.5 m a passing car must leave around a scooter rider, drawn on the asphalt as a softly
+ * pulsing outlined zone, so the rule can be seen instead of guessed.
+ *
+ * @param zone the rider and the margin around them, in world units
+ * @param time seconds since the run started
+ */
+private fun DrawScope.drawSafetyZone(p: DriveProjection, zone: Box, time: Float) {
+    val pulse = 0.5f + 0.5f * sin(time * 5f)
+    val edge = Color.White.copy(alpha = 0.3f + 0.2f * pulse)
+    val thickness = 0.035f
+    quad(p, zone.left, zone.bottom, zone.right, zone.top, Color.White.copy(alpha = 0.06f + 0.04f * pulse))
+    quad(p, zone.left, zone.bottom, zone.right, zone.bottom + thickness, edge)
+    quad(p, zone.left, zone.top - thickness, zone.right, zone.top, edge)
+    quad(p, zone.left, zone.bottom, zone.left + thickness, zone.top, edge)
+    quad(p, zone.right - thickness, zone.bottom, zone.right, zone.top, edge)
+}
+
+/**
+ * Warns of an ambulance racing along a lane before it comes into view: the lane tints flashing
+ * blue and red from halfway down the screen, with chevrons rising along it, stronger the closer
+ * the ambulance gets. It sits above the corner widgets, which would otherwise hide it.
+ *
+ * @param time seconds since the run started, for the flashing
+ */
+private fun DrawScope.drawSirenWarning(engine: DriveEngine, p: DriveProjection, time: Float) {
+    val situation = engine.situations.firstOrNull { it is AmbulanceSituation && it.ambulance != null && !it.hasPassed } as? AmbulanceSituation ?: return
+    val ambulance = situation.ambulance ?: return
+    val behind = p.cameraY - ambulance.y
+    // It becomes visible about 1.9 behind the car's front bumper; before that, the glow stands in for it.
+    if (behind < 1.9f || behind > 9f) return
+    val strength = (1f - (behind - 1.9f) / 7.1f).coerceIn(0.3f, 1f)
+    val color = if (sin(time * 14f) > 0f) DrivePalette.Siren else DrivePalette.SignRed
+    val lane = situation.ambulanceLane
+    val left = p.sx(lane.toFloat(), p.cameraY)
+    val right = p.sx(lane + 1f, p.cameraY)
+    val width = right - left
+    val top = p.height * 0.55f
+    drawRect(
+        Brush.verticalGradient(listOf(color.copy(alpha = 0f), color.copy(alpha = 0.5f * strength)), startY = top, endY = p.height),
+        Offset(left, top),
+        Size(width, p.height - top),
+    )
+    for (i in 0 until 3) {
+        val rise = (time * 1.8f + i / 3f) % 1f
+        val cy = p.height * (0.93f - 0.38f * rise)
+        val half = width * 0.2f
+        val chevron = Path().apply {
+            moveTo(left + width / 2 - half, cy + half * 0.6f)
+            lineTo(left + width / 2, cy - half * 0.4f)
+            lineTo(left + width / 2 + half, cy + half * 0.6f)
+        }
+        drawPath(chevron, Color.White.copy(alpha = (0.5f + 0.5f * strength) * (1f - rise * 0.7f)), style = Stroke(width * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round))
     }
 }
 
@@ -487,7 +569,9 @@ private fun addSituationSprites(situation: Situation, p: DriveProjection, art: D
             sprites += Sprite(car.y) { drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], false, yaw = -90f) }
         }
         is LeadCarSituation -> situation.lead?.let { car ->
-            sprites += Sprite(car.y) { drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], car.braking) }
+            sprites += Sprite(car.y) {
+                drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], car.braking, yaw = (car.drift * 10f).coerceIn(-16f, 16f))
+            }
         }
         is ScooterSituation -> if (situation.visible) {
             sprites += Sprite(situation.riderY) { drawRider(p, situation, time) }
@@ -670,7 +754,7 @@ private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation,
     val tilt = sin(situation.wobble) * 4f
     val shirt = DrivePalette.shirts[situation.style % DrivePalette.shirts.size]
     atWorld(p, situation.riderX, situation.riderY, tilt) {
-        withTransform({ scale(1.3f, 1.3f, Offset.Zero) }) {
+        withTransform({ scale(1.5f, 1.5f, Offset.Zero) }) {
             drawOval(DrivePalette.Shadow, Offset(-0.1f, -0.22f), Size(0.24f, 0.5f))
             if (situation.bike) {
                 drawOval(Color(0xFF111827), Offset(-0.03f, -0.26f), Size(0.06f, 0.16f))

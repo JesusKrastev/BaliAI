@@ -31,9 +31,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Captures of Bali Drive at its key moments (one per situation, the HUD while driving, the results
- * card and the catalogue cover), saved under `build/bali-drive/` to review the look. The class
- * name ends in `ScreenshotTest` because the release build only keeps those (brain E-021).
+ * Captures of Bali Drive at its key moments (one per situation, the power-ups, the HUD while
+ * driving, the results screens and the catalogue cover), saved under `build/bali-drive/` to review
+ * the look. The class name ends in `ScreenshotTest` because the release build only keeps those
+ * (brain E-021).
  */
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], qualifiers = "w393dp-h851dp-xxhdpi")
@@ -77,7 +78,47 @@ class BaliDriveScreenshotTest {
     }
 
     @Test
+    fun captureLeadCarPullingOver() = captureScene("6b_lead_car_pulls_over", seed = 5) { e ->
+        e.situations.filterIsInstance<LeadCarSituation>().first().lead?.let { it.drift > 0f && it.x in 2.0f..2.6f } == true
+    }
+
+    @Test
     fun captureFinish() = captureScene("7_finish", seed = 5) { e -> e.finishY - e.car.y < 4f }
+
+    @Test
+    fun captureScooter() = captureScene("10_scooter", seed = 5) { e ->
+        (e.nextSituation() as? ScooterSituation)?.let { it.visible && it.riderY - e.car.y in 2.8f..3.6f } == true
+    }
+
+    @Test
+    fun captureScooterTurningOff() = captureScene("10b_scooter_turns_off", seed = 5, driver = { examinerInput(it, overtakesScooters = false) }) { e ->
+        e.situations.filterIsInstance<ScooterSituation>().first().let { it.visible && it.riderX > 2.4f }
+    }
+
+    @Test
+    fun captureAmbulanceWarning() = captureScene("11_ambulance_warning", seed = 5) { e ->
+        e.situations.filterIsInstance<AmbulanceSituation>().first().ambulance?.let { it.y - e.car.y in -4.4f..-4.1f } == true
+    }
+
+    @Test
+    fun captureAmbulancePassing() = captureScene("11b_ambulance_passing", seed = 5) { e ->
+        e.situations.filterIsInstance<AmbulanceSituation>().first().ambulance?.let { it.y - e.car.y in 1.4f..1.7f } == true
+    }
+
+    @Test
+    fun captureZone30() = captureScene("12_zone_30", seed = 5) { e ->
+        e.speedLimitKmh != null && e.situations.filterIsInstance<Zone30Situation>().first().let { e.car.y > it.y + 1.2f }
+    }
+
+    @Test
+    fun capturePowerUpAhead() = captureScene("13_power_up_ahead", seed = 5, driver = { examinerFetching(it, it.powerUps.first()) }) { e ->
+        e.powerUps.first().y - e.car.y in 3.2f..3.6f
+    }
+
+    @Test
+    fun capturePowerUpActive() = captureScene("13b_power_up_active", seed = 5, driver = { examinerFetching(it, it.powerUps.first()) }) { e ->
+        e.shield || PowerUpKind.entries.any { it.seconds > 0f && e.isActive(it) }
+    }
 
     @Test
     fun captureDrivingHud() {
@@ -98,11 +139,32 @@ class BaliDriveScreenshotTest {
     @Test
     fun captureResults() {
         val vm = viewModel(GameRecord(2350, 5))
-        vm.finishRun(DriveSummary(2780, 10, 11, listOf(RULE_STOP), 31, 44, 54))
+        vm.finishRun(DriveSummary(2780, 10, 11, listOf(RULE_STOP), 31, 44, 54, faultKinds = listOf(SituationKind.STOP)))
         composeTestRule.mainClock.autoAdvance = false
         composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
         composeTestRule.mainClock.advanceTimeBy(3_000)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/9_results.png")
+    }
+
+    @Test
+    fun captureResultsPerfect() {
+        val vm = viewModel(GameRecord(2350, 5))
+        vm.finishRun(DriveSummary(3420, 11, 11, emptyList(), 40, 44, 52))
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
+        composeTestRule.mainClock.advanceTimeBy(3_000)
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/9b_results_perfect.png")
+    }
+
+    @Test
+    fun captureResultsRough() {
+        val vm = viewModel(GameRecord(2350, 5))
+        val kinds = listOf(SituationKind.STOP, SituationKind.CROSSWALK, SituationKind.BALL, SituationKind.SCOOTER, SituationKind.AMBULANCE)
+        vm.finishRun(DriveSummary(900, 6, 11, listOf(RULE_STOP, RULE_CROSSWALK, RULE_BALL), 8, 44, 70, faultKinds = kinds))
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
+        composeTestRule.mainClock.advanceTimeBy(3_000)
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/9c_results_rough.png")
     }
 
     @Test
@@ -134,16 +196,24 @@ class BaliDriveScreenshotTest {
     }
 
     /**
-     * Drives a careful run until [moment] is true and draws that frame of the world.
+     * Drives a run until [moment] is true and draws that frame of the world.
      *
+     * @param name file name of the capture, without extension
      * @param seed route to drive
+     * @param driver steering and brake of the driver; the careful examiner by default
+     * @param moment true on the frame to capture
      */
-    private fun captureScene(name: String, seed: Long, moment: (DriveEngine) -> Boolean) {
+    private fun captureScene(
+        name: String,
+        seed: Long,
+        driver: (DriveEngine) -> Pair<Float, Boolean> = { examinerInput(it) },
+        moment: (DriveEngine) -> Boolean,
+    ) {
         val engine = DriveEngine(seed)
         val fx = DriveFx()
         var elapsed = 0f
         while (!moment(engine) && elapsed < 200f) {
-            val (steer, brake) = examinerInput(engine)
+            val (steer, brake) = driver(engine)
             engine.update(TEST_FRAME, steer, brake)
             engine.drainEvents().filterIsInstance<DriveEvent.Resolved>().forEach {
                 fx.burst(engine.car.x, engine.car.y - CAR_LENGTH / 2, listOf(androidx.compose.ui.graphics.Color.Yellow), 20)
