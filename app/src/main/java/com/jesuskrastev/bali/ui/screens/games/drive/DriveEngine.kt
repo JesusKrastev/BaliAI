@@ -269,6 +269,10 @@ class DriveEngine(
     private val showHints: Boolean = false,
     private val route: List<SituationKind>? = null,
 ) {
+    init {
+        require(route == null || route.isNotEmpty()) { "A fixed Bali Drive route needs at least one situation." }
+    }
+
     private val random = Random(seed)
 
     val car = PlayerCar()
