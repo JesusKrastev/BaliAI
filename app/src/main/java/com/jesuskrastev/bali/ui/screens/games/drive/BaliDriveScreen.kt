@@ -169,7 +169,11 @@ private data class HudState(
     val countdown: Int = 3,
     val stars: Int = 0,
     val fault: DriveEvent.Faulted? = null,
+    val faultShielded: Boolean = false,
     val newRecord: Boolean = false,
+    val powers: List<Pair<PowerUpKind, Float>> = emptyList(),
+    val speedLimit: Int? = null,
+    val slowMotion: Boolean = false,
 )
 
 /** A floating text that rises and fades over the car. */
@@ -245,6 +249,31 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
                 baliLine = BaliLine(nextId++, if (event.perfect) "¡Sin un solo fallo!" else "¡Meta!", happy = true)
                 finishedAt = clock
             }
+            is DriveEvent.PowerUpCollected -> {
+                viewModel.playPowerUp()
+                view.haptic(confirm = true)
+                val color = powerUpColor(event.kind)
+                fx.burst(event.x, event.y, listOf(color, Color.White, BaliAccentYellow), 30, power = 2.6f)
+                fx.ring(car.x, car.y - CAR_LENGTH / 2, color)
+                popups += Popup(nextId++, event.kind.label, null, color, big = true)
+                baliLine = BaliLine(
+                    nextId++,
+                    when (event.kind) {
+                        PowerUpKind.SHIELD -> "¡Escudo! Tu racha está a salvo"
+                        PowerUpKind.MAGNET -> "¡Imán de estrellas!"
+                        PowerUpKind.DOUBLE -> "¡Todo vale el doble!"
+                        PowerUpKind.SLOW_MOTION -> "Todo va más despacio…"
+                    },
+                    happy = true,
+                )
+            }
+            DriveEvent.ShieldSaved -> fx.ring(car.x, car.y - CAR_LENGTH / 2, powerUpColor(PowerUpKind.SHIELD))
+            DriveEvent.Siren -> {
+                viewModel.playSiren()
+                view.haptic(confirm = false)
+                hint = (nextId++) to SituationKind.AMBULANCE
+                baliLine = BaliLine(nextId++, "¡Ambulancia! Hazle sitio", happy = false)
+            }
         }
     }
 
@@ -289,7 +318,16 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
                     countdown = kotlin.math.ceil(engine.countdown).toInt(),
                     stars = engine.stars.count { it.collected },
                     fault = if (engine.phase == DrivePhase.FAULT) engine.lastFault else null,
+                    faultShielded = engine.lastFaultShielded,
                     newRecord = state.bestScore > 0 && engine.score > state.bestScore,
+                    powers = buildList {
+                        if (engine.shield) add(PowerUpKind.SHIELD to 1f)
+                        PowerUpKind.entries.filter { it.seconds > 0f && engine.isActive(it) }.forEach {
+                            add(it to (engine.remaining(it) / it.seconds * 20).toInt() / 20f)
+                        }
+                    },
+                    speedLimit = engine.speedLimitKmh,
+                    slowMotion = engine.isActive(PowerUpKind.SLOW_MOTION),
                 )
                 frame = now
             }
@@ -328,6 +366,9 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
             if (frame < 0L) return@Canvas // reading the frame makes every frame redraw
             val projection = DriveProjection(size.width, size.height, engine.car.y)
             drawDriveWorld(engine, fx, projection, art, clock)
+            if (engine.isActive(PowerUpKind.SLOW_MOTION)) {
+                drawRect(Brush.radialGradient(listOf(Color.Transparent, DrivePalette.Slow.copy(alpha = 0.4f)), radius = size.maxDimension * 0.7f))
+            }
             if (fx.glow > 0f) {
                 drawRect(Brush.radialGradient(listOf(Color.Transparent, BaliAccentYellow.copy(alpha = 0.25f * fx.glow)), radius = size.maxDimension * 0.7f))
             }
@@ -356,10 +397,10 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
         }
 
         BaliCorner(line = baliLine, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
-        Speedometer(speedKmh = hud.speedKmh, braking = hud.braking, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp))
+        Speedometer(speedKmh = hud.speedKmh, braking = hud.braking, limit = hud.speedLimit, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp))
 
         if (hud.phase == DrivePhase.COUNTDOWN) CountdownOverlay(hud.countdown)
-        hud.fault?.let { FaultOverlay(it, onTap = { engine.resumeFromFault() }) }
+        hud.fault?.let { FaultOverlay(it, shielded = hud.faultShielded, onTap = { engine.resumeFromFault() }) }
 
         state.result?.let { result ->
             DriveResultsOverlay(
@@ -379,7 +420,14 @@ internal fun rememberDriveArt(): DriveArt {
     val bali = ImageBitmap.imageResource(R.drawable.bali)
     return remember(textMeasurer, bali) {
         val bold = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Black)
-        DriveArt(bali, textMeasurer.measure("STOP", bold), textMeasurer.measure("META", bold), textMeasurer.measure("!", bold))
+        DriveArt(
+            bali = bali,
+            stop = textMeasurer.measure("STOP", bold),
+            finish = textMeasurer.measure("META", bold),
+            alert = textMeasurer.measure("!", bold),
+            thirty = textMeasurer.measure("30", bold),
+            double = textMeasurer.measure("×2", bold),
+        )
     }
 }
 
@@ -392,8 +440,6 @@ private fun View.haptic(confirm: Boolean) {
     performHapticFeedback(constant)
 }
 
-/** Formats points with Spanish thousands separators (1.234). */
-private fun points(value: Int): String = NumberFormat.getIntegerInstance(Locale("es", "ES")).format(value)
 
 /** Close button, animated score, record, multiplier, stars and the route progress. */
 @Composable
@@ -458,6 +504,26 @@ private fun DriveTopBar(hud: HudState, bestScore: Int, starPulse: Int, onClose: 
             }
         }
         RouteProgress(hud.progress)
+        if (hud.powers.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { hud.powers.forEach { (kind, left) -> PowerChip(kind, left) } }
+        }
+    }
+}
+
+/** Active power-up in the HUD: its colour, its name and a bar emptying as it runs out. */
+@Composable
+private fun PowerChip(kind: PowerUpKind, left: Float) {
+    val color = powerUpColor(kind)
+    Column(
+        Modifier.clip(RoundedCornerShape(12.dp)).background(color).padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(kind.label, color = if (kind == PowerUpKind.DOUBLE) BaliSecondary else Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+        if (kind.seconds > 0f) {
+            Box(Modifier.width(56.dp).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.35f))) {
+                Box(Modifier.fillMaxWidth(left).height(3.dp).background(Color.White))
+            }
+        }
     }
 }
 
@@ -584,9 +650,16 @@ private fun BaliCorner(line: BaliLine?, modifier: Modifier = Modifier) {
 
 /** Round speedometer with the km/h and a brake lamp that lights while the finger holds still. */
 @Composable
-private fun Speedometer(speedKmh: Int, braking: Boolean, modifier: Modifier = Modifier) {
+private fun Speedometer(speedKmh: Int, braking: Boolean, limit: Int?, modifier: Modifier = Modifier) {
     val sweep by animateFloatAsState((speedKmh / 55f).coerceIn(0f, 1f), tween(120), label = "speedo")
+    val over = limit != null && speedKmh > limit
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (limit != null) {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(Color.White).border(5.dp, BaliAccentRed, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text("$limit", color = BaliSecondary, fontWeight = FontWeight.Black, fontSize = 15.sp) }
+        }
         Box(Modifier.size(78.dp).clip(CircleShape).background(BaliSecondary.copy(alpha = 0.88f)), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(64.dp)) {
                 val stroke = 7.dp.toPx()
@@ -594,7 +667,7 @@ private fun Speedometer(speedKmh: Int, braking: Boolean, modifier: Modifier = Mo
                 val topLeft = Offset(stroke / 2, stroke / 2)
                 drawArc(Color.White.copy(alpha = 0.18f), 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                 drawArc(
-                    Brush.sweepGradient(listOf(BaliAccentGreen, BaliAccentYellow, BaliPrimary, BaliAccentGreen)),
+                    if (over) Brush.sweepGradient(listOf(BaliAccentRed, BaliAccentRed)) else Brush.sweepGradient(listOf(BaliAccentGreen, BaliAccentYellow, BaliPrimary, BaliAccentGreen)),
                     135f, 270f * sweep, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round),
                 )
             }
@@ -654,7 +727,7 @@ private fun ControlRow(icon: String, text: String) {
 
 /** The frozen moment after a broken rule: the rule in one sentence, then a tap to drive on. */
 @Composable
-private fun BoxScope.FaultOverlay(fault: DriveEvent.Faulted, onTap: () -> Unit) {
+private fun BoxScope.FaultOverlay(fault: DriveEvent.Faulted, shielded: Boolean, onTap: () -> Unit) {
     val countdown = remember { Animatable(0f) }
     LaunchedEffect(fault) { countdown.animateTo(1f, tween((FAULT_PAUSE_SECONDS * 1000).toInt(), easing = LinearEasing)) }
     Box(Modifier.matchParentSize().background(BaliSecondary.copy(alpha = 0.3f)).clickable(onClick = onTap))
@@ -666,8 +739,8 @@ private fun BoxScope.FaultOverlay(fault: DriveEvent.Faulted, onTap: () -> Unit) 
     ) {
         Column(Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(fault.kind.icon, fontSize = 44.sp)
-            Surface(shape = RoundedCornerShape(50), color = BaliAccentRed) {
-                Text("¡FALTA! · Pierdes la racha", modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
+            Surface(shape = RoundedCornerShape(50), color = if (shielded) powerUpColor(PowerUpKind.SHIELD) else BaliAccentRed) {
+                Text(if (shielded) "¡FALTA! · El escudo salva tu racha" else "¡FALTA! · Pierdes la racha", modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp), color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
             }
             Text(fault.message, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, color = BaliSecondary, fontSize = 17.sp, lineHeight = 22.sp)
             Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(50)).background(Color(0xFFE2E8F0))) {
@@ -675,151 +748,5 @@ private fun BoxScope.FaultOverlay(fault: DriveEvent.Faulted, onTap: () -> Unit) 
             }
             Text("Toca para seguir", color = BaliSecondary.copy(alpha = 0.6f), fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
-    }
-}
-
-/**
- * End-of-run card: stars pop one by one, the score counts up, the record is celebrated (or the
- * gap to it shown, the "so close" that makes the next run tempting), rewards, what to revise, and
- * a big replay button.
- *
- * @param onStarShown called as each rating star appears, with its 1-based index (for the sound)
- */
-@Composable
-private fun BoxScope.DriveResultsOverlay(result: DriveResult, onReplay: () -> Unit, onExit: () -> Unit, onStarShown: (Int) -> Unit) {
-    val summary = result.summary
-    var starsShown by remember { mutableIntStateOf(0) }
-    val score = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(250)
-        for (i in 1..summary.rating) {
-            delay(330)
-            starsShown = i
-            onStarShown(i)
-        }
-        score.animateTo(summary.score.toFloat(), tween(900, easing = FastOutSlowInEasing))
-    }
-    Box(Modifier.matchParentSize().background(BaliSecondary.copy(alpha = 0.6f)).clickable(enabled = false) {})
-    if (result.isNewRecord) {
-        val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.confetti))
-        val lottieProgress by animateLottieCompositionAsState(composition, iterations = 1)
-        LottieAnimation(composition, { lottieProgress }, Modifier.matchParentSize())
-    }
-    Surface(
-        modifier = Modifier.align(Alignment.Center).padding(20.dp),
-        shape = RoundedCornerShape(30.dp),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 16.dp,
-    ) {
-        Column(
-            Modifier.verticalScroll(rememberScrollState()).padding(22.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                when (summary.rating) {
-                    3 -> "¡Conducción perfecta!"
-                    2 -> "¡Muy bien conducido!"
-                    else -> "¡Has llegado!"
-                },
-                fontWeight = FontWeight.Black,
-                fontSize = 24.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Bottom) {
-                for (i in 1..3) {
-                    val shown = i <= starsShown
-                    val scale by animateFloatAsState(if (shown) 1f else 0.7f, spring(Spring.DampingRatioHighBouncy, Spring.StiffnessMediumLow), label = "result_star_$i")
-                    Text(
-                        "★",
-                        modifier = Modifier.scale(scale).offset(y = if (i == 2) (-8).dp else 0.dp),
-                        fontSize = if (i == 2) 58.sp else 46.sp,
-                        color = if (shown) BaliAccentYellow else MaterialTheme.colorScheme.surfaceVariant,
-                    )
-                }
-            }
-            Text(points(score.value.toInt()), fontWeight = FontWeight.Black, fontSize = 44.sp, color = BaliPrimary)
-            RecordLine(result)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatChip("✅ ${summary.resolved}/${summary.situations}")
-                StatChip("⭐ ${summary.starsCollected}/${summary.starsTotal}")
-                StatChip("⏱ ${summary.durationSeconds} s")
-            }
-            RewardsLine(result)
-            if (summary.faults.isNotEmpty()) {
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text("Para la próxima", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
-                    summary.faults.distinct().take(3).forEach {
-                        Text("• $it", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
-                    }
-                }
-            }
-            Button(
-                onClick = onReplay,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BaliPrimary),
-            ) {
-                Icon(Icons.Rounded.Replay, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("OTRA VEZ", fontWeight = FontWeight.Black, fontSize = 18.sp)
-            }
-            TextButton(onClick = onExit) { Text("Salir", fontWeight = FontWeight.Bold) }
-        }
-    }
-}
-
-/** Record badge, or how far the run fell from it when it was close. */
-@Composable
-private fun RecordLine(result: DriveResult) {
-    val gap = result.previousBest - result.summary.score
-    when {
-        result.isNewRecord -> {
-            val pulse = rememberInfiniteTransition(label = "record_pulse")
-            val scale by pulse.animateFloat(0.95f, 1.07f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "record_scale")
-            Surface(Modifier.scale(scale), shape = RoundedCornerShape(50), color = BaliAccentYellow) {
-                Text(
-                    if (result.previousBest > 0) "🏆 ¡NUEVO RÉCORD! (+${points(-gap)})" else "🏆 ¡TU PRIMER RÉCORD!",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    fontWeight = FontWeight.Black,
-                    color = BaliSecondary,
-                )
-            }
-        }
-        gap in 1..(result.previousBest / 4).coerceAtLeast(1) -> Text(
-            "¡A solo ${points(gap)} puntos de tu récord!",
-            fontWeight = FontWeight.Black,
-            color = BaliPrimary,
-        )
-        else -> Text("Récord: ${points(result.previousBest)}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** XP and coins earned, with the level-up if there was one. */
-@Composable
-private fun RewardsLine(result: DriveResult) {
-    val rewards = result.rewards
-    if (rewards == null) {
-        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-        return
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        StatChip("+${rewards.xpEarned.xpGained} XP", BaliPrimary.copy(alpha = 0.15f))
-        StatChip("+${rewards.coinsGained} monedas", BaliAccentYellow.copy(alpha = 0.3f))
-    }
-    if (rewards.xpEarned.levelUp) {
-        Text("¡Subes a nivel ${rewards.xpEarned.newLevel}!", fontWeight = FontWeight.Black, color = BaliAccentGreen)
-    }
-}
-
-/** Small rounded figure on the results card. */
-@Composable
-private fun StatChip(text: String, background: Color = MaterialTheme.colorScheme.surfaceVariant) {
-    Surface(shape = RoundedCornerShape(50), color = background) {
-        Text(text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
     }
 }

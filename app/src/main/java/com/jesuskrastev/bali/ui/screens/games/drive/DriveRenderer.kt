@@ -100,6 +100,11 @@ object DrivePalette {
     val Green = Color(0xFF22C55E)
     val SignBlue = Color(0xFF2563EB)
     val SignRed = Color(0xFFDC2626)
+    val Zone30 = Color(0xFF6B5A5E)
+    val Shield = Color(0xFF38BDF8)
+    val Magnet = Color(0xFFEF4444)
+    val Slow = Color(0xFFA78BFA)
+    val Siren = Color(0xFF2563EB)
     val Trunk = Color(0xFF7C5A3A)
     val TreeDark = Color(0xFF3E9A5B)
     val Tree = Color(0xFF52B86E)
@@ -121,8 +126,17 @@ object DrivePalette {
  * @param stop "STOP" lettering for the sign and the road
  * @param finish "META" lettering for the finish arch
  * @param alert "!" over a pedestrian who is about to cross
+ * @param thirty "30" for the zone 30 sign and road marking
+ * @param double "×2" for the double-points bubble
  */
-class DriveArt(val bali: ImageBitmap?, val stop: TextLayoutResult, val finish: TextLayoutResult, val alert: TextLayoutResult)
+class DriveArt(
+    val bali: ImageBitmap?,
+    val stop: TextLayoutResult,
+    val finish: TextLayoutResult,
+    val alert: TextLayoutResult,
+    val thirty: TextLayoutResult,
+    val double: TextLayoutResult,
+)
 
 /** A short-lived bit of confetti or sparkle, in world coordinates; [z] is height above the road. */
 class Particle(
@@ -335,6 +349,11 @@ private fun DrawScope.drawMarkings(engine: DriveEngine, p: DriveProjection, art:
                 drawRoadText(p, 1.5f, situation.y - 0.75f, 0.42f, DrivePalette.Marking, art.stop)
             }
             is TrafficLightSituation -> quad(p, 0f, situation.y - 0.08f, LANES.toFloat(), situation.y + 0.04f, white)
+            is Zone30Situation -> {
+                quad(p, 0f, situation.y, LANES.toFloat(), situation.layoutEnd, DrivePalette.Zone30)
+                quad(p, 0f, situation.y, LANES.toFloat(), situation.y + 0.1f, white)
+                for (lane in 0 until LANES) drawRoadText(p, laneCenter(lane), situation.y + 0.8f, 0.5f, DrivePalette.Marking, art.thirty)
+            }
             is RoadworksSituation -> situation.blockedLanes.forEach { lane ->
                 var stripe = situation.y + 0.2f
                 while (stripe < situation.y + situation.length) {
@@ -404,6 +423,10 @@ private fun DrawScope.drawSprites(engine: DriveEngine, p: DriveProjection, art: 
         if (star.collected || star.y < p.nearY || star.y > p.farY) continue
         sprites += Sprite(star.y) { drawStar(p, star.x, star.y, time) }
     }
+    for (powerUp in engine.powerUps) {
+        if (powerUp.collected || powerUp.y < p.nearY || powerUp.y > p.farY) continue
+        sprites += Sprite(powerUp.y) { drawPowerUp(p, powerUp, art, time) }
+    }
     for (situation in engine.situations) {
         if (situation.layoutEnd < p.nearY - 6f || situation.layoutStart > p.farY + 2f) continue
         addSituationSprites(situation, p, art, time, sprites)
@@ -411,6 +434,7 @@ private fun DrawScope.drawSprites(engine: DriveEngine, p: DriveProjection, art: 
     val car = engine.car
     sprites += Sprite(car.y - CAR_LENGTH / 2) {
         val yaw = ((car.targetX - car.x) * 22f).coerceIn(-18f, 18f)
+        drawPowerAura(engine, p, time)
         drawCarAt(p, car.x, car.y - CAR_LENGTH / 2, DrivePalette.Player, car.braking, yaw = yaw, bali = art.bali)
     }
     drawSignBillboards(engine, p, art, time, sprites)
@@ -465,6 +489,13 @@ private fun addSituationSprites(situation: Situation, p: DriveProjection, art: D
         is LeadCarSituation -> situation.lead?.let { car ->
             sprites += Sprite(car.y) { drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], car.braking) }
         }
+        is ScooterSituation -> if (situation.visible) {
+            sprites += Sprite(situation.riderY) { drawRider(p, situation, time) }
+        }
+        is AmbulanceSituation -> situation.ambulance?.let { ambulance ->
+            sprites += Sprite(ambulance.y) { drawAmbulance(p, ambulance.x, ambulance.y, time) }
+        }
+        is Zone30Situation -> Unit
         is BallSituation -> {
             if (situation.ballVisible) sprites += Sprite(situation.y) { drawBall(p, situation.ballX, situation.y, situation.ballSpin) }
             if (situation.child.visible) sprites += Sprite(situation.child.y) { drawWalker(p, situation.child, art) }
@@ -484,6 +515,10 @@ private fun drawSignBillboards(engine: DriveEngine, p: DriveProjection, art: Dri
             }
             is CrosswalkSituation -> sprites += Sprite(situation.y - 0.3f) { drawCrosswalkSign(p, PARKING_EDGE + 0.3f, situation.y - 0.3f) }
             is RoadworksSituation -> sprites += Sprite(situation.y - 2.4f) { drawWorksSign(p, PARKING_EDGE + 0.3f, situation.y - 2.4f) }
+            is Zone30Situation -> {
+                sprites += Sprite(situation.y - 0.3f) { drawZone30Sign(p, PARKING_EDGE + 0.3f, situation.y - 0.3f, art) }
+                sprites += Sprite(situation.y - 0.3f) { drawZone30Sign(p, -0.3f, situation.y - 0.3f, art) }
+            }
             else -> Unit
         }
     }
@@ -551,6 +586,139 @@ private fun DrawScope.drawCarAt(
         }
         drawRoundRect(brake, Offset(-w / 2 + 0.04f, l / 2 - 0.06f), Size(0.13f, 0.05f), CornerRadius(0.02f))
         drawRoundRect(brake, Offset(w / 2 - 0.17f, l / 2 - 0.06f), Size(0.13f, 0.05f), CornerRadius(0.02f))
+    }
+}
+
+/** A power-up bubble: a glossy coloured orb with its icon, bobbing and glowing. */
+private fun DrawScope.drawPowerUp(p: DriveProjection, powerUp: PowerUp, art: DriveArt, time: Float) {
+    val bob = sin(time * 4f + powerUp.y)
+    val color = powerUpColor(powerUp.kind)
+    atWorld(p, powerUp.x, powerUp.y) {
+        drawOval(DrivePalette.Shadow, Offset(-0.2f, 0.1f), Size(0.4f, 0.14f))
+        withTransform({ translate(0f, -0.14f - bob * 0.04f) }) {
+            drawCircle(color.copy(alpha = 0.25f + 0.1f * bob), 0.36f, Offset.Zero)
+            drawCircle(Color.White, 0.25f, Offset.Zero)
+            drawCircle(color, 0.21f, Offset.Zero)
+            drawPowerUpIcon(powerUp.kind, art)
+            drawCircle(Color.White.copy(alpha = 0.55f), 0.06f, Offset(-0.09f, -0.1f))
+        }
+    }
+}
+
+/** Colour that identifies a power-up everywhere (bubble, aura, HUD). */
+fun powerUpColor(kind: PowerUpKind): Color = when (kind) {
+    PowerUpKind.SHIELD -> DrivePalette.Shield
+    PowerUpKind.MAGNET -> DrivePalette.Magnet
+    PowerUpKind.DOUBLE -> DrivePalette.Star
+    PowerUpKind.SLOW_MOTION -> DrivePalette.Slow
+}
+
+/** White icon of a power-up, about 0.24 lanes across, centred on the origin. */
+private fun DrawScope.drawPowerUpIcon(kind: PowerUpKind, art: DriveArt) {
+    val ink = Color.White
+    when (kind) {
+        PowerUpKind.SHIELD -> {
+            val shield = Path().apply {
+                moveTo(0f, -0.12f); lineTo(0.1f, -0.08f); lineTo(0.09f, 0.03f)
+                quadraticTo(0.06f, 0.1f, 0f, 0.13f); quadraticTo(-0.06f, 0.1f, -0.09f, 0.03f)
+                lineTo(-0.1f, -0.08f); close()
+            }
+            drawPath(shield, ink)
+        }
+        PowerUpKind.MAGNET -> {
+            drawArc(ink, 0f, 180f, false, Offset(-0.09f, -0.06f), Size(0.18f, 0.18f), style = Stroke(0.06f))
+            drawRect(ink, Offset(-0.12f, -0.1f), Size(0.06f, 0.08f))
+            drawRect(ink, Offset(0.06f, -0.1f), Size(0.06f, 0.08f))
+        }
+        PowerUpKind.DOUBLE -> {
+            val t = art.double
+            val q = 0.2f / t.size.height
+            withTransform({ scale(q, q, Offset.Zero) }) {
+                drawText(t, color = Color(0xFF7C2D12), topLeft = Offset(-t.size.width / 2f, -t.size.height / 2f))
+            }
+        }
+        PowerUpKind.SLOW_MOTION -> {
+            val glass = Path().apply {
+                moveTo(-0.08f, -0.11f); lineTo(0.08f, -0.11f); lineTo(0f, 0f); lineTo(0.08f, 0.11f)
+                lineTo(-0.08f, 0.11f); lineTo(0f, 0f); close()
+            }
+            drawPath(glass, ink)
+        }
+    }
+}
+
+/** Glow around the player's car for the active power-ups: shield bubble, magnet field, golden ×2. */
+private fun DrawScope.drawPowerAura(engine: DriveEngine, p: DriveProjection, time: Float) {
+    val car = engine.car
+    atWorld(p, car.x, car.y - CAR_LENGTH / 2) {
+        if (engine.isActive(PowerUpKind.DOUBLE)) {
+            drawCircle(DrivePalette.Star.copy(alpha = 0.3f + 0.1f * sin(time * 8f)), 0.7f, Offset.Zero)
+        }
+        if (engine.isActive(PowerUpKind.MAGNET)) {
+            val wave = (time * 1.6f) % 1f
+            drawCircle(DrivePalette.Magnet.copy(alpha = 0.5f * (1f - wave)), 0.5f + wave * 1.2f, Offset.Zero, style = Stroke(0.05f))
+        }
+        if (engine.shield) {
+            drawCircle(DrivePalette.Shield.copy(alpha = 0.18f), 0.72f, Offset.Zero)
+            drawCircle(DrivePalette.Shield.copy(alpha = 0.75f), 0.72f, Offset.Zero, style = Stroke(0.05f))
+        }
+    }
+}
+
+/** Someone on an e-scooter (or a bike) seen from above, with a helmet and a slight wobble. */
+private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation, time: Float) {
+    val tilt = sin(situation.wobble) * 4f
+    val shirt = DrivePalette.shirts[situation.style % DrivePalette.shirts.size]
+    atWorld(p, situation.riderX, situation.riderY, tilt) {
+        withTransform({ scale(1.3f, 1.3f, Offset.Zero) }) {
+            drawOval(DrivePalette.Shadow, Offset(-0.1f, -0.22f), Size(0.24f, 0.5f))
+            if (situation.bike) {
+                drawOval(Color(0xFF111827), Offset(-0.03f, -0.26f), Size(0.06f, 0.16f))
+                drawOval(Color(0xFF111827), Offset(-0.03f, 0.1f), Size(0.06f, 0.16f))
+                drawLine(Color(0xFF0EA5E9), Offset(0f, -0.15f), Offset(0f, 0.15f), strokeWidth = 0.035f)
+            } else {
+                drawRoundRect(Color(0xFF1F2937), Offset(-0.045f, -0.22f), Size(0.09f, 0.44f), CornerRadius(0.04f))
+            }
+            drawLine(Color(0xFF374151), Offset(-0.12f, -0.17f), Offset(0.12f, -0.17f), strokeWidth = 0.03f)
+            drawCircle(DrivePalette.skin, 0.03f, Offset(-0.11f, -0.15f))
+            drawCircle(DrivePalette.skin, 0.03f, Offset(0.11f, -0.15f))
+            drawOval(shirt, Offset(-0.1f, -0.1f), Size(0.2f, 0.18f))
+            drawCircle(DrivePalette.BrakeLight, 0.07f, Offset(0f, -0.02f))
+            drawCircle(Color.White.copy(alpha = 0.5f), 0.025f, Offset(-0.02f, -0.04f))
+        }
+    }
+}
+
+/** A white ambulance with a red stripe and a flashing blue light bar. */
+private fun DrawScope.drawAmbulance(p: DriveProjection, x: Float, y: Float, time: Float) {
+    if (y < p.nearY - 1f || y > p.farY + 1f) return
+    drawCarAt(p, x, y, Color(0xFFF8FAFC), braking = false)
+    val flash = sin(time * 18f) > 0f
+    atWorld(p, x, y) {
+        drawRect(DrivePalette.SignRed, Offset(-CAR_WIDTH / 2, 0.02f), Size(CAR_WIDTH, 0.06f))
+        drawRect(DrivePalette.SignRed, Offset(-0.03f, -0.1f), Size(0.06f, 0.2f))
+        drawRect(DrivePalette.SignRed, Offset(-0.1f, -0.03f), Size(0.2f, 0.06f))
+        val left = Offset(-0.12f, -0.2f)
+        val right = Offset(0.12f, -0.2f)
+        drawCircle(DrivePalette.Siren.copy(alpha = if (flash) 0.45f else 0.1f), 0.32f, left)
+        drawCircle(DrivePalette.SignRed.copy(alpha = if (flash) 0.1f else 0.45f), 0.32f, right)
+        drawRoundRect(if (flash) DrivePalette.Siren else Color(0xFF1E3A8A), Offset(-0.18f, -0.24f), Size(0.17f, 0.08f), CornerRadius(0.03f))
+        drawRoundRect(if (flash) Color(0xFF7F1D1D) else DrivePalette.SignRed, Offset(0.01f, -0.24f), Size(0.17f, 0.08f), CornerRadius(0.03f))
+    }
+}
+
+/** Round "30" speed-limit sign on a pole. */
+private fun DrawScope.drawZone30Sign(p: DriveProjection, x: Float, y: Float, art: DriveArt) {
+    val top = drawPole(p, x, y, 0.9f)
+    val s = p.scale(y)
+    withTransform({ translate(top.x, top.y); scale(s, s, Offset.Zero) }) {
+        drawCircle(DrivePalette.SignRed, 0.24f, Offset.Zero)
+        drawCircle(Color.White, 0.18f, Offset.Zero)
+        val t = art.thirty
+        val q = 0.2f / t.size.height
+        withTransform({ scale(q, q, Offset.Zero) }) {
+            drawText(t, color = Color(0xFF111827), topLeft = Offset(-t.size.width / 2f, -t.size.height / 2f))
+        }
     }
 }
 

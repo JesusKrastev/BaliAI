@@ -57,6 +57,8 @@ class SoundPoolSoundEffects @Inject constructor(
     private val softFinishSoundId = load(R.raw.sfx_soft_finish)
     private val chestOpenSoundId = load(R.raw.sfx_chest_open)
     private val pickupSoundId = load(R.raw.sfx_pickup)
+    private val powerUpSoundId = load(R.raw.sfx_powerup)
+    private val sirenSoundId = load(R.raw.sfx_siren)
 
     override val isEnabled: Flow<Boolean> = context.soundDataStore.data
         .map { preferences -> preferences[KEY_ENABLED] ?: true }
@@ -82,6 +84,10 @@ class SoundPoolSoundEffects @Inject constructor(
     override fun playChestOpen() = play(chestOpenSoundId)
 
     override fun playPickup(pitch: Float) = play(pickupSoundId, rate = pitch.coerceIn(0.5f, 2f))
+
+    override fun playPowerUp() = play(powerUpSoundId)
+
+    override fun playSiren() = play(sirenSoundId)
 
     /**
      * Starts loading a raw sound resource into the pool. Loading is asynchronous: a sound asked

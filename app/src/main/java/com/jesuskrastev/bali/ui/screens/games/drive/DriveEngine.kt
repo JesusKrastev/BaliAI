@@ -50,6 +50,11 @@ private const val SITUATION_POINTS = 100
 private const val BONUS_POINTS = 50
 private const val STAR_POINTS = 5
 private const val PERFECT_RUN_POINTS = 300
+private const val SLOW_MOTION_FACTOR = 0.55f
+private const val MAGNET_RANGE = 3.5f
+
+/** Speed limit of a zone 30, in world units per second (30 km/h). */
+const val ZONE_30_SPEED = 30f / KMH_PER_UNIT
 
 /** Distance a car at [speed] needs to stop with the brake fully held. */
 fun stoppingDistance(speed: Float): Float = speed * speed / (2f * BRAKING)
@@ -75,6 +80,26 @@ enum class SituationKind(val icon: String, val hint: String) {
     TRAFFIC_LIGHT("🚦", "Semáforo: en rojo, detente"),
     LEAD_CAR("🚙", "Coche delante: guarda distancia"),
     BALL("⚽", "Balón: frena, puede salir un niño"),
+    SCOOTER("🛴", "Patinete: adelanta dejando 1,5 m"),
+    AMBULANCE("🚑", "¡Sirena! Apártate de su carril"),
+    ZONE_30("🐢", "Zona 30: frena antes de entrar"),
+}
+
+/**
+ * Bubbles on the road that change the run for a while.
+ *
+ * @param seconds how long it lasts; 0 for the shield, which waits for the next fault
+ */
+enum class PowerUpKind(val label: String, val seconds: Float) {
+    SHIELD("ESCUDO", 0f),
+    MAGNET("IMÁN", 7f),
+    DOUBLE("PUNTOS ×2", 8f),
+    SLOW_MOTION("CÁMARA LENTA", 5f),
+}
+
+/** A power-up bubble waiting on the road. */
+class PowerUp(val x: Float, val y: Float, val kind: PowerUpKind) {
+    var collected = false
 }
 
 /** Phase of a run. */
@@ -139,7 +164,7 @@ class Walker(var x: Float, var y: Float, val style: Int, val isChild: Boolean = 
 }
 
 /** A collectible star; stars give points and keep the eyes moving between situations. */
-class Star(val x: Float, val y: Float) {
+class Star(var x: Float, var y: Float) {
     var collected = false
     var missed = false
 }
@@ -175,6 +200,15 @@ sealed interface DriveEvent {
 
     /** The finish line was crossed. */
     data class Finished(val perfect: Boolean) : DriveEvent
+
+    /** A power-up bubble was collected. */
+    data class PowerUpCollected(val kind: PowerUpKind, val x: Float, val y: Float) : DriveEvent
+
+    /** The shield took a fault: the streak survives. */
+    data object ShieldSaved : DriveEvent
+
+    /** An ambulance with its siren on appeared behind the player. */
+    data object Siren : DriveEvent
 }
 
 /**
@@ -187,6 +221,7 @@ sealed interface DriveEvent {
  * @param starsCollected stars picked up
  * @param starsTotal stars on the route
  * @param durationSeconds driving time, countdown excluded
+ * @param faultKinds situations of [faults], in the same order
  */
 data class DriveSummary(
     val score: Int,
@@ -196,6 +231,7 @@ data class DriveSummary(
     val starsCollected: Int,
     val starsTotal: Int,
     val durationSeconds: Int,
+    val faultKinds: List<SituationKind> = emptyList(),
 ) {
     /** 3 stars for a clean run, 2 for one fault, 1 otherwise. */
     val rating: Int get() = when (faults.size) {
@@ -222,7 +258,10 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     val car = PlayerCar()
     val situations: List<Situation> = buildRoute()
     val finishY: Float = situations.last().layoutEnd + 6f
-    val stars: List<Star> = buildStars()
+    val powerUps: List<PowerUp> = buildPowerUps()
+    val stars: List<Star> = buildStars().filter { star ->
+        powerUps.none { abs(it.y - star.y) < 0.7f && abs(it.x - star.x) < 0.6f }
+    }
     val parkedCars: List<ParkedCar> = buildParkedCars()
 
     var phase = DrivePhase.COUNTDOWN
@@ -240,8 +279,18 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     var lastFault: DriveEvent.Faulted? = null
         private set
 
+    /** True when the shield absorbed the last fault, so the streak survived it. */
+    var lastFaultShielded = false
+        private set
+
+    /** True while a shield is waiting to absorb the next fault. */
+    var shield = false
+        private set
+
     private var resolvedCount = 0
     private val faultMessages = mutableListOf<String>()
+    private val faultKinds = mutableListOf<SituationKind>()
+    private val powerUpTimers = mutableMapOf<PowerUpKind, Float>()
     private var pickupStreak = 0
     private var recordAnnounced = false
     private val pendingEvents = mutableListOf<DriveEvent>()
@@ -254,6 +303,24 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
 
     /** Speed shown on the speedometer. */
     val speedKmh: Int get() = (car.speed * KMH_PER_UNIT).toInt()
+
+    /** Speed limit in force around the car, in km/h, or null outside a zone 30. */
+    val speedLimitKmh: Int?
+        get() = situations.filterIsInstance<Zone30Situation>()
+            .firstOrNull { car.y > it.y - 2f && car.rear < it.layoutEnd }?.let { 30 }
+
+    /**
+     * Seconds left of a timed power-up.
+     *
+     * @return 0 when [kind] is not active
+     */
+    fun remaining(kind: PowerUpKind): Float = powerUpTimers[kind] ?: 0f
+
+    /** True while a timed power-up [kind] is running. */
+    fun isActive(kind: PowerUpKind): Boolean = remaining(kind) > 0f
+
+    /** Points multiplier of the "×2" power-up. */
+    private val pointsFactor: Int get() = if (isActive(PowerUpKind.DOUBLE)) 2 else 1
 
     /** Returns and forgets the events since the last call. */
     fun drainEvents(): List<DriveEvent> = pendingEvents.toList().also { pendingEvents.clear() }
@@ -268,7 +335,10 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     fun update(dt: Float, steer: Float, brake: Boolean) {
         when (phase) {
             DrivePhase.COUNTDOWN -> updateCountdown(dt)
-            DrivePhase.DRIVING -> drive(dt, steer, brake)
+            DrivePhase.DRIVING -> {
+                tickPowerUps(dt)
+                drive(if (isActive(PowerUpKind.SLOW_MOTION)) dt * SLOW_MOTION_FACTOR else dt, steer, brake)
+            }
             DrivePhase.FAULT -> {
                 faultTime += dt
                 if (faultTime >= FAULT_PAUSE_SECONDS) resume()
@@ -288,6 +358,7 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         resolved = resolvedCount,
         situations = situations.size,
         faults = faultMessages.toList(),
+        faultKinds = faultKinds.toList(),
         starsCollected = stars.count { it.collected },
         starsTotal = stars.size,
         durationSeconds = drivingTime.toInt().coerceAtLeast(1),
@@ -318,12 +389,17 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
             // A pending situation is always updated: the car ahead travels with the player.
             if (distance > ACTIVE_AHEAD) continue
             if (situation.status != SituationStatus.UPCOMING && car.rear - situation.layoutEnd > ACTIVE_BEHIND) continue
-            if (showHints && !situation.hinted && distance < HINT_DISTANCE) {
+            // The siren is announced on every run instead: the ambulance comes from behind.
+            if (showHints && !situation.hinted && distance < HINT_DISTANCE && situation !is AmbulanceSituation) {
                 situation.hinted = true
                 pendingEvents += DriveEvent.Hint(situation.kind)
             }
             val checkRules = situation.status == SituationStatus.UPCOMING
             val fault = situation.update(dt, car, checkRules)
+            if (situation is AmbulanceSituation && situation.ambulance != null && !situation.hinted) {
+                situation.hinted = true
+                pendingEvents += DriveEvent.Siren
+            }
             if (checkRules && fault != null) {
                 fault(situation, fault)
                 return
@@ -331,7 +407,9 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
             if (checkRules && situation.isCleared(car)) resolve(situation)
         }
 
-        collectStars()
+        if (checkCrashes()) return
+        collectStars(dt)
+        collectPowerUps()
         if (!recordAnnounced && bestScore > 0 && score > bestScore) {
             recordAnnounced = true
             pendingEvents += DriveEvent.NewRecord
@@ -342,6 +420,9 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     /** Steers towards the dragged position and accelerates towards cruise speed or brakes. */
     private fun moveCar(dt: Float, steer: Float, brake: Boolean) {
         car.cruise = CRUISE_START + (CRUISE_END - CRUISE_START) * progress
+        // Inside a zone 30 the car holds the limit by itself: the test is slowing down before it.
+        val inZone30 = situations.any { it is Zone30Situation && car.y > it.y && car.rear < it.layoutEnd }
+        if (inZone30) car.cruise = min(car.cruise, ZONE_30_SPEED * 0.97f)
         val minX = CAR_WIDTH / 2 + 0.04f
         val maxX = LANES - CAR_WIDTH / 2 - 0.04f
         car.targetX = (car.targetX + steer).coerceIn(minX, maxX)
@@ -361,7 +442,7 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         resolvedCount++
         combo++
         val bonus = situation.bonus()
-        val points = (SITUATION_POINTS + if (bonus != null) BONUS_POINTS else 0) * multiplier
+        val points = (SITUATION_POINTS + if (bonus != null) BONUS_POINTS else 0) * multiplier * pointsFactor
         score += points
         pendingEvents += DriveEvent.Resolved(situation.kind, points, multiplier, praise(), bonus)
     }
@@ -370,15 +451,65 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
     private fun fault(situation: Situation, message: String) {
         situation.status = SituationStatus.FAILED
         situation.clearAfterFault(car)
+        freeze(situation.kind, message)
+    }
+
+    /** Stops the car, spends the shield or the streak, records the rule and freezes the run. */
+    private fun freeze(kind: SituationKind, message: String) {
         car.speed = 0f
         car.braking = false
-        combo = 0
+        lastFaultShielded = shield
+        if (shield) {
+            shield = false
+            pendingEvents += DriveEvent.ShieldSaved
+        } else {
+            combo = 0
+        }
         faultMessages += message
+        faultKinds += kind
         phase = DrivePhase.FAULT
         faultTime = 0f
-        val event = DriveEvent.Faulted(situation.kind, message)
+        val event = DriveEvent.Faulted(kind, message)
         lastFault = event
         pendingEvents += event
+    }
+
+    /**
+     * Keeps every actor solid after its situation is settled: a car already overtaken, a scooter
+     * left behind, a crossing car... Hitting one is a crash fault, and the car is moved out of it
+     * so it can never drive through.
+     *
+     * @return true when a crash froze the run this frame
+     */
+    private fun checkCrashes(): Boolean {
+        val box = car.box()
+        for (situation in situations) {
+            if (situation.status == SituationStatus.UPCOMING) continue
+            if (situation.layoutStart - car.y > ACTIVE_AHEAD || car.rear - situation.layoutEnd > ACTIVE_BEHIND + 6f) continue
+            if (situation.crashed) continue
+            val hit = situation.obstacles().firstOrNull { it.overlaps(box) } ?: continue
+            situation.crashed = true
+            separate(hit)
+            freeze(situation.kind, RULE_CRASH)
+            return true
+        }
+        return false
+    }
+
+    /** Moves the car just out of [obstacle]: behind it when it is ahead, beside it otherwise. */
+    private fun separate(obstacle: Box) {
+        val obstacleCenterY = (obstacle.bottom + obstacle.top) / 2
+        val carCenterY = car.y - CAR_LENGTH / 2
+        if (obstacleCenterY >= carCenterY && car.y - obstacle.bottom < 0.5f) {
+            car.y = obstacle.bottom - 0.05f
+        } else {
+            val pushRight = car.x >= (obstacle.left + obstacle.right) / 2
+            val minX = CAR_WIDTH / 2 + 0.04f
+            val maxX = LANES - CAR_WIDTH / 2 - 0.04f
+            car.x = (if (pushRight) obstacle.right + CAR_WIDTH / 2 + 0.05f else obstacle.left - CAR_WIDTH / 2 - 0.05f).coerceIn(minX, maxX)
+            car.targetX = car.x
+            if (car.box().overlaps(obstacle)) car.y = obstacle.bottom - 0.05f
+        }
     }
 
     /** Leaves the fault freeze and drives on from a standstill. */
@@ -387,17 +518,48 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         faultTime = 0f
     }
 
-    /** Picks up the stars under the car and breaks the streak on any star left behind. */
-    private fun collectStars() {
+    /** Counts down the timed power-ups in real time (slow motion does not stretch itself). */
+    private fun tickPowerUps(dt: Float) {
+        powerUpTimers.keys.toList().forEach { kind ->
+            val left = (powerUpTimers[kind] ?: 0f) - dt
+            if (left <= 0f) powerUpTimers.remove(kind) else powerUpTimers[kind] = left
+        }
+    }
+
+    /** Picks up the power-up bubbles under the car. */
+    private fun collectPowerUps() {
         val box = car.box()
+        for (powerUp in powerUps) {
+            if (powerUp.collected || powerUp.y > car.y + 0.5f || powerUp.y < car.rear - 0.5f) continue
+            if (box.overlaps(Box(powerUp.x - 0.22f, powerUp.y - 0.22f, powerUp.x + 0.22f, powerUp.y + 0.22f))) {
+                powerUp.collected = true
+                if (powerUp.kind == PowerUpKind.SHIELD) shield = true else powerUpTimers[powerUp.kind] = powerUp.kind.seconds
+                pendingEvents += DriveEvent.PowerUpCollected(powerUp.kind, powerUp.x, powerUp.y)
+            }
+        }
+    }
+
+    /**
+     * Picks up the stars under the car and breaks the streak on any star left behind. With the
+     * magnet on, the stars ahead fly towards the car first.
+     */
+    private fun collectStars(dt: Float) {
+        val box = car.box()
+        val magnet = isActive(PowerUpKind.MAGNET)
+        val reachAhead = if (magnet) MAGNET_RANGE else 0.3f
         for (star in stars) {
             if (star.collected || star.missed) continue
-            if (star.y > car.y + 0.3f) break
+            if (star.y > car.y + reachAhead) break
+            if (magnet && star.y > car.rear - 0.2f) {
+                val pull = min(1f, dt * 7f)
+                star.x += (car.x - star.x) * pull
+                star.y += (car.y - CAR_LENGTH / 2 - star.y) * pull
+            }
             val reach = Box(star.x - 0.17f, star.y - 0.17f, star.x + 0.17f, star.y + 0.17f)
             if (box.overlaps(reach)) {
                 star.collected = true
                 pickupStreak++
-                val points = STAR_POINTS * multiplier
+                val points = STAR_POINTS * multiplier * pointsFactor
                 score += points
                 pendingEvents += DriveEvent.Pickup(points, pickupStreak, star.x, star.y)
             } else if (star.y < car.rear - 0.2f) {
@@ -412,6 +574,7 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         // Only a car ahead can still be pending here (it was still driving off): the player kept
         // their distance all the way to the line, so it counts as handled.
         situations.filter { it.status == SituationStatus.UPCOMING }.forEach(::resolve)
+        powerUpTimers.clear()
         val perfect = faultMessages.isEmpty()
         if (perfect) score += PERFECT_RUN_POINTS
         phase = DrivePhase.FINISHED
@@ -445,10 +608,11 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
      * crosswalk: brake), then a shuffle of the rest with no kind twice in a row.
      */
     private fun buildRoute(): List<Situation> {
+        // One of each after the opening: about a minute of driving.
         val pool = listOf(
             SituationKind.STOP, SituationKind.TRAFFIC_LIGHT, SituationKind.LEAD_CAR,
             SituationKind.BALL, SituationKind.ROADWORKS, SituationKind.CROSSWALK,
-            SituationKind.TRAFFIC_LIGHT, SituationKind.LEAD_CAR, SituationKind.STOP,
+            SituationKind.SCOOTER, SituationKind.AMBULANCE, SituationKind.ZONE_30,
         )
         val opening = listOf(SituationKind.ROADWORKS, SituationKind.CROSSWALK)
         var kinds = opening + pool.shuffled(random)
@@ -456,9 +620,16 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         while (kinds.zipWithNext().any { (a, b) -> a == b } && attempts++ < 100) {
             kinds = opening + pool.shuffled(random)
         }
-        var y = 10f
+        var free = 10f
         var lightCount = 0
         return kinds.map { kind ->
+            // Situations whose actor appears ahead of their y (the slow car, the scooter) need that
+            // stretch free too, or it would show up while the previous one is still on screen.
+            val y = free + when (kind) {
+                SituationKind.LEAD_CAR -> 6.6f
+                SituationKind.SCOOTER -> 8.8f
+                else -> 0f
+            }
             val situation = when (kind) {
                 SituationKind.ROADWORKS -> RoadworksSituation(y, wide = y > 20f && random.nextBoolean())
                 SituationKind.CROSSWALK -> CrosswalkSituation(y, fromLeft = random.nextBoolean(), style = random.nextInt(4))
@@ -470,10 +641,28 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
                 )
                 SituationKind.LEAD_CAR -> LeadCarSituation(y, color = random.nextInt(NPC_COLORS))
                 SituationKind.BALL -> BallSituation(y, style = random.nextInt(4))
+                SituationKind.SCOOTER -> ScooterSituation(y, bike = random.nextBoolean(), style = random.nextInt(4))
+                SituationKind.AMBULANCE -> AmbulanceSituation(y)
+                SituationKind.ZONE_30 -> Zone30Situation(y)
             }
-            y = situation.layoutEnd + 6.5f + random.nextFloat() * 1.5f
+            free = situation.layoutEnd + 6.2f + random.nextFloat() * 1.4f
             situation
         }
+    }
+
+    /**
+     * Places power-up bubbles: one on the first stretch, so every run starts with a treat, then
+     * one after every third situation, cycling through the kinds in a shuffled order.
+     */
+    private fun buildPowerUps(): List<PowerUp> {
+        val kinds = PowerUpKind.entries.shuffled(random)
+        val result = mutableListOf(PowerUp(laneCenter(1), 5f, kinds[0]))
+        situations.forEachIndexed { index, situation ->
+            if (index % 3 == 1) {
+                result += PowerUp(laneCenter(random.nextInt(LANES)), situation.layoutEnd + 2.4f, kinds[result.size % kinds.size])
+            }
+        }
+        return result
     }
 
     /** Places star patterns in the free stretches between situations. */
@@ -481,10 +670,12 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
         val result = mutableListOf<Star>()
         var from = 2.5f
         for (situation in situations + null) {
-            val to = (situation?.layoutStart ?: finishY) - 2.2f
+            val to = (situation?.layoutStart ?: finishY) - 1.4f
             var y = from
-            while (to - y > 3.2f) {
-                val pattern = random.nextInt(3)
+            while (to - y > 2.3f) {
+                // The longest pattern that fits what is left of the gap.
+                val room = to - y
+                val pattern = random.nextInt(if (room > 4.2f) 3 else if (room > 3.1f) 2 else 1)
                 val lane = random.nextInt(LANES)
                 when (pattern) {
                     0 -> repeat(4) { result += Star(laneCenter(lane), y + it * 0.75f) }
@@ -498,7 +689,7 @@ class DriveEngine(seed: Long, private val bestScore: Int = 0, private val showHi
                 }
                 y += 5.5f
             }
-            from = (situation?.layoutEnd ?: finishY) + 1.6f
+            from = (situation?.layoutEnd ?: finishY) + 1f
         }
         return result.sortedBy { it.y }
     }
@@ -535,6 +726,9 @@ sealed class Situation(val kind: SituationKind, val y: Float) {
     var status = SituationStatus.UPCOMING
     var hinted = false
 
+    /** Set after the car crashed into one of its actors, which then stop being solid. */
+    var crashed = false
+
     /** Where the situation's road markings start, for laying out the route. */
     open val layoutStart: Float get() = y
 
@@ -562,6 +756,9 @@ sealed class Situation(val kind: SituationKind, val y: Float) {
 
     /** Makes the scene safe to drive on after a fault (moves actors out of the way, etc.). */
     abstract fun clearAfterFault(car: PlayerCar)
+
+    /** Solid things the car must not drive through once the situation is settled. */
+    open fun obstacles(): List<Box> = emptyList()
 }
 
 /** Roadworks closing the player's lane (or two lanes when [wide]): steer into a free one. */
@@ -594,6 +791,8 @@ class RoadworksSituation(y: Float, val wide: Boolean) : Situation(SituationKind.
     }
 
     override fun bonus(): String? = if (early == true) "¡Con antelación!" else null
+
+    override fun obstacles(): List<Box> = barriers()
 
     override fun clearAfterFault(car: PlayerCar) {
         car.y = y - 0.35f
@@ -642,6 +841,8 @@ class CrosswalkSituation(y: Float, val fromLeft: Boolean, style: Int) : Situatio
 
     override fun bonus(): String? = if (stoppedAtLine) "¡Parada perfecta!" else null
 
+    override fun obstacles(): List<Box> = if (walkerOnRoad) listOf(walker.box()) else emptyList()
+
     override fun clearAfterFault(car: PlayerCar) {
         walker.x = endX
         walker.vx = 0f
@@ -678,6 +879,8 @@ class StopSituation(y: Float, private val crossColor: Int) : Situation(Situation
     }
 
     override fun bonus(): String? = if (stoppedNearLine) "¡Parada en la línea!" else null
+
+    override fun obstacles(): List<Box> = listOfNotNull(crossCar?.box())
 
     override fun clearAfterFault(car: PlayerCar) {
         stopped = true
@@ -740,6 +943,8 @@ class TrafficLightSituation(y: Float, startsRed: Boolean, private val crossColor
 
     override fun bonus(): String? = if (sawRed && stoppedNearLine) "¡Parada en la línea!" else null
 
+    override fun obstacles(): List<Box> = listOfNotNull(crossCar?.box())
+
     override fun clearAfterFault(car: PlayerCar) {
         light = LightColor.GREEN
         crossCar?.x = -8f
@@ -798,6 +1003,8 @@ class LeadCarSituation(y: Float, private val color: Int) : Situation(SituationKi
     override fun isCleared(car: PlayerCar): Boolean = done || overtook
 
     override fun bonus(): String? = if (!overtook && minGap >= 0.7f) "¡Buena distancia!" else null
+
+    override fun obstacles(): List<Box> = listOfNotNull(lead?.box())
 
     override fun clearAfterFault(car: PlayerCar) {
         val lead = lead ?: return
@@ -867,6 +1074,8 @@ class BallSituation(y: Float, style: Int) : Situation(SituationKind.BALL, y) {
 
     override fun bonus(): String? = if (minSpeed < STOPPED_SPEED) "¡Gran anticipación!" else null
 
+    override fun obstacles(): List<Box> = if (child.visible && child.x > -0.05f) listOf(child.box()) else emptyList()
+
     override fun clearAfterFault(car: PlayerCar) {
         child.x = -0.4f
         child.vx = 0f
@@ -876,6 +1085,148 @@ class BallSituation(y: Float, style: Int) : Situation(SituationKind.BALL, y) {
     }
 }
 
+/**
+ * A scooter (or bike) riding slowly in the player's lane: overtake it by changing lane, leaving
+ * at least 1.5 m (about 0.4 lanes) of space, or wait behind until it turns off.
+ */
+class ScooterSituation(y: Float, val bike: Boolean, val style: Int) : Situation(SituationKind.SCOOTER, y) {
+    var riderX = 0f
+        private set
+    var riderY = y
+        private set
+    var visible = false
+        private set
+    var wobble = 0f
+        private set
+    private var spawned = false
+    private var timer = 0f
+    private var riderSpeed = 1.5f
+    private var gone = false
+    private var overtaken = false
+    private var early: Boolean? = null
+
+    override val layoutStart: Float get() = y - 8.8f
+    override val layoutEnd: Float get() = y + 8f
+    override val parkingClearStart: Float get() = Float.MAX_VALUE
+    override val parkingClearEnd: Float get() = -Float.MAX_VALUE
+
+    /** The rider and the 1.5 m around them that a passing car must keep clear. */
+    fun safetyBox(): Box = Box(riderX - 0.11f - 0.4f, riderY - 0.25f - 0.35f, riderX + 0.11f + 0.4f, riderY + 0.3f)
+
+    override fun update(dt: Float, car: PlayerCar, checkRules: Boolean): String? {
+        if (!spawned) {
+            if (car.y < y - 8.8f) return null
+            spawned = true
+            visible = true
+            riderX = laneCenter(laneOf(car.targetX)) + 0.15f
+            riderY = car.y + 8.8f
+        }
+        if (gone) return null
+        timer += dt
+        wobble += dt * 5f
+        riderY += riderSpeed * dt
+        // Never cuts across the lanes: it leaves over the top edge if not overtaken, or off the
+        // bottom edge once left behind, so it never rides into the next situation.
+        if ((riderY - car.y > 9.3f && timer > 2f) || riderY < car.y - 2.4f) {
+            gone = true
+            visible = false
+        }
+        if (!checkRules) return null
+        if (early == null && riderY - car.y < 2.5f) {
+            val box = safetyBox()
+            early = box.left >= car.x + CAR_WIDTH / 2 || box.right <= car.x - CAR_WIDTH / 2
+        }
+        if (car.rear > riderY + 0.3f) overtaken = true
+        return if (safetyBox().overlaps(car.box())) RULE_SCOOTER else null
+    }
+
+    override fun isCleared(car: PlayerCar): Boolean = gone || overtaken
+
+    override fun bonus(): String? = if (overtaken && early == true) "¡Adelantamiento de libro!" else null
+
+    override fun obstacles(): List<Box> =
+        if (visible) listOf(Box(riderX - 0.11f, riderY - 0.25f, riderX + 0.11f, riderY + 0.25f)) else emptyList()
+
+    override fun clearAfterFault(car: PlayerCar) {
+        overtaken = true
+        // The car stopped dead; the rider speeds off ahead, faster than the car, out of sight.
+        riderY = max(riderY, car.y + 1.2f)
+        riderSpeed = 5f
+    }
+}
+
+/** An ambulance with its siren on, closing in from behind in the player's lane: move out of it. */
+class AmbulanceSituation(y: Float) : Situation(SituationKind.AMBULANCE, y) {
+    var ambulance: Vehicle? = null
+        private set
+    private var lane = 1
+    private var spawned = false
+    private var timer = 0f
+    private var movedAt = -1f
+    private var passed = false
+
+    override val layoutEnd: Float get() = y + 10f
+    override val parkingClearStart: Float get() = Float.MAX_VALUE
+    override val parkingClearEnd: Float get() = -Float.MAX_VALUE
+
+    /** True once the ambulance is ahead of the car. */
+    val hasPassed: Boolean get() = passed
+
+    /** Lane the ambulance drives along. */
+    val ambulanceLane: Int get() = lane
+
+    override fun update(dt: Float, car: PlayerCar, checkRules: Boolean): String? {
+        if (!spawned) {
+            if (car.y < y) return null
+            spawned = true
+            lane = laneOf(car.targetX)
+            ambulance = Vehicle(laneCenter(lane), car.y - 6.2f, max(car.speed, 2f) + 3.2f, color = -1)
+        }
+        val ambulance = ambulance ?: return null
+        timer += dt
+        ambulance.speed = max(ambulance.speed, car.speed + 2.5f)
+        ambulance.y += ambulance.speed * dt
+        // Gone over the top edge, before it can reach whatever comes next.
+        if (ambulance.y - car.y > 9.5f) this.ambulance = null
+        if (!checkRules) return null
+        val inLane = car.x + CAR_WIDTH / 2 > lane + 0.05f && car.x - CAR_WIDTH / 2 < lane + 0.95f
+        if (!inLane && movedAt < 0f) movedAt = timer
+        if (ambulance.y - CAR_LENGTH / 2 > car.y + 0.4f) passed = true
+        // Long box: the ambulance also must not be held up right behind the car.
+        val reach = Box(ambulance.x - CAR_WIDTH / 2, ambulance.y - 0.6f, ambulance.x + CAR_WIDTH / 2, ambulance.y + 0.6f + 0.5f)
+        return if (!passed && reach.overlaps(car.box())) RULE_AMBULANCE else null
+    }
+
+    override fun isCleared(car: PlayerCar): Boolean = passed
+
+    override fun bonus(): String? = if (movedAt in 0f..1.4f) "¡Paso abierto!" else null
+
+    override fun obstacles(): List<Box> = listOfNotNull(ambulance?.box())
+
+    override fun clearAfterFault(car: PlayerCar) {
+        ambulance?.let { it.y = car.y + 2f }
+        passed = true
+    }
+}
+
+/** A zone 30: be at 30 km/h or less when entering; inside, the car keeps to the limit. */
+class Zone30Situation(y: Float) : Situation(SituationKind.ZONE_30, y) {
+    val length = 5f
+    private var entrySpeed = -1f
+
+    override val layoutEnd: Float get() = y + length
+
+    override fun update(dt: Float, car: PlayerCar, checkRules: Boolean): String? {
+        if (!checkRules || entrySpeed >= 0f || car.y < y) return null
+        entrySpeed = car.speed
+        return if (car.speed > ZONE_30_SPEED * 1.08f) RULE_ZONE_30 else null
+    }
+
+    override fun bonus(): String? = if (entrySpeed in ZONE_30_SPEED * 0.75f..ZONE_30_SPEED * 1.08f) "¡Velocidad perfecta!" else null
+
+    override fun clearAfterFault(car: PlayerCar) = Unit
+}
+
 const val RULE_ROADWORKS = "Si las obras cortan tu carril, cámbiate a uno libre con antelación."
 const val RULE_CROSSWALK = "En un paso de peatones, cede el paso a quien cruza o va a cruzar."
 const val RULE_STOP = "En un STOP hay que detenerse por completo antes de la línea, aunque no venga nadie."
@@ -883,3 +1234,7 @@ const val RULE_STOP_YIELD = "Tras parar en el STOP, cede el paso a los vehículo
 const val RULE_RED_LIGHT = "Con el semáforo en rojo, detente antes de la línea de detención."
 const val RULE_LEAD_CAR = "Guarda la distancia de seguridad: si el de delante frena, tienes que poder parar."
 const val RULE_BALL = "Si un balón sale a la calzada, frena: detrás puede venir un niño."
+const val RULE_CRASH = "¡Choque! Antes de cambiar de carril o acercarte, comprueba que hay espacio."
+const val RULE_SCOOTER = "Para adelantar a un patinete o una bici, deja al menos 1,5 m: cámbiate de carril."
+const val RULE_AMBULANCE = "Si oyes la sirena de una ambulancia, apártate de su carril para dejarle paso."
+const val RULE_ZONE_30 = "En una zona 30 hay que entrar ya a 30 km/h o menos: frena antes de la señal."

@@ -46,4 +46,10 @@ interface SoundEffects {
      *   pass a rising value so a streak climbs in pitch
      */
     fun playPickup(pitch: Float = 1f)
+
+    /** Plays the rising sweep of a power-up collected in a mini-game. */
+    fun playPowerUp()
+
+    /** Plays a soft two-tone siren: an emergency vehicle is coming. */
+    fun playSiren()
 }

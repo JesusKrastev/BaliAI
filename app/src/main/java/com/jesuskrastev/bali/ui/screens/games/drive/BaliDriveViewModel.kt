@@ -149,6 +149,12 @@ class BaliDriveViewModel @Inject constructor(
      */
     fun playPickup(streak: Int) = soundEffects.playPickup(1f + (streak - 1).coerceIn(0, 12) * 0.06f)
 
+    /** Rising sweep of a collected power-up. */
+    fun playPowerUp() = soundEffects.playPowerUp()
+
+    /** Two-tone siren of the ambulance coming from behind. */
+    fun playSiren() = soundEffects.playSiren()
+
     /**
      * Beep of the countdown: low for 3, 2, 1 and high for "go".
      *

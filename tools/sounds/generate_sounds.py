@@ -16,6 +16,10 @@ released as CC0 1.0 (public domain) together with this script.
     sfx_pickup.ogg           a tiny two-note "pling" (E6 -> B6): a star collected in Bali Drive.
                              The app replays it at a rising playback rate for consecutive stars,
                              so a streak climbs in pitch
+    sfx_powerup.ogg          a quick rising sweep under a sparkling arpeggio: a power-up bubble
+                             collected in Bali Drive
+    sfx_siren.ogg            a soft two-tone "nee-naw" (B5 / F#5) twice: the ambulance coming from
+                             behind in Bali Drive, gentle enough not to startle
 
 Usage (needs numpy and ffmpeg on the PATH):
 
@@ -184,6 +188,30 @@ def pickup():
     )
 
 
+def powerup():
+    """Power-up: a sine sweep gliding up an octave (A4 -> A5) under a fast C major arpeggio
+    (C6 E6 G6 C7), so it sounds bigger than a star and clearly "something changed"."""
+    length = 0.45
+    t = np.arange(int(length * SAMPLE_RATE)) / SAMPLE_RATE
+    freq = 440.0 * 2 ** (t / length)
+    sweep = np.sin(2 * np.pi * np.cumsum(freq) / SAMPLE_RATE)
+    sweep *= np.minimum(1.0, t / 0.01) * np.minimum(1.0, (length - t) / 0.05) * 0.45
+    arpeggio = [(0.05 + 0.06 * i, 0.7 * bell(f, 0.30, decay=0.09)) for i, f in enumerate([1046.50, 1318.51, 1567.98, 2093.00])]
+    return mix([(0.0, sweep)] + arpeggio, total_length=0.62)
+
+
+def siren():
+    """Ambulance: two rounds of B5 / F#5, 0.24 s each, soft triangle-like tone with a slight
+    vibrato, fading in and out so it never startles."""
+    round_ = [(1, 1.0), (3, 0.12), (5, 0.04)]
+    notes = []
+    for i, f in enumerate([987.77, 739.99, 987.77, 739.99]):
+        notes.append((0.24 * i, note(f, 0.24, round_, decay=0.6, attack=0.02)))
+    out = mix(notes, total_length=0.98)
+    t = np.arange(len(out)) / SAMPLE_RATE
+    return out * np.minimum(1.0, t / 0.15) * np.minimum(1.0, (t[-1] - t) / 0.2)
+
+
 def write_ogg(samples, name, peak=PEAK):
     """Normalises [samples] to [peak] and encodes it as mono OGG Vorbis at OUT_DIR/<name>.ogg."""
     samples = samples / np.max(np.abs(samples)) * peak
@@ -216,3 +244,5 @@ if __name__ == "__main__":
     write_ogg(soft_finish(), "sfx_soft_finish", peak=0.40)
     # Quieter too: it can fire several times a second during a star streak.
     write_ogg(pickup(), "sfx_pickup", peak=0.38)
+    write_ogg(powerup(), "sfx_powerup", peak=0.5)
+    write_ogg(siren(), "sfx_siren", peak=0.32)
