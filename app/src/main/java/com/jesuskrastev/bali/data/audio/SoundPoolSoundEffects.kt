@@ -42,7 +42,7 @@ class SoundPoolSoundEffects @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val soundPool: SoundPool = SoundPool.Builder()
-        .setMaxStreams(2)
+        .setMaxStreams(4)
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_GAME)
@@ -56,6 +56,9 @@ class SoundPoolSoundEffects @Inject constructor(
     private val lessonCompleteSoundId = load(R.raw.sfx_lesson_complete)
     private val softFinishSoundId = load(R.raw.sfx_soft_finish)
     private val chestOpenSoundId = load(R.raw.sfx_chest_open)
+    private val pickupSoundId = load(R.raw.sfx_pickup)
+    private val powerUpSoundId = load(R.raw.sfx_powerup)
+    private val sirenSoundId = load(R.raw.sfx_siren)
 
     override val isEnabled: Flow<Boolean> = context.soundDataStore.data
         .map { preferences -> preferences[KEY_ENABLED] ?: true }
@@ -80,6 +83,12 @@ class SoundPoolSoundEffects @Inject constructor(
 
     override fun playChestOpen() = play(chestOpenSoundId)
 
+    override fun playPickup(pitch: Float) = play(pickupSoundId, rate = pitch.coerceIn(0.5f, 2f))
+
+    override fun playPowerUp() = play(powerUpSoundId)
+
+    override fun playSiren() = play(sirenSoundId)
+
     /**
      * Starts loading a raw sound resource into the pool. Loading is asynchronous: a sound asked
      * for before it finished loading is skipped instead of delaying the caller.
@@ -94,12 +103,13 @@ class SoundPoolSoundEffects @Inject constructor(
      * reported to Crashlytics and swallowed, so the test the sound belongs to carries on.
      *
      * @param soundId id returned by [load]
+     * @param rate playback rate (0.5–2), which also shifts the pitch; 1 plays it as recorded
      */
-    private fun play(soundId: Int) {
+    private fun play(soundId: Int, rate: Float = 1f) {
         scope.launch {
             try {
                 if (isEnabled.first()) {
-                    soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+                    soundPool.play(soundId, 1f, 1f, 1, 0, rate)
                 }
             } catch (e: Exception) {
                 FirebaseCrashlytics.getInstance().recordException(e)
