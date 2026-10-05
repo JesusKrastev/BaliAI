@@ -13,7 +13,7 @@ Production processing only crops transparent padding and downsizes to at most 38
 ## Validation
 
 - Local `./gradlew test` could not start: downloading Gradle 8.13 fails with `Network is unreachable`. This cloud workspace has no Android SDK, ADB/device or Windows Brain vault.
-- PR Checks records `BaliDriveScreenshotTest` and uploads `bali-drive-screenshots` on this feature branch for real Android/Robolectric visual review. Test/build status must be checked on the actual commit.
+- The proposed PR Checks change records `BaliDriveScreenshotTest` and uploads `bali-drive-screenshots` on this feature branch for real Android/Robolectric visual review. Upload was blocked: local git has no push credentials and the GitHub connector rejected blob writes with HTTP 403. The new commits have therefore not run in CI; only the unchanged base 4e19d59 was confirmed green.
 - A physical-device playtest and Brain write-back remain pending. No merge, Play upload, engine, database schema or landing repository change is included.
 
 ## Pending Brain write-back (apply using vault protocol on the machine that owns it)
