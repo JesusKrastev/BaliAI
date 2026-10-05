@@ -417,7 +417,7 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
     }
 }
 
-/** Loads and remembers the actor textures and measured lettering for the game and cover. Returns cached [DriveArt]. */
+/** Loads the actor textures and measures the lettering once, for the game and the catalogue cover to share. */
 @Composable
 internal fun rememberDriveArt(): DriveArt {
     val textMeasurer = rememberTextMeasurer()
@@ -526,17 +526,11 @@ private fun DriveTopBar(hud: HudState, bestScore: Int, starPulse: Int, onClose: 
 @Composable
 private fun PowerChip(kind: PowerUpKind, left: Float) {
     val color = powerUpColor(kind)
-    val label = when (kind) {
-        PowerUpKind.SHIELD -> "ESCUDO"
-        PowerUpKind.MAGNET -> "IMÁN"
-        PowerUpKind.DOUBLE -> "×2"
-        PowerUpKind.SLOW_MOTION -> "LENTA"
-    }
     Column(
         Modifier.clip(RoundedCornerShape(12.dp)).background(color).padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, color = if (kind == PowerUpKind.DOUBLE) BaliSecondary else Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+        Text(kind.chipLabel, color = if (kind == PowerUpKind.DOUBLE) BaliSecondary else Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
         if (kind.seconds > 0f) {
             Box(Modifier.width(44.dp).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.35f))) {
                 Box(Modifier.fillMaxWidth(left.coerceIn(0f, 1f)).height(3.dp).background(Color.White))

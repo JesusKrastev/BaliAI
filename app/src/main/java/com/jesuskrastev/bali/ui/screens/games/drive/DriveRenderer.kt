@@ -154,7 +154,7 @@ class DriveSprites(
 /**
  * Stamps [image] at the current world origin within [width] by [height] lanes.
  * [tint] optionally multiplies a neutral texture; bilinear filtering keeps distant sprites smooth.
- * Returns Unit and allocates no decoded images during a frame.
+ * Nothing is decoded here: [image] is already loaded.
  */
 private fun DrawScope.drawActorImage(image: ImageBitmap, width: Float, height: Float, tint: Color? = null) {
     // DrawScope image destinations are integers; convert back to lane units after sizing.
@@ -656,7 +656,7 @@ private inline fun DrawScope.atWorld(p: DriveProjection, x: Float, y: Float, rot
 /**
  * Draws a textured car centred at world ([x], [y]), nose forward, using cached [art].
  * [body] tints traffic cars; [braking] lights the rear lamps; [yaw] rotates steering/cross traffic.
- * [player] selects the orange car and overlays the existing Bali mascot. Returns Unit.
+ * [player] selects the orange car and overlays the existing Bali mascot.
  */
 private fun DrawScope.drawCarAt(
     p: DriveProjection, art: DriveArt, x: Float, y: Float, body: Color, braking: Boolean,
@@ -760,7 +760,7 @@ private fun DrawScope.drawPowerAura(engine: DriveEngine, p: DriveProjection, tim
 
 /**
  * Draws [situation]'s scooter or bicycle sprite with its existing wobble and world position.
- * [art] supplies cached images; the safety marking remains a separate road layer. Returns Unit.
+ * [art] supplies the images; the safety margin is a separate road layer.
  */
 private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation, art: DriveArt) {
     val tilt = sin(situation.wobble) * 4f
@@ -772,7 +772,7 @@ private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation,
 
 /**
  * Draws a dedicated ambulance sprite at ([x], [y]) using [art], with lights flashing at [time].
- * [p] projects the same collision footprint as traffic cars. Returns Unit.
+ * [p] projects the same collision footprint as traffic cars.
  */
 private fun DrawScope.drawAmbulance(p: DriveProjection, x: Float, y: Float, art: DriveArt, time: Float) {
     if (y < p.nearY - 1f || y > p.farY + 1f) return
@@ -885,7 +885,7 @@ private fun DrawScope.drawBarrier(p: DriveProjection, left: Float, right: Float,
     }
 }
 
-/** Draws [walker] with cached [art], facing their walking direction in projection [p], plus the crossing alert. Returns Unit. */
+/** Draws [walker] with cached [art], facing their walking direction in projection [p], plus the crossing alert. */
 private fun DrawScope.drawWalker(p: DriveProjection, walker: Walker, art: DriveArt) {
     if (!walker.visible) return
     val k = if (walker.isChild) 0.85f else 1f

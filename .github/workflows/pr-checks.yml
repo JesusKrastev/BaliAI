@@ -65,19 +65,6 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Record Bali Drive screenshots
-        if: github.head_ref == 'feature/bali-drive'
-        run: ./gradlew recordRoborazziDebug --tests "*BaliDriveScreenshotTest" --stacktrace
-
-      - name: Upload Bali Drive screenshots
-        if: always() && github.head_ref == 'feature/bali-drive'
-        uses: actions/upload-artifact@v4
-        with:
-          name: bali-drive-screenshots
-          path: app/build/bali-drive/
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
