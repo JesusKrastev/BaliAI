@@ -413,15 +413,23 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
     }
 }
 
-/** Measures the lettering and loads the mascot bitmap the renderer stamps on the scene. */
+/** Loads and remembers the actor textures and measured lettering for the game and cover. Returns cached [DriveArt]. */
 @Composable
 internal fun rememberDriveArt(): DriveArt {
     val textMeasurer = rememberTextMeasurer()
     val bali = ImageBitmap.imageResource(R.drawable.bali)
-    return remember(textMeasurer, bali) {
+    val player = ImageBitmap.imageResource(R.drawable.drive_player)
+    val traffic = ImageBitmap.imageResource(R.drawable.drive_traffic)
+    val ambulance = ImageBitmap.imageResource(R.drawable.drive_ambulance)
+    val pedestrian = ImageBitmap.imageResource(R.drawable.drive_pedestrian)
+    val child = ImageBitmap.imageResource(R.drawable.drive_child)
+    val scooter = ImageBitmap.imageResource(R.drawable.drive_scooter)
+    val bicycle = ImageBitmap.imageResource(R.drawable.drive_bicycle)
+    return remember(textMeasurer, bali, player, traffic, ambulance, pedestrian, child, scooter, bicycle) {
         val bold = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Black)
         DriveArt(
             bali = bali,
+            sprites = DriveSprites(player, traffic, ambulance, pedestrian, child, scooter, bicycle),
             stop = textMeasurer.measure("STOP", bold),
             finish = textMeasurer.measure("META", bold),
             alert = textMeasurer.measure("!", bold),
