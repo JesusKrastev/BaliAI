@@ -388,7 +388,11 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
-        HintBanner(hint = hint, onDone = { hint = null }, modifier = Modifier.align(Alignment.TopCenter).padding(top = 116.dp))
+        HintBanner(
+            hint = hint,
+            onDone = { hint = null },
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = if (hud.powers.isEmpty()) 116.dp else 150.dp),
+        )
 
         Box(Modifier.align(Alignment.Center).offset(y = 40.dp)) {
             popups.forEach { popup ->
@@ -413,15 +417,23 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
     }
 }
 
-/** Measures the lettering and loads the mascot bitmap the renderer stamps on the scene. */
+/** Loads the actor textures and measures the lettering once, for the game and the catalogue cover to share. */
 @Composable
 internal fun rememberDriveArt(): DriveArt {
     val textMeasurer = rememberTextMeasurer()
     val bali = ImageBitmap.imageResource(R.drawable.bali)
-    return remember(textMeasurer, bali) {
+    val player = ImageBitmap.imageResource(R.drawable.drive_player)
+    val traffic = ImageBitmap.imageResource(R.drawable.drive_traffic)
+    val ambulance = ImageBitmap.imageResource(R.drawable.drive_ambulance)
+    val pedestrian = ImageBitmap.imageResource(R.drawable.drive_pedestrian)
+    val child = ImageBitmap.imageResource(R.drawable.drive_child)
+    val scooter = ImageBitmap.imageResource(R.drawable.drive_scooter)
+    val bicycle = ImageBitmap.imageResource(R.drawable.drive_bicycle)
+    return remember(textMeasurer, bali, player, traffic, ambulance, pedestrian, child, scooter, bicycle) {
         val bold = TextStyle(fontSize = 40.sp, fontWeight = FontWeight.Black)
         DriveArt(
             bali = bali,
+            sprites = DriveSprites(player, traffic, ambulance, pedestrian, child, scooter, bicycle),
             stop = textMeasurer.measure("STOP", bold),
             finish = textMeasurer.measure("META", bold),
             alert = textMeasurer.measure("!", bold),
@@ -515,13 +527,13 @@ private fun DriveTopBar(hud: HudState, bestScore: Int, starPulse: Int, onClose: 
 private fun PowerChip(kind: PowerUpKind, left: Float) {
     val color = powerUpColor(kind)
     Column(
-        Modifier.clip(RoundedCornerShape(12.dp)).background(color).padding(horizontal = 10.dp, vertical = 4.dp),
+        Modifier.clip(RoundedCornerShape(12.dp)).background(color).padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(kind.label, color = if (kind == PowerUpKind.DOUBLE) BaliSecondary else Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+        Text(kind.chipLabel, color = if (kind == PowerUpKind.DOUBLE) BaliSecondary else Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
         if (kind.seconds > 0f) {
-            Box(Modifier.width(56.dp).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.35f))) {
-                Box(Modifier.fillMaxWidth(left).height(3.dp).background(Color.White))
+            Box(Modifier.width(44.dp).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.35f))) {
+                Box(Modifier.fillMaxWidth(left.coerceIn(0f, 1f)).height(3.dp).background(Color.White))
             }
         }
     }

@@ -94,13 +94,15 @@ enum class SituationKind(val icon: String, val hint: String) {
 /**
  * Bubbles on the road that change the run for a while.
  *
+ * @param label name shown in the pop-up when it is collected
+ * @param chipLabel short name for the HUD chip, so several fit side by side
  * @param seconds how long it lasts; 0 for the shield, which waits for the next fault
  */
-enum class PowerUpKind(val label: String, val seconds: Float) {
-    SHIELD("ESCUDO", 0f),
-    MAGNET("IMÁN", 7f),
-    DOUBLE("PUNTOS ×2", 8f),
-    SLOW_MOTION("CÁMARA LENTA", 5f),
+enum class PowerUpKind(val label: String, val chipLabel: String, val seconds: Float) {
+    SHIELD("ESCUDO", "ESCUDO", 0f),
+    MAGNET("IMÁN", "IMÁN", 7f),
+    DOUBLE("PUNTOS ×2", "×2", 8f),
+    SLOW_MOTION("CÁMARA LENTA", "LENTA", 5f),
 }
 
 /** A power-up bubble waiting on the road. */
@@ -269,6 +271,10 @@ class DriveEngine(
     private val showHints: Boolean = false,
     private val route: List<SituationKind>? = null,
 ) {
+    init {
+        require(route == null || route.isNotEmpty()) { "A fixed Bali Drive route needs at least one situation." }
+    }
+
     private val random = Random(seed)
 
     val car = PlayerCar()

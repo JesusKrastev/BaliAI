@@ -3,8 +3,11 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -92,8 +95,6 @@ object DrivePalette {
     val Marking = Color(0xFFF8FAFC)
     val Shadow = Color(0x33000000)
     val Player = Color(0xFFFF6B35)
-    val PlayerDark = Color(0xFFE2541F)
-    val Glass = Color(0xFF1E293B)
     val Star = Color(0xFFFACC15)
     val StarEdge = Color(0xFFF59E0B)
     val Cone = Color(0xFFFF7A1A)
@@ -116,15 +117,13 @@ object DrivePalette {
         Color(0xFFF43F5E), Color(0xFFEAB308), Color(0xFFF1F5F9),
     )
     val roofs = listOf(Color(0xFFFB923C), Color(0xFFF87171), Color(0xFF60A5FA), Color(0xFFA78BFA), Color(0xFF2DD4BF))
-    val shirts = listOf(Color(0xFF6366F1), Color(0xFFEC4899), Color(0xFF10B981), Color(0xFFF97316))
-    val hair = listOf(Color(0xFF3F2A1D), Color(0xFF111827), Color(0xFFB45309), Color(0xFF78350F))
-    val skin = Color(0xFFF2C29B)
 }
 
 /**
  * Pre-measured images and texts the renderer stamps on the scene.
  *
  * @param bali the mascot, drawn peeking out of the player's sunroof
+ * @param sprites preloaded transparent actor sprites shared with the animated catalogue cover
  * @param stop "STOP" lettering for the sign and the road
  * @param finish "META" lettering for the finish arch
  * @param alert "!" over a pedestrian who is about to cross
@@ -133,12 +132,42 @@ object DrivePalette {
  */
 class DriveArt(
     val bali: ImageBitmap?,
+    val sprites: DriveSprites,
     val stop: TextLayoutResult,
     val finish: TextLayoutResult,
     val alert: TextLayoutResult,
     val thirty: TextLayoutResult,
     val double: TextLayoutResult,
 )
+
+/** Transparent actor textures, loaded once per composition rather than during frame rendering. */
+class DriveSprites(
+    val player: ImageBitmap,
+    val traffic: ImageBitmap,
+    val ambulance: ImageBitmap,
+    val pedestrian: ImageBitmap,
+    val child: ImageBitmap,
+    val scooter: ImageBitmap,
+    val bicycle: ImageBitmap,
+)
+
+/**
+ * Stamps [image] at the current world origin within [width] by [height] lanes.
+ * [tint] optionally multiplies a neutral texture; bilinear filtering keeps distant sprites smooth.
+ * Nothing is decoded here: [image] is already loaded.
+ */
+private fun DrawScope.drawActorImage(image: ImageBitmap, width: Float, height: Float, tint: Color? = null) {
+    // DrawScope image destinations are integers; convert back to lane units after sizing.
+    withTransform({ scale(0.001f, 0.001f, Offset.Zero) }) {
+        drawImage(
+            image,
+            dstOffset = IntOffset((-width * 500).toInt(), (-height * 500).toInt()),
+            dstSize = IntSize((width * 1000).toInt(), (height * 1000).toInt()),
+            colorFilter = tint?.let { ColorFilter.tint(it, BlendMode.Modulate) },
+            filterQuality = FilterQuality.Medium,
+        )
+    }
+}
 
 /** A short-lived bit of confetti or sparkle, in world coordinates; [z] is height above the road. */
 class Particle(
@@ -498,7 +527,7 @@ private fun DrawScope.drawSprites(engine: DriveEngine, p: DriveProjection, art: 
     for (parked in engine.parkedCars) {
         if (parked.y < p.nearY - 1f || parked.y > p.farY + 1f) continue
         sprites += Sprite(parked.y) {
-            drawCarAt(p, (LANES + PARKING_EDGE) / 2, parked.y, DrivePalette.npc[parked.color % DrivePalette.npc.size], braking = false)
+            drawCarAt(p, art, (LANES + PARKING_EDGE) / 2, parked.y, DrivePalette.npc[parked.color % DrivePalette.npc.size], braking = false)
         }
     }
     for (star in engine.stars) {
@@ -517,7 +546,7 @@ private fun DrawScope.drawSprites(engine: DriveEngine, p: DriveProjection, art: 
     sprites += Sprite(car.y - CAR_LENGTH / 2) {
         val yaw = ((car.targetX - car.x) * 22f).coerceIn(-18f, 18f)
         drawPowerAura(engine, p, time)
-        drawCarAt(p, car.x, car.y - CAR_LENGTH / 2, DrivePalette.Player, car.braking, yaw = yaw, bali = art.bali)
+        drawCarAt(p, art, car.x, car.y - CAR_LENGTH / 2, DrivePalette.Player, car.braking, yaw = yaw, player = true)
     }
     drawSignBillboards(engine, p, art, time, sprites)
 
@@ -563,21 +592,21 @@ private fun addSituationSprites(situation: Situation, p: DriveProjection, art: D
         }
         is CrosswalkSituation -> sprites += Sprite(situation.walker.y) { drawWalker(p, situation.walker, art) }
         is StopSituation -> situation.crossCar?.let { car ->
-            sprites += Sprite(car.y) { drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], false, yaw = 90f) }
+            sprites += Sprite(car.y) { drawCarAt(p, art, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], false, yaw = 90f) }
         }
         is TrafficLightSituation -> situation.crossCar?.let { car ->
-            sprites += Sprite(car.y) { drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], false, yaw = -90f) }
+            sprites += Sprite(car.y) { drawCarAt(p, art, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], false, yaw = -90f) }
         }
         is LeadCarSituation -> situation.lead?.let { car ->
             sprites += Sprite(car.y) {
-                drawCarAt(p, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], car.braking, yaw = (car.drift * 10f).coerceIn(-16f, 16f))
+                drawCarAt(p, art, car.x, car.y, DrivePalette.npc[car.color % DrivePalette.npc.size], car.braking, yaw = (car.drift * 10f).coerceIn(-16f, 16f))
             }
         }
         is ScooterSituation -> if (situation.visible) {
-            sprites += Sprite(situation.riderY) { drawRider(p, situation, time) }
+            sprites += Sprite(situation.riderY) { drawRider(p, situation, art) }
         }
         is AmbulanceSituation -> situation.ambulance?.let { ambulance ->
-            sprites += Sprite(ambulance.y) { drawAmbulance(p, ambulance.x, ambulance.y, time) }
+            sprites += Sprite(ambulance.y) { drawAmbulance(p, ambulance.x, ambulance.y, art, time) }
         }
         is Zone30Situation -> Unit
         is BallSituation -> {
@@ -625,51 +654,31 @@ private inline fun DrawScope.atWorld(p: DriveProjection, x: Float, y: Float, rot
 }
 
 /**
- * Draws a car seen from above, centred on world ([x], [y]), nose pointing forward.
- *
- * @param braking lights up the brake lights with a glow
- * @param yaw rotation in degrees; ±90 for cars on a cross street, a little for the player's steering
- * @param bali when given, the mascot peeks out of the sunroof (the player's car)
+ * Draws a textured car centred at world ([x], [y]), nose forward, using cached [art].
+ * [body] tints traffic cars; [braking] lights the rear lamps; [yaw] rotates steering/cross traffic.
+ * [player] selects the orange car and overlays the existing Bali mascot.
  */
 private fun DrawScope.drawCarAt(
-    p: DriveProjection, x: Float, y: Float, body: Color, braking: Boolean,
-    yaw: Float = 0f, bali: ImageBitmap? = null,
+    p: DriveProjection, art: DriveArt, x: Float, y: Float, body: Color, braking: Boolean,
+    yaw: Float = 0f, player: Boolean = false,
 ) {
     if (y < p.nearY - 1f || y > p.farY + 1f) return
     val w = CAR_WIDTH
     val l = CAR_LENGTH
     atWorld(p, x, y, yaw) {
-        drawRoundRect(DrivePalette.Shadow, Offset(-w / 2 + 0.05f, -l / 2 + 0.08f), Size(w, l), CornerRadius(0.16f))
-        for (side in listOf(-1f, 1f)) for (axle in listOf(-0.28f, 0.27f)) {
-            drawRoundRect(Color(0xFF1F2937), Offset(side * w / 2 - 0.05f, axle - 0.1f), Size(0.1f, 0.2f), CornerRadius(0.04f))
+        drawRoundRect(DrivePalette.Shadow, Offset(-w / 2 + 0.03f, -l / 2 + 0.05f), Size(w, l), CornerRadius(0.12f))
+        drawActorImage(if (player) art.sprites.player else art.sprites.traffic, w, l, if (player) null else body)
+        if (player) art.bali?.let { mascot ->
+            // Sit in the open roof, leaving the windshield and brake lights unobstructed.
+            withTransform({ translate(0f, 0.08f) }) { drawActorImage(mascot, 0.3f, 0.3f) }
         }
-        drawRoundRect(body, Offset(-w / 2, -l / 2), Size(w, l), CornerRadius(0.16f))
-        drawRoundRect(
-            Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent, Color.Black.copy(alpha = 0.12f)), -w / 2, w / 2),
-            Offset(-w / 2, -l / 2), Size(w, l), CornerRadius(0.16f),
-        )
-        drawRoundRect(DrivePalette.Glass, Offset(-w / 2 + 0.07f, -l / 2 + 0.17f), Size(w - 0.14f, 0.19f), CornerRadius(0.06f))
-        drawRoundRect(Color.White.copy(alpha = 0.25f), Offset(-w / 2 + 0.1f, -l / 2 + 0.19f), Size(0.12f, 0.06f), CornerRadius(0.03f))
-        drawRoundRect(DrivePalette.Glass.copy(alpha = 0.9f), Offset(-w / 2 + 0.09f, l / 2 - 0.25f), Size(w - 0.18f, 0.11f), CornerRadius(0.05f))
-        if (bali != null) {
-            drawRoundRect(DrivePalette.PlayerDark, Offset(-0.19f, -0.13f), Size(0.38f, 0.36f), CornerRadius(0.1f))
-            withTransform({ scale(0.01f, 0.01f, Offset.Zero) }) {
-                drawImage(bali, dstOffset = IntOffset(-19, -15), dstSize = IntSize(38, 38))
-            }
-            drawRoundRect(Color.White.copy(alpha = 0.85f), Offset(-0.035f, -l / 2 + 0.02f), Size(0.07f, 0.14f), CornerRadius(0.03f))
-        } else {
-            drawRoundRect(Color.White.copy(alpha = 0.16f), Offset(-w / 2 + 0.09f, -0.06f), Size(w - 0.18f, 0.26f), CornerRadius(0.07f))
-        }
-        val head = Color(0xFFFFF7D6)
-        drawCircle(head, 0.045f, Offset(-w / 2 + 0.1f, -l / 2 + 0.05f))
-        drawCircle(head, 0.045f, Offset(w / 2 - 0.1f, -l / 2 + 0.05f))
-        val brake = if (braking) DrivePalette.BrakeLight else Color(0xFF991B1B)
         if (braking) {
-            drawCircle(DrivePalette.BrakeLight.copy(alpha = 0.3f), 0.12f, Offset(-w / 2 + 0.1f, l / 2 - 0.02f))
-            drawCircle(DrivePalette.BrakeLight.copy(alpha = 0.3f), 0.12f, Offset(w / 2 - 0.1f, l / 2 - 0.02f))
+            for (side in listOf(-1f, 1f)) {
+                val center = Offset(side * (w / 2 - 0.075f), l / 2 - 0.085f)
+                drawCircle(DrivePalette.BrakeLight.copy(alpha = 0.35f), 0.11f, center)
+                drawRoundRect(DrivePalette.BrakeLight, center - Offset(0.045f, 0.015f), Size(0.09f, 0.03f), CornerRadius(0.01f))
+            }
         }
-        drawRoundRect(brake, Offset(-w / 2 + 0.04f, l / 2 - 0.06f), Size(0.13f, 0.05f), CornerRadius(0.02f))
-        drawRoundRect(brake, Offset(w / 2 - 0.17f, l / 2 - 0.06f), Size(0.13f, 0.05f), CornerRadius(0.02f))
     }
 }
 
@@ -749,45 +758,34 @@ private fun DrawScope.drawPowerAura(engine: DriveEngine, p: DriveProjection, tim
     }
 }
 
-/** Someone on an e-scooter (or a bike) seen from above, with a helmet and a slight wobble. */
-private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation, time: Float) {
+/**
+ * Draws [situation]'s scooter or bicycle sprite with its existing wobble and world position.
+ * [art] supplies the images; the safety margin is a separate road layer.
+ */
+private fun DrawScope.drawRider(p: DriveProjection, situation: ScooterSituation, art: DriveArt) {
     val tilt = sin(situation.wobble) * 4f
-    val shirt = DrivePalette.shirts[situation.style % DrivePalette.shirts.size]
     atWorld(p, situation.riderX, situation.riderY, tilt) {
-        withTransform({ scale(1.5f, 1.5f, Offset.Zero) }) {
-            drawOval(DrivePalette.Shadow, Offset(-0.1f, -0.22f), Size(0.24f, 0.5f))
-            if (situation.bike) {
-                drawOval(Color(0xFF111827), Offset(-0.03f, -0.26f), Size(0.06f, 0.16f))
-                drawOval(Color(0xFF111827), Offset(-0.03f, 0.1f), Size(0.06f, 0.16f))
-                drawLine(Color(0xFF0EA5E9), Offset(0f, -0.15f), Offset(0f, 0.15f), strokeWidth = 0.035f)
-            } else {
-                drawRoundRect(Color(0xFF1F2937), Offset(-0.045f, -0.22f), Size(0.09f, 0.44f), CornerRadius(0.04f))
-            }
-            drawLine(Color(0xFF374151), Offset(-0.12f, -0.17f), Offset(0.12f, -0.17f), strokeWidth = 0.03f)
-            drawCircle(DrivePalette.skin, 0.03f, Offset(-0.11f, -0.15f))
-            drawCircle(DrivePalette.skin, 0.03f, Offset(0.11f, -0.15f))
-            drawOval(shirt, Offset(-0.1f, -0.1f), Size(0.2f, 0.18f))
-            drawCircle(DrivePalette.BrakeLight, 0.07f, Offset(0f, -0.02f))
-            drawCircle(Color.White.copy(alpha = 0.5f), 0.025f, Offset(-0.02f, -0.04f))
-        }
+        drawOval(DrivePalette.Shadow, Offset(-0.15f, -0.3f), Size(0.3f, 0.66f))
+        drawActorImage(if (situation.bike) art.sprites.bicycle else art.sprites.scooter, 0.36f, 0.75f)
     }
 }
 
-/** A white ambulance with a red stripe and a flashing blue light bar. */
-private fun DrawScope.drawAmbulance(p: DriveProjection, x: Float, y: Float, time: Float) {
+/**
+ * Draws a dedicated ambulance sprite at ([x], [y]) using [art], with lights flashing at [time].
+ * [p] projects the same collision footprint as traffic cars.
+ */
+private fun DrawScope.drawAmbulance(p: DriveProjection, x: Float, y: Float, art: DriveArt, time: Float) {
     if (y < p.nearY - 1f || y > p.farY + 1f) return
-    drawCarAt(p, x, y, Color(0xFFF8FAFC), braking = false)
     val flash = sin(time * 18f) > 0f
     atWorld(p, x, y) {
-        drawRect(DrivePalette.SignRed, Offset(-CAR_WIDTH / 2, 0.02f), Size(CAR_WIDTH, 0.06f))
-        drawRect(DrivePalette.SignRed, Offset(-0.03f, -0.1f), Size(0.06f, 0.2f))
-        drawRect(DrivePalette.SignRed, Offset(-0.1f, -0.03f), Size(0.2f, 0.06f))
-        val left = Offset(-0.12f, -0.2f)
-        val right = Offset(0.12f, -0.2f)
-        drawCircle(DrivePalette.Siren.copy(alpha = if (flash) 0.45f else 0.1f), 0.32f, left)
-        drawCircle(DrivePalette.SignRed.copy(alpha = if (flash) 0.1f else 0.45f), 0.32f, right)
-        drawRoundRect(if (flash) DrivePalette.Siren else Color(0xFF1E3A8A), Offset(-0.18f, -0.24f), Size(0.17f, 0.08f), CornerRadius(0.03f))
-        drawRoundRect(if (flash) Color(0xFF7F1D1D) else DrivePalette.SignRed, Offset(0.01f, -0.24f), Size(0.17f, 0.08f), CornerRadius(0.03f))
+        drawRoundRect(DrivePalette.Shadow, Offset(-CAR_WIDTH / 2 + 0.03f, -CAR_LENGTH / 2 + 0.05f), Size(CAR_WIDTH, CAR_LENGTH), CornerRadius(0.1f))
+        drawActorImage(art.sprites.ambulance, CAR_WIDTH, CAR_LENGTH)
+        val left = Offset(-0.12f, -0.085f)
+        val right = Offset(0.12f, -0.085f)
+        drawCircle(DrivePalette.Siren.copy(alpha = if (flash) 0.45f else 0.1f), 0.22f, left)
+        drawCircle(DrivePalette.SignRed.copy(alpha = if (flash) 0.1f else 0.45f), 0.22f, right)
+        drawRoundRect(if (flash) DrivePalette.Siren else Color(0xFF1E3A8A), Offset(-0.18f, -0.115f), Size(0.17f, 0.06f), CornerRadius(0.02f))
+        drawRoundRect(if (flash) Color(0xFF7F1D1D) else DrivePalette.SignRed, Offset(0.01f, -0.115f), Size(0.17f, 0.06f), CornerRadius(0.02f))
     }
 }
 
@@ -887,21 +885,17 @@ private fun DrawScope.drawBarrier(p: DriveProjection, left: Float, right: Float,
     }
 }
 
-/** A pedestrian (or child) seen from above, swinging arms while walking, with a "!" when about to cross. */
+/** Draws [walker] with cached [art], facing their walking direction in projection [p], plus the crossing alert. */
 private fun DrawScope.drawWalker(p: DriveProjection, walker: Walker, art: DriveArt) {
     if (!walker.visible) return
-    val k = if (walker.isChild) 1.25f else 1.5f
-    val swing = sin(walker.stride) * 0.07f
-    val shirt = DrivePalette.shirts[walker.style % DrivePalette.shirts.size]
+    val k = if (walker.isChild) 0.85f else 1f
+    val sway = if (walker.vx != 0f) sin(walker.stride) * 5f else 0f
     atWorld(p, walker.x, walker.y) {
-        withTransform({ scale(k, k, Offset.Zero) }) {
-            drawOval(DrivePalette.Shadow, Offset(-0.14f, -0.08f), Size(0.32f, 0.24f))
-            drawCircle(DrivePalette.skin, 0.045f, Offset(swing, -0.15f))
-            drawCircle(DrivePalette.skin, 0.045f, Offset(-swing, 0.15f))
-            drawOval(shirt, Offset(-0.1f, -0.16f), Size(0.2f, 0.32f))
-            drawCircle(DrivePalette.skin, 0.085f, Offset.Zero)
-            drawCircle(DrivePalette.hair[walker.style % DrivePalette.hair.size], 0.07f, Offset(-0.02f, 0f))
-        }
+        drawOval(DrivePalette.Shadow, Offset(-0.18f * k, -0.12f * k), Size(0.36f * k, 0.24f * k))
+        withTransform({
+            if (walker.vx < 0f) rotate(180f, Offset.Zero)
+            rotate(sway, Offset.Zero)
+        }) { drawActorImage(if (walker.isChild) art.sprites.child else art.sprites.pedestrian, 0.46f * k, 0.46f * k) }
         if (walker.alert) {
             drawCircle(Color.White, 0.15f, Offset(0f, -0.5f))
             drawCircle(DrivePalette.Star, 0.13f, Offset(0f, -0.5f))

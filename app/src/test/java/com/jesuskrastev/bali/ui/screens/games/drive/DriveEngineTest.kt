@@ -3,9 +3,18 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 import com.google.common.collect.Range
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DriveEngineTest {
+
+    @Test
+    fun `an empty fixed route is rejected with a clear error`() {
+        val failure = assertThrows(IllegalArgumentException::class.java) { DriveEngine(seed = 1, route = emptyList()) }
+
+        assertThat(failure.message)
+            .contains("at least one situation")
+    }
 
     @Test
     fun `countdown counts 2, 1 and go before the car moves`() {
