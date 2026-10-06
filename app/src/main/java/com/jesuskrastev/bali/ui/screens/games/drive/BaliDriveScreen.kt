@@ -27,8 +27,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -82,13 +80,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -96,7 +93,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
@@ -107,17 +107,13 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 import com.jesuskrastev.bali.ui.theme.BaliSecondary
-import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 /** A finger moving slower than this (dp per second) counts as held still, i.e. braking. */
 private const val STILL_SPEED_DP = 90f
-
-/** A finger held still this long starts braking; shorter pauses while steering do not. */
-private const val BRAKE_DELAY_SECONDS = 0.12f
 
 /** Lanes the car moves per lane-width of finger travel. */
 private const val STEER_GAIN = 1.2f
@@ -138,23 +134,22 @@ private val SUCCESS_COLORS = listOf(BaliPrimary, BaliAccentYellow, BaliAccentGre
 fun BaliDriveScreen(onExit: () -> Unit, modifier: Modifier = Modifier, viewModel: BaliDriveViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Box(modifier.fillMaxSize().background(DrivePalette.Grass)) {
-        if (state.runId > 0) {
+        if (state.phase == DriveScreenPhase.LOADING) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (state.error) {
+                    Text(stringResource(R.string.drive_load_error))
+                    Button(onClick = viewModel::prepare) { Text(stringResource(R.string.drive_retry)) }
+                    TextButton(onClick = onExit) { Text(stringResource(R.string.drive_exit)) }
+                } else CircularProgressIndicator()
+            }
+        } else if (state.phase == DriveScreenPhase.TUTORIAL || state.phase == DriveScreenPhase.SAVING_TUTORIAL) {
+            DriveTutorial(state, viewModel::onEvent, onExit)
+        } else if (state.runId > 0) {
             key(state.runId) {
                 DriveRun(state = state, viewModel = viewModel, onExit = onExit)
             }
         }
     }
-}
-
-/** Finger state shared between the gesture detector and the frame loop. */
-private class FingerInput {
-    var pressed = false
-    var pendingDx = 0f
-    var stillFor = 0f
-    var taps = 0
-
-    /** Returns the horizontal drag since the last frame and forgets it. */
-    fun takeDx(): Float = pendingDx.also { pendingDx = 0f }
 }
 
 /** Values the overlays show; a data class so unchanged frames do not recompose them. */
@@ -184,10 +179,11 @@ private data class BaliLine(val id: Long, val text: String, val happy: Boolean)
 
 /** One run: owns the engine, the frame loop, input and every overlay. */
 @Composable
-private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit: () -> Unit) {
-    val engine = remember { DriveEngine(state.runSeed, state.bestScore, state.showHints) }
+internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit: () -> Unit) {
+    val engine = remember(state.runId) { viewModel.session(state).engine }
     val fx = remember { DriveFx() }
-    val input = remember { FingerInput() }
+    val input = remember { DriveControls() }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val view = LocalView.current
     val density = LocalDensity.current
     val stillSpeedPx = with(density) { STILL_SPEED_DP.dp.toPx() }
@@ -195,6 +191,7 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
 
     var frame by remember { mutableLongStateOf(0L) }
     var clock by remember { mutableFloatStateOf(0f) }
+    var headerHeight by remember { mutableIntStateOf(0) }
     var canvasWidth by remember { mutableFloatStateOf(1f) }
     var hud by remember { mutableStateOf(HudState()) }
     var hint by remember { mutableStateOf<Pair<Long, SituationKind>?>(null) }
@@ -204,7 +201,7 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
     val popups = remember { mutableStateListOf<Popup>() }
     var nextId by remember { mutableLongStateOf(0L) }
 
-    BackHandler {
+    BackHandler(enabled = state.result == null) {
         viewModel.abandonRun(engine.situations.count { it.status != SituationStatus.UPCOMING })
         onExit()
     }
@@ -277,60 +274,61 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
         }
     }
 
-    LaunchedEffect(engine) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000f).coerceAtMost(1f / 30f)
-                last = now
-                clock += dt
-                val dx = input.takeDx()
-                input.stillFor = when {
-                    !input.pressed -> 0f
-                    dt > 0f && abs(dx) / dt > stillSpeedPx -> 0f
-                    else -> input.stillFor + dt
-                }
-                if (input.taps > 0) {
-                    input.taps = 0
-                    engine.resumeFromFault()
-                }
-                val unitPx = canvasWidth / 5.6f
-                engine.update(dt, steer = dx / unitPx * STEER_GAIN, brake = input.stillFor >= BRAKE_DELAY_SECONDS)
-                fx.update(dt)
-                val car = engine.car
-                if (car.braking && car.speed > 1.4f) {
-                    fx.skid(car.x - 0.2f, car.rear + 0.15f)
-                    fx.skid(car.x + 0.2f, car.rear + 0.15f)
-                }
-                engine.drainEvents().forEach(::handle)
-                if (finishedAt >= 0f && clock - finishedAt > 1.3f) {
-                    finishedAt = Float.MAX_VALUE
-                    viewModel.finishRun(engine.summary())
-                }
-                hud = HudState(
-                    score = engine.score,
-                    multiplier = engine.multiplier,
-                    combo = engine.combo,
-                    progress = (engine.progress * 200).toInt() / 200f,
-                    speedKmh = engine.speedKmh,
-                    braking = car.braking && engine.phase == DrivePhase.DRIVING,
-                    phase = engine.phase,
-                    countdown = kotlin.math.ceil(engine.countdown).toInt(),
-                    stars = engine.stars.count { it.collected },
-                    fault = if (engine.phase == DrivePhase.FAULT) engine.lastFault else null,
-                    faultShielded = engine.lastFaultShielded,
-                    newRecord = state.bestScore > 0 && engine.score > state.bestScore,
-                    powers = buildList {
-                        if (engine.shield) add(PowerUpKind.SHIELD to 1f)
-                        PowerUpKind.entries.filter { it.seconds > 0f && engine.isActive(it) }.forEach {
-                            add(it to (engine.remaining(it) / it.seconds * 20).toInt() / 20f)
+    LaunchedEffect(engine, lifecycle, state.result != null) {
+        if (state.result != null) return@LaunchedEffect
+        if (engine.phase == DrivePhase.FINISHED) {
+            viewModel.finishRun(engine.summary(), state.runId)
+            return@LaunchedEffect
+        }
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            try {
+                var last = 0L
+                while (true) {
+                    withFrameNanos { now ->
+                        val dt = if (last == 0L) 0f else ((now - last) / 1_000_000_000f).coerceAtMost(1f / 30f)
+                        last = now
+                        clock += dt
+                        val dx = input.takeDx()
+                        input.advance(dt, dx, stillSpeedPx)
+                        val unitPx = canvasWidth / 5.6f
+                        engine.update(dt, steer = dx / unitPx * STEER_GAIN, brake = input.braking)
+                        fx.update(dt)
+                        val car = engine.car
+                        if (car.braking && car.speed > 1.4f) {
+                            fx.skid(car.x - 0.2f, car.rear + 0.15f)
+                            fx.skid(car.x + 0.2f, car.rear + 0.15f)
                         }
-                    },
-                    speedLimit = engine.speedLimitKmh,
-                    slowMotion = engine.isActive(PowerUpKind.SLOW_MOTION),
-                )
-                frame = now
-            }
+                        engine.drainEvents().forEach(::handle)
+                        if (finishedAt >= 0f && clock - finishedAt > 1.3f) {
+                            finishedAt = Float.MAX_VALUE
+                            viewModel.finishRun(engine.summary(), state.runId)
+                        }
+                        hud = HudState(
+                            score = engine.score,
+                            multiplier = engine.multiplier,
+                            combo = engine.combo,
+                            progress = (engine.progress * 200).toInt() / 200f,
+                            speedKmh = engine.speedKmh,
+                            braking = car.braking && engine.phase == DrivePhase.DRIVING,
+                            phase = engine.phase,
+                            countdown = kotlin.math.ceil(engine.countdown).toInt(),
+                            stars = engine.stars.count { it.collected },
+                            fault = if (engine.phase == DrivePhase.FAULT) engine.lastFault else null,
+                            faultShielded = engine.lastFaultShielded,
+                            newRecord = state.bestScore > 0 && engine.score > state.bestScore,
+                            powers = buildList {
+                                if (engine.shield) add(PowerUpKind.SHIELD to 1f)
+                                PowerUpKind.entries.filter { it.seconds > 0f && engine.isActive(it) }.forEach {
+                                    add(it to (engine.remaining(it) / it.seconds * 20).toInt() / 20f)
+                                }
+                            },
+                            speedLimit = engine.speedLimitKmh,
+                            slowMotion = engine.isActive(PowerUpKind.SLOW_MOTION),
+                        )
+                        frame = now
+                    }
+                }
+            } finally { input.reset() }
         }
     }
 
@@ -344,24 +342,7 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
                     translationX = sin(frame / 18_000_000f) * shake * 16.dp.toPx()
                     translationY = sin(frame / 23_000_000f) * shake * 10.dp.toPx()
                 }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        input.pressed = true
-                        input.taps++
-                        var pointerId = down.id
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == pointerId }
-                                ?: event.changes.firstOrNull { it.pressed }?.also { pointerId = it.id }
-                                ?: break
-                            if (!change.pressed) break
-                            input.pendingDx += change.positionChange().x
-                            change.consume()
-                        }
-                        input.pressed = false
-                    }
-                },
+                .driveControls(input, onPress = engine::resumeFromFault),
         ) {
             if (frame < 0L) return@Canvas // reading the frame makes every frame redraw
             val projection = DriveProjection(size.width, size.height, engine.car.y)
@@ -385,13 +366,13 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
                 viewModel.abandonRun(engine.situations.count { it.status != SituationStatus.UPCOMING })
                 onExit()
             },
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerHeight = it.height },
         )
 
         HintBanner(
             hint = hint,
             onDone = { hint = null },
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = if (hud.powers.isEmpty()) 116.dp else 150.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = with(density) { headerHeight.toDp() } + 8.dp),
         )
 
         Box(Modifier.align(Alignment.Center).offset(y = 40.dp)) {
@@ -407,7 +388,7 @@ private fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit:
         hud.fault?.let { FaultOverlay(it, shielded = hud.faultShielded, onTap = { engine.resumeFromFault() }) }
 
         state.result?.let { result ->
-            DriveResultsOverlay(
+            DriveResultsDialog(
                 result = result,
                 onReplay = viewModel::startRun,
                 onExit = onExit,
@@ -515,7 +496,7 @@ private fun DriveTopBar(hud: HudState, bestScore: Int, starPulse: Int, onClose: 
                 )
             }
         }
-        RouteProgress(hud.progress)
+        DriveRouteProgress(hud.progress)
         if (hud.powers.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { hud.powers.forEach { (kind, left) -> PowerChip(kind, left) } }
         }
@@ -535,20 +516,6 @@ private fun PowerChip(kind: PowerUpKind, left: Float) {
             Box(Modifier.width(44.dp).height(3.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.35f))) {
                 Box(Modifier.fillMaxWidth(left.coerceIn(0f, 1f)).height(3.dp).background(Color.White))
             }
-        }
-    }
-}
-
-/** The route as a bar: Bali's car slides from the start towards the chequered flag. */
-@Composable
-private fun RouteProgress(progress: Float) {
-    Box(Modifier.fillMaxWidth().height(22.dp), contentAlignment = Alignment.CenterStart) {
-        Box(Modifier.fillMaxWidth().padding(end = 22.dp).height(8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.65f))) {
-            Box(Modifier.fillMaxWidth(progress).height(8.dp).clip(RoundedCornerShape(50)).background(BaliPrimary))
-        }
-        Text("🏁", modifier = Modifier.align(Alignment.CenterEnd), fontSize = 16.sp)
-        Box(Modifier.fillMaxWidth(progress.coerceIn(0.04f, 0.96f)).padding(end = 22.dp), contentAlignment = Alignment.CenterEnd) {
-            Text("🚗", fontSize = 15.sp)
         }
     }
 }
@@ -700,7 +667,7 @@ private fun Speedometer(speedKmh: Int, braking: Boolean, limit: Int?, modifier: 
     }
 }
 
-/** "3, 2, 1, ¡YA!" with the two controls explained underneath. */
+/** Shows only the countdown; the first-run tutorial explains controls before it starts. */
 @Composable
 private fun BoxScope.CountdownOverlay(number: Int) {
     val pop = remember { Animatable(0f) }
@@ -718,22 +685,6 @@ private fun BoxScope.CountdownOverlay(number: Int) {
             fontWeight = FontWeight.Black,
             style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(BaliPrimary, Offset(0f, 8f), 0f)),
         )
-        Surface(shape = RoundedCornerShape(24.dp), color = Color.White, shadowElevation = 8.dp) {
-            Column(Modifier.padding(horizontal = 22.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                ControlRow("↔️", "Desliza para cambiar de carril")
-                ControlRow("✋", "Deja el dedo quieto para frenar")
-                ControlRow("⭐", "Encadena aciertos: ×2, ×3, ×4…")
-            }
-        }
-    }
-}
-
-/** One line of the controls card. */
-@Composable
-private fun ControlRow(icon: String, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(icon, fontSize = 22.sp, modifier = Modifier.width(44.dp), textAlign = TextAlign.Center)
-        Text(text, fontWeight = FontWeight.Bold, color = BaliSecondary, fontSize = 15.sp)
     }
 }
 

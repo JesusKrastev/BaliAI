@@ -180,7 +180,7 @@ class OnboardingShowcaseScreenshotTest {
         }
     }
 
-    /** The mini-games list. */
+    /** The dedicated Bali Drive entry, including its live preview and play button. */
     @Test
     fun captureGames() = capture("shot_games") {
         GamesScreen(onGameClick = {})

@@ -16,6 +16,12 @@ interface GameRecordRepository {
      */
     suspend fun record(gameId: String): GameRecord
 
+    /** Returns whether [userId] completed [gameId]'s tutorial on this device; null is a guest. */
+    suspend fun tutorialCompleted(gameId: String, userId: String?): Boolean
+
+    /** Persists completion of both tutorial steps for [userId] and [gameId]; returns Unit. */
+    suspend fun completeTutorial(gameId: String, userId: String?)
+
     /**
      * Records a finished run, keeping the higher of [score] and the stored best.
      *

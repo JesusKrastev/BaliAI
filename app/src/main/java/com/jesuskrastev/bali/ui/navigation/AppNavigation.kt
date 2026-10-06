@@ -31,7 +31,6 @@ import com.jesuskrastev.bali.ui.screens.exam.ExamViewModel
 import com.jesuskrastev.bali.ui.screens.greetings.GreetingsScreen
 import com.jesuskrastev.bali.ui.screens.home.HomeScreen
 import com.jesuskrastev.bali.ui.screens.home.HomeViewModel
-import com.jesuskrastev.bali.ui.screens.games.GamePlayScreen
 import com.jesuskrastev.bali.ui.screens.games.GameType
 import com.jesuskrastev.bali.ui.screens.games.GamesScreen
 import com.jesuskrastev.bali.ui.screens.games.drive.BaliDriveScreen
@@ -186,7 +185,7 @@ fun AppNavigation(
                     },
                     onPlayGameClick = {
                         // The first-steps bar's game task goes straight into a game; back returns to Home.
-                        navController.navigate(GamePlayRoute(GameType.entries.first().id))
+                        navController.navigate(GamePlayRoute(GameType.DRIVE.id))
                     },
                     onExamClick = openExam,
                     onSeePlanClick = {
@@ -201,18 +200,9 @@ fun AppNavigation(
                 })
             }
 
-            composable<GamePlayRoute> { backStackEntry ->
-                val route: GamePlayRoute = backStackEntry.toRoute()
-                val game = GameType.fromId(route.gameId)
-                if (game == GameType.DRIVE) {
-                    // A continuous one-minute run, not five rounds: it has its own screen and loop.
-                    BaliDriveScreen(onExit = { navController.popBackStack() })
-                } else {
-                    GamePlayScreen(
-                        game = game,
-                        onBackClick = { navController.popBackStack() },
-                    )
-                }
+            composable<GamePlayRoute> {
+                // Retired routes retain their serializable signature and open Bali Drive.
+                BaliDriveScreen(onExit = { navController.popBackStack() })
             }
 
             composable<SettingsRoute> {

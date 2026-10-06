@@ -1,3 +1,45 @@
 <resources>
     <string name="app_name">Bali AI</string>
+
+    <string name="drive_games">Juegos</string>
+    <string name="drive_description">Conduce con un dedo, recoge estrellas y supera situaciones de tráfico. ¡Bate tu récord!</string>
+    <string name="drive_play">Jugar</string>
+    <string name="drive_exit">Salir</string>
+    <string name="drive_replay">Otra vez</string>
+    <string name="drive_next">Siguiente</string>
+    <string name="drive_saving">Guardando…</string>
+    <string name="drive_tutorial_title">Antes de conducir</string>
+    <string name="drive_tutorial_step">Paso %1$d de 2</string>
+    <string name="drive_tutorial_steer">Desliza a izquierda o derecha para dirigir</string>
+    <string name="drive_tutorial_brake">Mantén pulsado sin mover el dedo para frenar</string>
+    <string name="drive_tutorial_release">Suelta para continuar</string>
+    <string name="drive_tutorial_start">¡A conducir!</string>
+    <string name="drive_practice">Prueba aquí, sin tráfico</string>
+    <string name="drive_braking">Frenando</string>
+    <string name="drive_tutorial_error">No se pudo guardar el tutorial. Vuelve a intentarlo o sal y complétalo más tarde.</string>
+    <string name="drive_load_error">No se pudo preparar la partida.</string>
+    <string name="drive_retry">Reintentar</string>
+    <string name="drive_route_progress">Distancia recorrida</string>
+    <string name="drive_result_title">¡Has llegado a la meta!</string>
+    <string name="drive_rating">Valoración: %1$d de 3 estrellas</string>
+    <string name="drive_points">Puntos</string>
+    <string name="drive_record">Récord</string>
+    <string name="drive_new_record">¡Nuevo récord!</string>
+    <string name="drive_record_detail">Récord anterior: %1$s · Distancia al récord: %2$s</string>
+    <string name="drive_resolved">Situaciones resueltas</string>
+    <string name="drive_collected">Estrellas recogidas</string>
+    <string name="drive_duration">Duración</string>
+    <string name="drive_seconds">%1$d s</string>
+    <string name="drive_accuracy">Precisión</string>
+    <string name="drive_xp">Experiencia</string>
+    <string name="drive_coins">Monedas</string>
+    <string name="drive_rewards_pending">Guardando partida y recompensas…</string>
+    <string name="drive_rewards_failed">No se pudo confirmar todo el guardado. Algunas recompensas pueden haberse aplicado. Puedes salir o jugar otra partida.</string>
+    <string name="drive_xp_base">XP base: %1$d</string>
+    <string name="drive_xp_perfect">Bonus de perfección: +%1$d XP</string>
+    <string name="drive_xp_fast">Bonus de rapidez: +%1$d XP</string>
+    <string name="drive_xp_streak">Bonus de racha: +%1$d XP</string>
+    <string name="drive_level_up">¡Subes al nivel %1$d!</string>
+    <string name="drive_faults">Faltas cometidas: %1$d</string>
+    <string name="drive_previous_record">Récord anterior: %1$s</string>
 </resources>

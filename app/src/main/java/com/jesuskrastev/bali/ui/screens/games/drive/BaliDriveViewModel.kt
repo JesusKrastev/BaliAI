@@ -2,64 +2,41 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestMode
-import com.jesuskrastev.bali.domain.repository.GameRecordRepository
 import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.usecase.CompleteGameTutorialUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
+import com.jesuskrastev.bali.domain.usecase.PrepareGameUseCase
+import com.jesuskrastev.bali.domain.usecase.SubmitGameRunUseCase
 import com.jesuskrastev.bali.ui.screens.games.GameRewards
 import com.jesuskrastev.bali.ui.screens.games.GameType
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlin.random.Random
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import kotlin.random.Random
+import kotlinx.coroutines.withTimeout
 
 /** First-run hints (what each situation asks for) are shown until this many runs are finished. */
 private const val HINT_RUNS = 3
 
 /**
- * Screen state of Bali Drive.
- *
- * @param runId increases with every run; the screen rebuilds the simulation when it changes
- * @param runSeed seed of the current run's route
- * @param bestScore personal best before the current run
- * @param showHints whether the current run announces each situation (first runs only)
- * @param result the finished run, null while driving
- */
-data class DriveUiState(
-    val runId: Int = 0,
-    val runSeed: Long = 0L,
-    val bestScore: Int = 0,
-    val showHints: Boolean = true,
-    val result: DriveResult? = null,
-)
-
-/**
- * A finished run and what it earned.
- *
- * @param previousBest personal best before this run
- * @param rewards XP and coins, null until the reward use cases answer
- */
-data class DriveResult(val summary: DriveSummary, val previousBest: Int, val rewards: GameRewards? = null) {
-    /** True when this run beat the stored best (the first finished run always does). */
-    val isNewRecord: Boolean get() = summary.score > previousBest
-}
-
-/**
- * Owns Bali Drive's runs: the personal best kept by [GameRecordRepository], the real XP, coins and
+ * Owns Bali Drive's runs: the personal best kept by the game record use cases, the real XP, coins and
  * streak a finished run grants (the same use cases as the other mini-games), its analytics and
  * the sounds the screen asks for.
  *
- * The simulation itself lives in [DriveEngine] inside the screen: it ticks every frame and is pure
- * UI-time state, like the round timers of the other mini-games.
+ * The [DriveSession] retains the engine across configuration changes; Compose owns its frame loop.
  */
 @HiltViewModel
 class BaliDriveViewModel @Inject constructor(
@@ -67,7 +44,9 @@ class BaliDriveViewModel @Inject constructor(
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val completeFirstStepUseCase: CompleteFirstStepUseCase,
-    private val gameRecordRepository: GameRecordRepository,
+    private val prepareGame: PrepareGameUseCase,
+    private val completeTutorial: CompleteGameTutorialUseCase,
+    private val submitRun: SubmitGameRunUseCase,
     private val soundEffects: SoundEffects,
     private val analyticsTracker: AnalyticsTracker,
 ) : ViewModel() {
@@ -79,51 +58,123 @@ class BaliDriveViewModel @Inject constructor(
     /** Runs already rewarded since the screen opened: replays earn the reduced repeat XP. */
     private var rewardedRuns = 0
 
-    init {
+    private var tutorialUserId: String? = null
+    private var session: DriveSession? = null
+
+    init { prepare() }
+
+    /** Loads the record and persistent tutorial preference; exposes a retry on read failure. */
+    fun prepare() {
+        _uiState.update { it.copy(phase = DriveScreenPhase.LOADING, error = false) }
         viewModelScope.launch {
-            val record = gameRecordRepository.record(gameId)
-            _uiState.update { it.copy(bestScore = record.bestScore, showHints = record.runsPlayed < HINT_RUNS) }
-            startRun()
+            try {
+                val prepared = prepareGame(gameId)
+                tutorialUserId = prepared.userId
+                _uiState.update {
+                    it.copy(bestScore = prepared.record.bestScore, showHints = prepared.record.runsPlayed < HINT_RUNS,
+                        phase = if (prepared.tutorialCompleted) DriveScreenPhase.PLAYING else DriveScreenPhase.TUTORIAL)
+                }
+                if (prepared.tutorialCompleted) startRun()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                _uiState.update { it.copy(error = true) }
+            }
         }
     }
 
-    /** Starts a new run on a freshly shuffled route. */
+    /** Applies [event] through the pure reducer, persisting only the completed second step. */
+    fun onEvent(event: BaliDriveEvent) {
+        val before = _uiState.value
+        _uiState.update { BaliDriveReducer.reduce(it, event) }
+        if (before.phase == DriveScreenPhase.TUTORIAL && _uiState.value.phase == DriveScreenPhase.SAVING_TUTORIAL) {
+            viewModelScope.launch {
+                try {
+                    completeTutorial(gameId, tutorialUserId)
+                    _uiState.update { it.copy(phase = DriveScreenPhase.PLAYING) }
+                    startRun()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    _uiState.update { it.copy(phase = DriveScreenPhase.TUTORIAL, error = true) }
+                }
+            }
+        }
+    }
+
+    /** Starts a shuffled run once preparation and any previous reward attempt have finished. */
     fun startRun() {
-        _uiState.update { it.copy(runId = it.runId + 1, runSeed = Random.nextLong(), result = null) }
+        val state = _uiState.value
+        if (state.phase !in listOf(DriveScreenPhase.PLAYING, DriveScreenPhase.RESULTS) ||
+            state.result?.rewardStatus == DriveRewardStatus.PENDING ||
+            (state.phase == DriveScreenPhase.PLAYING && state.runId > 0)) return
+        _uiState.update { it.copy(runId = it.runId + 1, runSeed = Random.nextLong(), result = null, phase = DriveScreenPhase.PLAYING) }
+        session = null
         analyticsTracker.gameStarted(gameId)
+    }
+
+    /** Returns the simulation for [state], retaining it through configuration changes. */
+    internal fun session(state: DriveUiState): DriveSession {
+        return session?.takeIf { it.runId == state.runId } ?: DriveSession(state.runId,
+            DriveEngine(state.runSeed, state.bestScore, state.showHints)).also { session = it }
     }
 
     /**
      * Shows the finished run at once, then stores the record and grants its rewards.
      *
      * @param summary figures of the run that just crossed the finish line
+     * @param runId identity of its originating engine; stale finishes are ignored
      */
-    fun finishRun(summary: DriveSummary) {
+    fun finishRun(summary: DriveSummary, runId: Int = _uiState.value.runId) {
         val state = _uiState.value
-        if (state.result != null) return
-        _uiState.update { it.copy(result = DriveResult(summary, previousBest = state.bestScore)) }
+        if (state.result != null || state.runId != runId || state.phase != DriveScreenPhase.PLAYING) return
+        _uiState.update { it.copy(phase = DriveScreenPhase.RESULTS, result = DriveResult(summary, previousBest = state.bestScore)) }
         viewModelScope.launch {
-            val previous = gameRecordRepository.submitRun(gameId, summary.score)
-            val accuracy = summary.resolved * 100 / summary.situations.coerceAtLeast(1)
-            val xpEarned = incrementXpUseCase(
-                mode = TestMode.PRACTICE,
-                correctAnswers = summary.resolved,
-                totalQuestions = summary.situations,
-                durationSeconds = summary.durationSeconds,
-                isRepeat = rewardedRuns++ > 0,
-            )
-            val coinsGained = incrementCoinsUseCase(accuracy)
-            incrementStreakUseCase()
-            completeFirstStepUseCase(FirstStepTask.PLAY_GAME)?.let(analyticsTracker::firstStepRewarded)
-            analyticsTracker.gameCompleted(gameId, summary.resolved, summary.situations, summary.durationSeconds)
-            val rewards = GameRewards(xpEarned, coinsGained, accuracy, summary.durationSeconds)
-            _uiState.update {
-                it.copy(
-                    bestScore = maxOf(previous.bestScore, summary.score),
-                    showHints = previous.runsPlayed + 1 < HINT_RUNS,
-                    result = it.result?.copy(rewards = rewards),
-                )
+            try {
+                withTimeout(15_000) { saveRewards(summary, runId) }
+            } catch (timeout: TimeoutCancellationException) {
+                markRewardsFailed(runId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                markRewardsFailed(runId)
             }
+        }
+    }
+
+    /** Saves [summary] and its rewards for [runId], retaining the record even if a later reward fails. */
+    @AddTrace(name = "drive_run_rewards")
+    private suspend fun saveRewards(summary: DriveSummary, runId: Int) {
+        val previous = submitRun(gameId, summary.score)
+        _uiState.update {
+            if (it.runId != runId) it else it.copy(
+                bestScore = maxOf(previous.bestScore, summary.score),
+                showHints = previous.runsPlayed + 1 < HINT_RUNS,
+            )
+        }
+        val accuracy = summary.resolved * 100 / summary.situations.coerceAtLeast(1)
+        val xpEarned = incrementXpUseCase(
+            mode = TestMode.PRACTICE,
+            correctAnswers = summary.resolved,
+            totalQuestions = summary.situations,
+            durationSeconds = summary.durationSeconds,
+            isRepeat = rewardedRuns > 0,
+        )
+        rewardedRuns++
+        val coinsGained = incrementCoinsUseCase(accuracy)
+        incrementStreakUseCase()
+        completeFirstStepUseCase(FirstStepTask.PLAY_GAME)?.let(analyticsTracker::firstStepRewarded)
+        analyticsTracker.gameCompleted(gameId, summary.resolved, summary.situations, summary.durationSeconds)
+        val rewards = GameRewards(xpEarned, coinsGained, accuracy, summary.durationSeconds)
+        _uiState.update {
+            if (it.runId != runId) it else it.copy(result = it.result?.copy(rewards = rewards, rewardStatus = DriveRewardStatus.COMPLETE))
+        }
+    }
+
+    /** Marks the current [runId]'s reward attempt failed without retrying non-idempotent increments. */
+    private fun markRewardsFailed(runId: Int) {
+        _uiState.update {
+            if (it.runId != runId) it else it.copy(result = it.result?.copy(rewardStatus = DriveRewardStatus.FAILED))
         }
     }
 
@@ -133,7 +184,7 @@ class BaliDriveViewModel @Inject constructor(
      * @param situationsCleared situations already behind the player
      */
     fun abandonRun(situationsCleared: Int) {
-        if (_uiState.value.result == null) analyticsTracker.gameAbandoned(gameId, situationsCleared)
+        if (_uiState.value.phase == DriveScreenPhase.PLAYING && _uiState.value.result == null) analyticsTracker.gameAbandoned(gameId, situationsCleared)
     }
 
     /** Chime of a situation handled well. */
