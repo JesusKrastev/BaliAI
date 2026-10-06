@@ -3,14 +3,28 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.jesuskrastev.bali.ui.theme.BaliSecondary
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.jesuskrastev.bali.domain.repository.GameRecord
+import com.jesuskrastev.bali.domain.usecase.PrepareGameUseCase
+import com.jesuskrastev.bali.domain.usecase.CompleteGameTutorialUseCase
+import com.jesuskrastev.bali.domain.usecase.SubmitGameRunUseCase
+import com.jesuskrastev.bali.ui.screens.auth.FakeAuthRepository
 import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
@@ -123,7 +137,7 @@ class BaliDriveScreenshotTest {
     @Test
     fun captureDrivingHud() {
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = viewModel(GameRecord(2350, 5))) } }
+        composeTestRule.setContent { Themed { DrivePreviewScreen(viewModel(GameRecord(2350, 5))) } }
         composeTestRule.mainClock.advanceTimeBy(5_200)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/8_hud.png")
     }
@@ -131,7 +145,7 @@ class BaliDriveScreenshotTest {
     @Test
     fun captureCountdown() {
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = viewModel(GameRecord(0, 0))) } }
+        composeTestRule.setContent { Themed { DrivePreviewScreen(viewModel(GameRecord(0, 0))) } }
         composeTestRule.mainClock.advanceTimeBy(900)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/0_countdown.png")
     }
@@ -141,7 +155,7 @@ class BaliDriveScreenshotTest {
         val vm = viewModel(GameRecord(2350, 5))
         vm.finishRun(DriveSummary(2780, 10, 11, listOf(RULE_STOP), 31, 44, 54, faultKinds = listOf(SituationKind.STOP)))
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
+        composeTestRule.setContent { Themed { ResultsPreview(vm.uiState.value.result!!) } }
         composeTestRule.mainClock.advanceTimeBy(3_000)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/9_results.png")
     }
@@ -151,7 +165,7 @@ class BaliDriveScreenshotTest {
         val vm = viewModel(GameRecord(2350, 5))
         vm.finishRun(DriveSummary(3420, 11, 11, emptyList(), 40, 44, 52))
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
+        composeTestRule.setContent { Themed { ResultsPreview(vm.uiState.value.result!!) } }
         composeTestRule.mainClock.advanceTimeBy(3_000)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/9b_results_perfect.png")
     }
@@ -162,7 +176,7 @@ class BaliDriveScreenshotTest {
         val kinds = listOf(SituationKind.STOP, SituationKind.CROSSWALK, SituationKind.BALL, SituationKind.SCOOTER, SituationKind.AMBULANCE)
         vm.finishRun(DriveSummary(900, 6, 11, listOf(RULE_STOP, RULE_CROSSWALK, RULE_BALL), 8, 44, 70, faultKinds = kinds))
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { BaliDriveScreen(onExit = {}, viewModel = vm) } }
+        composeTestRule.setContent { Themed { ResultsPreview(vm.uiState.value.result!!) } }
         composeTestRule.mainClock.advanceTimeBy(3_000)
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/9c_results_rough.png")
     }
@@ -175,6 +189,56 @@ class BaliDriveScreenshotTest {
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/catalogue.png")
     }
 
+    /** Records the dialog content in a narrow dark display with large text. */
+    @Config(qualifiers = "w320dp-h640dp-xxhdpi")
+    @Test
+    fun captureResultsLargeFonts() {
+        val vm = viewModel(GameRecord(2350, 5))
+        vm.finishRun(DriveSummary(2780, 10, 11, listOf(RULE_STOP), 31, 44, 54, faultKinds = listOf(SituationKind.STOP)))
+        composeTestRule.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 1.6f)) {
+                BaliTheme(darkTheme = true) { ResultsPreview(vm.uiState.value.result!!) }
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/results_large_fonts.png")
+    }
+
+    /** Captures the first control demonstration without advancing a real run. */
+    @Test
+    fun captureSteeringTutorial() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent { Themed { DriveTutorial(DriveUiState(phase = DriveScreenPhase.TUTORIAL), {}, {}) } }
+        composeTestRule.mainClock.advanceTimeBy(600)
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/tutorial_steer.png")
+    }
+
+    /** Captures stationary braking, release guidance and the practice surface. */
+    @Test
+    fun captureBrakingTutorial() {
+        composeTestRule.mainClock.autoAdvance = false
+        composeTestRule.setContent { Themed { DriveTutorial(DriveUiState(phase = DriveScreenPhase.TUTORIAL, tutorialStep = 1), {}, {}) } }
+        composeTestRule.mainClock.advanceTimeBy(600)
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/tutorial_brake.png")
+    }
+
+    /** Captures the canonical dialog content; modal behavior is covered by semantic UI tests. */
+    @Composable
+    private fun ResultsPreview(result: DriveResult) {
+        Surface(Modifier.fillMaxSize(), color = BaliSecondary.copy(alpha = 0.6f)) {
+            Box(Modifier.fillMaxSize().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+                DriveResultsContent(result, {}, {}, {})
+            }
+        }
+    }
+
+    /** Presents a deterministic route seed while retaining the real screen overlays and loop. */
+    @Composable
+    private fun DrivePreviewScreen(viewModel: BaliDriveViewModel) {
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        DriveRun(state.copy(runSeed = 7L), viewModel, {})
+    }
+
     /** Wraps [content] in the app theme over its background. */
     @Composable
     private fun Themed(content: @Composable () -> Unit) {
@@ -184,12 +248,15 @@ class BaliDriveScreenshotTest {
     /** ViewModel over fakes, with [record] as the stored personal best. */
     private fun viewModel(record: GameRecord): BaliDriveViewModel {
         val users = FakeUserRepository()
+        val records = FakeGameRecordRepository(record)
         return BaliDriveViewModel(
             incrementXpUseCase = IncrementXpUseCase(users),
             incrementCoinsUseCase = IncrementCoinsUseCase(users),
             incrementStreakUseCase = IncrementStreakUseCase(users),
             completeFirstStepUseCase = CompleteFirstStepUseCase(users, PendingFirstStepRewards()),
-            gameRecordRepository = FakeGameRecordRepository(record),
+            prepareGame = PrepareGameUseCase(records, FakeAuthRepository()),
+            completeTutorial = CompleteGameTutorialUseCase(records),
+            submitRun = SubmitGameRunUseCase(records),
             soundEffects = FakeSoundEffects(),
             analyticsTracker = FakeAnalyticsTracker(mock(), mock()),
         )

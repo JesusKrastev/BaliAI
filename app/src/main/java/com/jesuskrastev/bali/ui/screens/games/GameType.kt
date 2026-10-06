@@ -20,7 +20,7 @@ enum class GameType(
     PRIORIDAD_CRUCE("prioridad_cruce", "Prioridad en el Cruce", "¿Quién pasa primero en cada cruce?", "🔀");
 
     companion object {
-        /** Returns the game matching [id], falling back to the first game for an invalid route. */
-        fun fromId(id: String): GameType = entries.firstOrNull { it.id == id } ?: PUNTOS_CARNE
+        /** Resolves [id], including retired or unknown routes, to the only offered game, Bali Drive. */
+        fun fromId(id: String): GameType = DRIVE
     }
 }
