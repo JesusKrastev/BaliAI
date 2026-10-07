@@ -218,30 +218,6 @@ class FirestoreUserDao @Inject constructor(
                 true
             }
         }
-        }
-    }
-
-    /**
-     * Removes one owned [item] atomically.
-     *
-     * @param userId document owner
-     * @param item consumable to use
-     * @return true only when an item was available
-     */
-    @AddTrace(name = "consume_shop_inventory")
-    suspend fun consumeInventoryItem(userId: String, item: ShopInventoryItem): Boolean {
-        require(item != ShopInventoryItem.STREAK_BET) { "A streak bet is claimed, not consumed" }
-        val field = item.firestoreField
-        val docRef = collection.document(userId)
-        return reportedTransaction { transaction ->
-            val count = transaction.get(docRef).getLong(field) ?: 0L
-            if (count <= 0) {
-                false
-            } else {
-                transaction.set(docRef, mapOf(field to count - 1), SetOptions.merge())
-                true
-            }
-        }
     }
 
     /**
