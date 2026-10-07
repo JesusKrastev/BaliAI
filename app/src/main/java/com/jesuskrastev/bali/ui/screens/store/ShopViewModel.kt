@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.ui.screens.store
+package com.jesuskrastev.bali.ui.screens.store
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -287,6 +287,7 @@ class ShopViewModel @Inject constructor(
             ShopInventoryItem.FIFTY_FIFTY -> "¡50/50 conseguido! Ya puedes usarlo en práctica ✨"
             ShopInventoryItem.DOUBLE_XP -> "¡Doble XP conseguido! Se activará en tu próxima actividad ⚡"
             ShopInventoryItem.DOUBLE_COINS -> "¡Doble moneda conseguido! Tu próxima recompensa valdrá el doble 🪙"
+            ShopInventoryItem.STREAK_BET -> "¡Apuesta de racha activada! Mantenla para ganar el doble 🎯"
         }
         return ShopFeedback(message, isSuccess = true)
     }

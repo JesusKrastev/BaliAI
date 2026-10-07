@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
+
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig
@@ -13,6 +14,7 @@ import com.google.firebase.firestore.snapshots
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.model.ChestReward
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.model.RankReward
@@ -136,25 +138,52 @@ class FirestoreUserDao @Inject constructor(
      * Purchases an inventory [item] for [cost] within one Firestore transaction.
      *
      * @param userId document owner
-     * @param item consumable to add
+     * @param item consumable or the single active streak bet to add
      * @param cost coins to charge
-     * @return true only when the balance permits the purchase
+     * @return true only when the balance and item's ownership limit permit the purchase
      */
+    @AddTrace(name = "purchase_shop_inventory")
     suspend fun purchaseInventoryItem(userId: String, item: ShopInventoryItem, cost: Int): Boolean {
         val docRef = collection.document(userId)
-        val field = item.firestoreField
         return reportedTransaction { transaction ->
             val snapshot = transaction.get(docRef)
             val coins = snapshot.getLong("coins") ?: 0L
-            if (coins < cost) {
+            val hasActiveBet = snapshot.getBoolean("activeStreakBet") ?: false
+            if (coins < cost || (item == ShopInventoryItem.STREAK_BET && hasActiveBet)) {
                 false
             } else {
-                val owned = snapshot.getLong(field) ?: 0L
-                transaction.set(
-                    docRef,
-                    mapOf("coins" to coins - cost, field to owned + 1),
-                    SetOptions.merge()
-                )
+                val updates = mutableMapOf<String, Any>("coins" to coins - cost)
+                when (item) {
+                    ShopInventoryItem.HINT -> updates["hints"] = (snapshot.getLong("hints") ?: 0L) + 1
+                    ShopInventoryItem.FIFTY_FIFTY -> updates["fiftyFifties"] =
+                        (snapshot.getLong("fiftyFifties") ?: 0L) + 1
+                    ShopInventoryItem.DOUBLE_XP -> updates["doubleXpBoosts"] =
+                        (snapshot.getLong("doubleXpBoosts") ?: 0L) + 1
+                    ShopInventoryItem.DOUBLE_COINS -> updates["doubleCoinBoosts"] =
+                        (snapshot.getLong("doubleCoinBoosts") ?: 0L) + 1
+                    ShopInventoryItem.STREAK_BET -> updates["activeStreakBet"] = true
+                }
+                transaction.set(docRef, updates, SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges a surprise chest and credits its coin [reward] atomically.
+     *
+     * @param userId document owner
+     * @param cost coins paid to open the chest
+     * @param reward random coin reward selected by the domain layer
+     * @return true if the chest opened, false when the user cannot afford it
+     */
+    @AddTrace(name = "open_surprise_chest")
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val coins = transaction.get(docRef).getLong("coins") ?: 0L
+            if (coins < cost) false else {
+                transaction.set(docRef, mapOf("coins" to coins - cost + reward), SetOptions.merge())
                 true
             }
         }
@@ -168,7 +197,7 @@ class FirestoreUserDao @Inject constructor(
      * @param reward coins or an inventory item picked by the caller
      * @return true if the chest opened, false when the user cannot afford it
      */
-    @AddTrace(name = "open_surprise_chest")
+    @AddTrace(name = "open_surprise_chest_reward")
     suspend fun openSurpriseChest(userId: String, cost: Int, reward: ChestReward): Boolean {
         val docRef = collection.document(userId)
         return reportedTransaction { transaction ->
@@ -198,7 +227,9 @@ class FirestoreUserDao @Inject constructor(
      * @param item consumable to use
      * @return true only when an item was available
      */
+    @AddTrace(name = "consume_shop_inventory")
     suspend fun consumeInventoryItem(userId: String, item: ShopInventoryItem): Boolean {
+        require(item != ShopInventoryItem.STREAK_BET) { "A streak bet is claimed, not consumed" }
         val field = item.firestoreField
         val docRef = collection.document(userId)
         return reportedTransaction { transaction ->
@@ -207,6 +238,30 @@ class FirestoreUserDao @Inject constructor(
                 false
             } else {
                 transaction.set(docRef, mapOf(field to count - 1), SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Credits the one outstanding streak wager and clears it in one transaction.
+     *
+     * @param userId document owner
+     * @param payout coins paid when the next study day is completed
+     * @return true if a wager was claimed, false if none was active
+     */
+    @AddTrace(name = "claim_streak_bet")
+    suspend fun claimStreakBetHead(userId: String, payout: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if (snapshot.getBoolean("activeStreakBet") != true) false else {
+                val coins = snapshot.getLong("coins") ?: 0L
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins + payout, "activeStreakBet" to false),
+                    SetOptions.merge()
+                )
                 true
             }
         }
@@ -319,7 +374,6 @@ class FirestoreUserDao @Inject constructor(
             }
         }.await()
     }
-
     // --- Test Results Operations ---
     fun getTestResults(userId: String): Flow<List<TestResultFirestore>> {
         return collection.document(userId).collection("test_results")
@@ -411,4 +465,5 @@ private val ShopInventoryItem.firestoreField: String
         ShopInventoryItem.FIFTY_FIFTY -> "fiftyFifties"
         ShopInventoryItem.DOUBLE_XP -> "doubleXpBoosts"
         ShopInventoryItem.DOUBLE_COINS -> "doubleCoinBoosts"
+        ShopInventoryItem.STREAK_BET -> error("Streak bet has no counter field")
     }

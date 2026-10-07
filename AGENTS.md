@@ -132,7 +132,7 @@ to it through a squash-merged PR; a feature branch never goes to Play; `main` on
 
 ## Important Rules
 
-- **NEVER commit `local.properties`** — it contains `GEMINI_API_KEY`, `ONE_SIGNAL_APP_ID` and `REVENUECAT_API_KEY`. The build will fail without it; add it locally.
+- **NEVER commit `local.properties`** — it contains `GEMINI_API_KEY`, `ONE_SIGNAL_APP_ID`, and `REVENUECAT_API_KEY`. The build will fail without it; add it locally.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
 - `BaliApplication.isRobolectric()` guards skip SDK initialization (OneSignal, PostHog, RevenueCat) in unit tests. NEVER remove this guard — those SDKs crash under Robolectric.
 - `versionCode` format is `YYYYMMDD` (e.g., `20260320`). NEVER use sequential integers.

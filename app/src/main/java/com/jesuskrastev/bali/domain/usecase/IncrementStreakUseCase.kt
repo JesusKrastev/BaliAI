@@ -29,6 +29,7 @@ open class IncrementStreakUseCase @Inject constructor(
 
         val updated = streak.practicedAt(now)
         userRepository.updateStreak(updated)
+        userRepository.claimStreakBet()
         settleStreakBet(
             target = user.streakBetTarget,
             streakBeforeToday = streak.settledAt(now).current,

@@ -73,9 +73,16 @@ interface UserRepository {
     /**
      * Atomically charges [cost] and adds [item] to the user's inventory.
      *
-     * @return true when the balance allows the purchase.
+     * @return true when the balance and the item's ownership limit allow the purchase.
      */
     suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean
+
+    /**
+     * Atomically spends [cost] and grants the random coin [reward] from a surprise chest.
+     *
+     * @return true when the chest was opened; false when the balance is insufficient.
+     */
+    suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean
 
     /**
      * Atomically spends [cost] and grants [reward] from a surprise chest.
@@ -90,6 +97,13 @@ interface UserRepository {
      * @return true when an item was available and consumed.
      */
     suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean
+
+    /**
+     * Pays the active streak wager once and clears it.
+     *
+     * @return true if a wager existed and was paid.
+     */
+    suspend fun claimStreakBet(): Boolean
 
     /**
      * Atomically charges [cost] and records the streak bet's [target] ([StreakBet]).

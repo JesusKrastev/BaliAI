@@ -30,7 +30,7 @@ class ShopInventoryRoomTest {
     private lateinit var database: BaliDatabase
 
     private val shopColumns =
-        setOf("hints", "fiftyFifties", "doubleXpBoosts", "doubleCoinBoosts", "streakBetTarget")
+        setOf("hints", "fiftyFifties", "doubleXpBoosts", "doubleCoinBoosts", "streakBetTarget", "activeStreakBet")
 
     @Before
     fun openDatabase() {
@@ -66,13 +66,17 @@ class ShopInventoryRoomTest {
         }
 
     /**
-     * Builds the `users` table of version 18: the current one without the shop columns.
+     * Builds a prior `users` table by removing [removedColumns] from [current].
      *
      * @param current the current table's columns
+     * @param removedColumns columns that the migration under test adds
      * @return a database holding that table with one user row
      */
-    private fun version18Database(current: Map<String, Column>): SupportSQLiteDatabase {
-        val kept = current.filterKeys { it !in shopColumns }
+    private fun priorVersionDatabase(
+        current: Map<String, Column>,
+        removedColumns: Set<String>
+    ): SupportSQLiteDatabase {
+        val kept = current.filterKeys { it !in removedColumns }
         val definitions = kept.map { (name, column) ->
             buildString {
                 append("$name ${column.type}")
@@ -111,18 +115,18 @@ class ShopInventoryRoomTest {
 
     @Test
     fun `the 18 to 19 migration leaves users exactly as Room creates it`() {
-        val expected = usersColumns(database.openHelper.writableDatabase)
-        val db = version18Database(expected)
+        val expected = usersColumns(database.openHelper.writableDatabase).filterKeys { it != "activeStreakBet" }
+        val db = priorVersionDatabase(expected, shopColumns)
 
         BaliDatabase.MIGRATION_18_19.migrate(db)
 
         assertThat(usersColumns(db)).isEqualTo(expected)
-        assertThat(expected.keys).containsAtLeastElementsIn(shopColumns)
+        assertThat(expected.keys).containsAtLeastElementsIn(shopColumns - "activeStreakBet")
     }
 
     @Test
     fun `the migration keeps the user and starts with an empty inventory`() {
-        val db = version18Database(usersColumns(database.openHelper.writableDatabase))
+        val db = priorVersionDatabase(usersColumns(database.openHelper.writableDatabase), shopColumns)
         db.execSQL("UPDATE users SET coins = 340, currentStreak = 9")
 
         BaliDatabase.MIGRATION_18_19.migrate(db)
@@ -134,6 +138,24 @@ class ShopInventoryRoomTest {
             assertThat(it.getInt(0)).isEqualTo(340)
             assertThat(it.getInt(1)).isEqualTo(9)
             for (column in 2..6) assertThat(it.getInt(column)).isEqualTo(0)
+        }
+    }
+
+    /** Verifies v20 profiles gain the new flag without changing their existing data. */
+    @Test
+    fun `the 20 to 21 migration preserves users and starts without an active bet`() {
+        val expected = usersColumns(database.openHelper.writableDatabase)
+        val db = priorVersionDatabase(expected, setOf("activeStreakBet"))
+        db.execSQL("UPDATE users SET coins = 340, currentStreak = 9")
+
+        BaliDatabase.MIGRATION_20_21.migrate(db)
+
+        assertThat(usersColumns(db)).isEqualTo(expected)
+        db.query("SELECT coins, currentStreak, activeStreakBet FROM users").use {
+            assertThat(it.moveToFirst()).isTrue()
+            assertThat(it.getInt(0)).isEqualTo(340)
+            assertThat(it.getInt(1)).isEqualTo(9)
+            assertThat(it.getInt(2)).isEqualTo(0)
         }
     }
 

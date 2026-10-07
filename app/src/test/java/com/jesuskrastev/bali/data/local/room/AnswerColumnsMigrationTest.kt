@@ -50,6 +50,11 @@ class AnswerColumnsMigrationTest {
         override fun migrate(database: SupportSQLiteDatabase) = Unit
     }
 
+    /** The simulated old file already has the current streak bet flag as well. */
+    private val betColumnAlreadyThere = object : Migration(20, 21) {
+        override fun migrate(database: SupportSQLiteDatabase) = Unit
+    }
+
     /**
      * Opens the test database file.
      *
@@ -59,7 +64,12 @@ class AnswerColumnsMigrationTest {
         val builder = Room.databaseBuilder(context, BaliDatabase::class.java, databaseName)
             .allowMainThreadQueries()
         if (withMigration) {
-            builder.addMigrations(BaliDatabase.MIGRATION_17_18, shopColumnsAlreadyThere, rankColumnsAlreadyThere)
+            builder.addMigrations(
+                BaliDatabase.MIGRATION_17_18,
+                shopColumnsAlreadyThere,
+                rankColumnsAlreadyThere,
+                betColumnAlreadyThere
+            )
         }
         return builder.build()
     }
@@ -109,7 +119,7 @@ class AnswerColumnsMigrationTest {
         val database = open(withMigration = true)
         database.openHelper.writableDatabase // opening is what runs the migration and the validation
 
-        assertThat(database.openHelper.readableDatabase.version).isEqualTo(20)
+        assertThat(database.openHelper.readableDatabase.version).isEqualTo(21)
         database.close()
     }
 

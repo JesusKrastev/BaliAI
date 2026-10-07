@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,14 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /** Adds the streak bet flag to databases that have already reached version 20. */
+        val MIGRATION_20_21 = object : Migration(20, 21) {
+            /** Starts existing users without an active bet. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN activeStreakBet INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /** Adds the locally persisted claim ledger for XP-path coin prizes. */
         val MIGRATION_19_20 = object : Migration(19, 20) {
             /** Starts existing profiles with no prizes claimed. */

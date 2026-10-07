@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.domain.usecase
+package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.TestMode
@@ -104,8 +104,8 @@ open class IncrementXpUseCase @Inject constructor(
         val perfectionBonus = if (isRepeat) null else calculatePerfectionBonus(accuracy, totalQuestions)
         val streakBonus = calculateStreakBonus(user.currentStreak)
 
-        // A double-XP boost doubles every part, so the breakdown on the result screen still adds up.
-        val factor = if (userRepository.spendBoostIfOwned(ShopInventoryItem.DOUBLE_XP, user.doubleXpBoosts)) 2 else 1
+        val doublesXp = userRepository.spendBoostIfOwned(ShopInventoryItem.DOUBLE_XP, user.doubleXpBoosts)
+        val factor = if (doublesXp) 2 else 1
         val totalXpGained = factor * (baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0))
 
         val newTotalXp = user.xp + totalXpGained

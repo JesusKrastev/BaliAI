@@ -86,17 +86,26 @@ interface UserDao {
      * Charges [cost] and adds [item] in one SQLite statement, preventing an interrupted
      * purchase from taking coins without granting its inventory item.
      *
-     * @return 1 for a completed purchase, or 0 for insufficient coins.
+     * @return 1 for a completed purchase, or 0 for insufficient coins/an existing streak bet.
      */
     @Query(
         "UPDATE users SET coins = coins - :cost, " +
             "hints = hints + CASE WHEN :item = 'HINT' THEN 1 ELSE 0 END, " +
             "fiftyFifties = fiftyFifties + CASE WHEN :item = 'FIFTY_FIFTY' THEN 1 ELSE 0 END, " +
             "doubleXpBoosts = doubleXpBoosts + CASE WHEN :item = 'DOUBLE_XP' THEN 1 ELSE 0 END, " +
-            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END " +
-            "WHERE coins >= :cost"
+            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN 1 ELSE 0 END, " +
+            "activeStreakBet = CASE WHEN :item = 'STREAK_BET' THEN 1 ELSE activeStreakBet END " +
+            "WHERE coins >= :cost AND (:item != 'STREAK_BET' OR activeStreakBet = 0)"
     )
     suspend fun purchaseInventoryItem(item: String, cost: Int): Int
+
+    /**
+     * Opens a surprise chest by applying both its cost and [reward] in one statement.
+     *
+     * @return 1 if the chest opened, otherwise 0 when the balance was insufficient.
+     */
+    @Query("UPDATE users SET coins = coins - :cost + :reward WHERE coins >= :cost")
+    suspend fun openSurpriseChest(cost: Int, reward: Int): Int
 
     /**
      * Opens a surprise chest by charging [cost] and granting either coins or one inventory item
@@ -131,6 +140,14 @@ interface UserDao {
             "(:item = 'DOUBLE_COINS' AND doubleCoinBoosts > 0)"
     )
     suspend fun consumeInventoryItem(item: String): Int
+
+    /**
+     * Pays the active streak wager one time and clears its pending flag.
+     *
+     * @return 1 if a wager was paid, otherwise 0.
+     */
+    @Query("UPDATE users SET coins = coins + :payout, activeStreakBet = 0 WHERE activeStreakBet = 1")
+    suspend fun claimStreakBetHead(payout: Int): Int
 
     /**
      * Charges [cost] and records the streak bet's [target] in one statement.

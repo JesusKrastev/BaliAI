@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.data.repository
+package com.jesuskrastev.bali.data.repository
 
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
@@ -169,6 +169,18 @@ class UserRepositoryImpl @Inject constructor(
         )
 
     /**
+     * Applies a surprise chest's [reward] while charging its [cost] in the same persistence write.
+     *
+     * @return true when the chest opened, false for an insufficient balance.
+     */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
+            actionLocal = { userDao.openSurpriseChest(cost, reward) == 1 }
+        )
+
+
+    /**
      * Applies a surprise chest's [reward] while charging its [cost] in one persistence write.
      *
      * @return true when the chest opened, false for an insufficient balance.
@@ -197,6 +209,17 @@ class UserRepositoryImpl @Inject constructor(
         authRepository.withAuthRouting(
             actionRemote = { userId -> firestoreUserDao.consumeInventoryItem(userId, item) },
             actionLocal = { userDao.consumeInventoryItem(item.name) == 1 }
+        )
+
+    /**
+     * Pays the active streak wager in whichever store currently owns the user's profile.
+     *
+     * @return true when a wager was paid.
+     */
+    override suspend fun claimStreakBet(): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.claimStreakBetHead(userId, STREAK_BET_PAYOUT) },
+            actionLocal = { userDao.claimStreakBetHead(STREAK_BET_PAYOUT) == 1 }
         )
 
     /** See [UserRepository.placeStreakBet]. */
@@ -265,4 +288,8 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
+
+    private companion object {
+        const val STREAK_BET_PAYOUT = 100
+    }
 }

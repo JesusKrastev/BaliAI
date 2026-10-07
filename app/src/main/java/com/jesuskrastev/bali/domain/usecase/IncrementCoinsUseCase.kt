@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.domain.usecase
+package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem

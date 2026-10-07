@@ -97,16 +97,21 @@ class FakeUserRepository(
     /** Buys [item] from the fake inventory when the test profile can afford [cost]. */
     override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean {
         val user = _user.value ?: return false
-        if (user.coins < cost) return false
+        if (user.coins < cost || (item == ShopInventoryItem.STREAK_BET && user.activeStreakBet)) return false
         _user.value = user.copy(
             coins = user.coins - cost,
             hints = user.hints + if (item == ShopInventoryItem.HINT) 1 else 0,
             fiftyFifties = user.fiftyFifties + if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
             doubleXpBoosts = user.doubleXpBoosts + if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
-            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
+            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0,
+            activeStreakBet = user.activeStreakBet || item == ShopInventoryItem.STREAK_BET
         )
         return true
     }
+
+    /** Charges [cost] and grants the coin [reward]; returns whether the fake user could pay. */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean =
+        openSurpriseChest(cost, ChestReward.Coins(reward))
 
     /** Opens a fake surprise chest by charging [cost] and granting its [reward]. */
     override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean {
@@ -136,6 +141,7 @@ class FakeUserRepository(
             ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties > 0
             ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts > 0
             ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts > 0
+            ShopInventoryItem.STREAK_BET -> false
         }
         if (!canConsume) return false
         _user.value = user.copy(
@@ -144,6 +150,14 @@ class FakeUserRepository(
             doubleXpBoosts = user.doubleXpBoosts - if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
             doubleCoinBoosts = user.doubleCoinBoosts - if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
         )
+        return true
+    }
+
+    /** Pays an active streak bet once; returns whether a payout was made. */
+    override suspend fun claimStreakBet(): Boolean {
+        val user = _user.value ?: return false
+        if (!user.activeStreakBet) return false
+        _user.value = user.copy(coins = user.coins + 100, activeStreakBet = false)
         return true
     }
 

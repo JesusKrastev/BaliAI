@@ -4,6 +4,7 @@ import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV11ToV12
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV12ToV13
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV13ToV14
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV14ToV15
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
@@ -75,6 +76,7 @@ object FirestoreMigrationsModule {
     @Singleton
     fun provideMigrationV9ToV10(migration: MigrationV9ToV10): FirestoreMigration = migration
 
+
     @Provides
     @IntoSet
     @Singleton
@@ -97,6 +99,11 @@ object FirestoreMigrationsModule {
     @Singleton
     fun provideMigrationV13ToV14(migration: MigrationV13ToV14): FirestoreMigration = migration
 
+    /** Registers the optional active streak bet flag on existing profiles. */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV14ToV15(migration: MigrationV14ToV15): FirestoreMigration = migration
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides
     @dagger.multibindings.ElementsIntoSet
