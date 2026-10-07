@@ -118,7 +118,6 @@ class FirestoreUserDao @Inject constructor(
     }
 
     /**
-    /**
      * Runs [block] as one Firestore transaction, reporting a failure to Crashlytics before
      * rethrowing it. Shop and reward writes are transactions because they read the balance or
      * the stock they change; unlike [incrementCoins] they need a connection.
