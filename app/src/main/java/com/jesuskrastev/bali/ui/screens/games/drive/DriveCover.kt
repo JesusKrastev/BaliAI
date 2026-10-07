@@ -74,15 +74,10 @@ fun BaliDriveCover(modifier: Modifier = Modifier, fullScreen: Boolean = false) {
         withTransform({ if (!fullScreen) translate(top = size.height * 0.36f - projection.anchorScreenY) }) {
             drawDriveWorld(engine, fx, projection, art, clock)
         }
-        // Keep the town visible while the title and bottom action remain readable.
-        drawRect(
-            Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = if (fullScreen) 0.8f else 0f),
-                0.4f to Color.Transparent,
-                0.55f to Color.Transparent,
-                1f to Color.Black.copy(alpha = if (fullScreen) 0.78f else 0.55f),
-            )
-        )
+        // Compact cards keep a soft fade under their caption; the full-screen cover stays unshaded.
+        if (!fullScreen) {
+            drawRect(Brush.verticalGradient(0.55f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f)))
+        }
     }
 }
 

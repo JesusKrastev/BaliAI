@@ -113,6 +113,7 @@ import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 import com.jesuskrastev.bali.ui.theme.BaliSecondary
+import com.jesuskrastev.bali.ui.theme.RacingFont
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.sin
@@ -155,10 +156,6 @@ fun BaliDriveScreen(onExit: () -> Unit, modifier: Modifier = Modifier, viewModel
                     Button(onClick = viewModel::prepare) { Text(stringResource(R.string.drive_retry)) }
                     TextButton(onClick = exitOnce) { Text(stringResource(R.string.drive_exit)) }
                 } else CircularProgressIndicator()
-            }
-        } else if (state.phase == DriveScreenPhase.TUTORIAL || state.phase == DriveScreenPhase.SAVING_TUTORIAL) {
-            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.drawSafe)) {
-                DriveTutorial(state, viewModel::onEvent, exitOnce)
             }
         } else if (state.runId > 0) {
             key(state.runId) {
@@ -204,6 +201,9 @@ internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit
     val density = LocalDensity.current
     val stillSpeedPx = with(density) { STILL_SPEED_DP.dp.toPx() }
     val art = rememberDriveArt()
+    // The coach belongs to this run: finishing the lesson clears state.coached without rebuilding it.
+    val coach = remember(state.runId) { DriveCoach(enabled = state.coached) }
+    var coachStep by remember(state.runId) { mutableStateOf(coach.step) }
 
     var frame by remember { mutableLongStateOf(0L) }
     var clock by remember { mutableFloatStateOf(0f) }
@@ -307,7 +307,20 @@ internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit
                         val dx = input.takeDx()
                         input.advance(dt, dx, stillSpeedPx)
                         val unitPx = canvasWidth / 5.6f
-                        engine.update(dt, steer = dx / unitPx * STEER_GAIN, brake = input.braking)
+                        if (coach.step != CoachStep.DONE) {
+                            val nextSituation = engine.situations.firstOrNull { it.status == SituationStatus.UPCOMING }
+                            coachStep = coach.update(
+                                driving = engine.phase == DrivePhase.DRIVING,
+                                distanceToSituation = nextSituation?.let { it.layoutStart - engine.car.y } ?: Float.MAX_VALUE,
+                                dx = dx,
+                                laneWidthPx = unitPx,
+                                braking = input.braking,
+                                dt = dt,
+                            )
+                            if (coachStep == CoachStep.DONE) viewModel.completeCoach()
+                        }
+                        // While a gesture is being taught the road stands still, so there is no hurry.
+                        if (!coach.freezesRoad) engine.update(dt, steer = dx / unitPx * STEER_GAIN, brake = input.braking)
                         fx.update(dt)
                         val car = engine.car
                         if (car.braking && car.speed > 1.4f) {
@@ -413,6 +426,7 @@ internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit
         )
 
         if (hud.phase == DrivePhase.COUNTDOWN) CountdownOverlay(hud.countdown)
+        DriveCoachOverlay(coachStep)
         hud.fault?.let { FaultOverlay(it, shielded = hud.faultShielded, onTap = { engine.resumeFromFault() }) }
 
         state.result?.let { result ->
@@ -703,14 +717,13 @@ private fun BoxScope.CountdownOverlay(number: Int) {
         pop.snapTo(0f)
         pop.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium))
     }
-    Box(Modifier.matchParentSize().background(BaliSecondary.copy(alpha = 0.35f)))
     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(28.dp)) {
         Text(
             if (number <= 0) "¡YA!" else "$number",
             modifier = Modifier.graphicsLayer { scaleX = 0.4f + pop.value * 0.6f; scaleY = 0.4f + pop.value * 0.6f; alpha = pop.value.coerceIn(0f, 1f) },
             color = Color.White,
+            fontFamily = RacingFont,
             fontSize = 96.sp,
-            fontWeight = FontWeight.Black,
             style = TextStyle(shadow = androidx.compose.ui.graphics.Shadow(BaliPrimary, Offset(0f, 8f), 0f)),
         )
     }

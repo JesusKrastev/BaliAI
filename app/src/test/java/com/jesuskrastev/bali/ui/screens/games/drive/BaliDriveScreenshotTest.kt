@@ -204,22 +204,22 @@ class BaliDriveScreenshotTest {
         composeTestRule.onRoot().captureRoboImage("build/bali-drive/results_large_fonts.png")
     }
 
-    /** Captures the first control demonstration without advancing a real run. */
+    /** Captures the steering lesson card over an empty road. */
     @Test
-    fun captureSteeringTutorial() {
+    fun captureSteeringCoach() {
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { DriveTutorial(DriveUiState(phase = DriveScreenPhase.TUTORIAL), {}, {}) } }
+        composeTestRule.setContent { Themed { Box(Modifier.fillMaxSize()) { DriveCoachOverlay(CoachStep.STEER) } } }
         composeTestRule.mainClock.advanceTimeBy(600)
-        composeTestRule.onRoot().captureRoboImage("build/bali-drive/tutorial_steer.png")
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/coach_steer.png")
     }
 
-    /** Captures stationary braking, release guidance and the practice surface. */
+    /** Captures the braking lesson card with its press-and-hold rings. */
     @Test
-    fun captureBrakingTutorial() {
+    fun captureBrakingCoach() {
         composeTestRule.mainClock.autoAdvance = false
-        composeTestRule.setContent { Themed { DriveTutorial(DriveUiState(phase = DriveScreenPhase.TUTORIAL, tutorialStep = 1), {}, {}) } }
+        composeTestRule.setContent { Themed { Box(Modifier.fillMaxSize()) { DriveCoachOverlay(CoachStep.BRAKE) } } }
         composeTestRule.mainClock.advanceTimeBy(600)
-        composeTestRule.onRoot().captureRoboImage("build/bali-drive/tutorial_brake.png")
+        composeTestRule.onRoot().captureRoboImage("build/bali-drive/coach_brake.png")
     }
 
     /** Captures the canonical dialog content; modal behavior is covered by semantic UI tests. */

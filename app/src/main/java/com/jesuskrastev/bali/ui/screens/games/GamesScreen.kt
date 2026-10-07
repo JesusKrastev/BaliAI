@@ -50,6 +50,7 @@ import com.jesuskrastev.bali.ui.screens.games.drive.DriveIconKind
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
 import com.jesuskrastev.bali.ui.theme.BaliSecondary
+import com.jesuskrastev.bali.ui.theme.RacingFont
 import com.jesuskrastev.bali.ui.util.LightSystemBarIcons
 import com.jesuskrastev.bali.ui.util.drawSafe
 
@@ -77,11 +78,12 @@ fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) 
                 modifier = Modifier.padding(top = 10.dp),
                 color = Color.White,
                 style = TextStyle(
+                    fontFamily = RacingFont,
                     fontSize = 46.sp,
                     lineHeight = 48.sp,
-                    fontWeight = FontWeight.Black,
+                    fontWeight = FontWeight.Normal,
                     fontStyle = FontStyle.Italic,
-                    letterSpacing = 1.sp,
+                    letterSpacing = 2.sp,
                     shadow = Shadow(BaliPrimary, Offset(0f, 7f), blurRadius = 0f),
                 ),
                 textAlign = TextAlign.Center,
@@ -97,7 +99,8 @@ fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) 
             Text(
                 stringResource(R.string.drive_cover_prompt),
                 color = BaliAccentYellow,
-                fontWeight = FontWeight.Black,
+                fontFamily = RacingFont,
+                fontWeight = FontWeight.Normal,
                 style = MaterialTheme.typography.titleMedium.copy(shadow = Shadow(Color.Black, Offset(0f, 2f), 6f)),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(bottom = 14.dp),
@@ -113,7 +116,7 @@ fun GamesScreen(onGameClick: (GameType) -> Unit, modifier: Modifier = Modifier) 
                     stringResource(R.string.drive_cover_controls),
                     color = Color.White.copy(alpha = 0.92f),
                     style = MaterialTheme.typography.labelMedium.copy(shadow = Shadow(Color.Black, Offset(0f, 2f), 6f)),
-                    fontWeight = FontWeight.Bold,
+                    fontFamily = RacingFont,
                     letterSpacing = 1.sp,
                 )
             }
@@ -131,7 +134,7 @@ private fun ArcadeTag(label: String) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DriveIcon(DriveIconKind.FLAG, Modifier.size(16.dp), BaliAccentYellow)
-        Text(label, color = BaliAccentYellow, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
+        Text(label, color = BaliAccentYellow, fontFamily = RacingFont, fontSize = 12.sp, letterSpacing = 3.sp)
         DriveIcon(DriveIconKind.FLAG, Modifier.size(16.dp), BaliAccentYellow)
     }
 }
@@ -171,8 +174,8 @@ private fun PlayButton(onClick: () -> Unit) {
                 Text(
                     stringResource(R.string.drive_play),
                     modifier = Modifier.padding(start = 6.dp),
+                    fontFamily = RacingFont,
                     fontSize = 28.sp,
-                    fontWeight = FontWeight.Black,
                     letterSpacing = 3.sp,
                 )
             }
