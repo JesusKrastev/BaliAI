@@ -184,8 +184,8 @@ fun AppNavigation(
                         navController.navigateTopLevel(ChatRoute)
                     },
                     onPlayGameClick = {
-                        // The first-steps bar's game task goes straight into a game; back returns to Home.
-                        navController.navigate(GamePlayRoute(GameType.DRIVE.id))
+                        // The first-steps bar opens Bali Drive; every exit returns to Juegos.
+                        navController.openBaliDrive()
                     },
                     onExamClick = openExam,
                     onSeePlanClick = {
@@ -195,14 +195,16 @@ fun AppNavigation(
             }
 
             composable<GamesRoute> {
-                GamesScreen(onGameClick = { game ->
-                    navController.navigate(GamePlayRoute(game.id))
-                })
+                GamesScreen(onGameClick = { navController.openBaliDrive() })
             }
 
             composable<GamePlayRoute> {
                 // Retired routes retain their serializable signature and open Bali Drive.
-                BaliDriveScreen(onExit = { navController.popBackStack() })
+                BaliDriveScreen(onExit = {
+                    if (!navController.popBackStack<GamesRoute>(inclusive = false)) {
+                        navController.navigateTopLevel(GamesRoute)
+                    }
+                })
             }
 
             composable<SettingsRoute> {
@@ -446,6 +448,12 @@ fun AppNavigation(
             }
         }
     }
+}
+
+/** Opens Bali Drive once, even when its entry button receives rapid repeated taps. */
+private fun NavHostController.openBaliDrive() {
+    if (currentDestination?.hasRoute<GamePlayRoute>() == true) return
+    navigate(GamePlayRoute(GameType.DRIVE.id)) { launchSingleTop = true }
 }
 
 /** Switches primary tabs while preserving their state and avoiding duplicate destinations. */

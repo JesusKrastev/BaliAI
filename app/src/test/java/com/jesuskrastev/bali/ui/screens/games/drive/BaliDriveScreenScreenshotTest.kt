@@ -35,7 +35,8 @@ class BaliDriveScreenScreenshotTest {
         var selected: GameType? = null
         compose.mainClock.autoAdvance = true
         compose.setContent { BaliTheme { GamesScreen(onGameClick = { selected = it }) } }
-        compose.onNodeWithText("Jugar").performScrollTo().assertIsDisplayed().performClick()
+        compose.onNodeWithText("BALI DRIVE").assertIsDisplayed()
+        compose.onNodeWithText("Jugar").assertIsDisplayed().performClick()
         assertThat(selected).isEqualTo(GameType.DRIVE)
         compose.onNodeWithText("Puntos del Carné").assertDoesNotExist()
         compose.onNodeWithText("Todos").assertDoesNotExist()

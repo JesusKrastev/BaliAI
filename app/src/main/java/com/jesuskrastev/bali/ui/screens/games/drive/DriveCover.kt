@@ -25,9 +25,12 @@ import kotlin.math.min
  * Live cover of Bali Drive for the arcade catalogue: the real renderer showing Bali's car on
  * autopilot, weaving between lanes to collect the stars of the route's first stretch, then
  * starting over before the first situation. It shows how the game plays before it is opened.
+ * @param modifier places the live preview in its parent
+ * @param fullScreen uses the gameplay camera across the full Games tab
+ * @return the animated preview
  */
 @Composable
-fun BaliDriveCover(modifier: Modifier = Modifier) {
+fun BaliDriveCover(modifier: Modifier = Modifier, fullScreen: Boolean = false) {
     val art = rememberDriveArt()
     val fx = remember { DriveFx() }
     var seed by remember { mutableLongStateOf(7L) }
@@ -65,13 +68,21 @@ fun BaliDriveCover(modifier: Modifier = Modifier) {
 
     Canvas(modifier) {
         if (frame < 0L) return@Canvas // reading the frame makes every frame redraw
-        // Projected as on a phone screen, then framed on the car: a wide card would squash the road.
-        val projection = DriveProjection(size.width, size.width * PHONE_ASPECT, engine.car.y, viewWidth = 8f, centerX = -0.6f)
-        withTransform({ translate(top = size.height * 0.36f - projection.anchorScreenY) }) {
+        // Full-screen previews share the game camera; compact callers retain the card framing.
+        val projection = if (fullScreen) DriveProjection(size.width, size.height, engine.car.y)
+            else DriveProjection(size.width, size.width * PHONE_ASPECT, engine.car.y, viewWidth = 8f, centerX = -0.6f)
+        withTransform({ if (!fullScreen) translate(top = size.height * 0.36f - projection.anchorScreenY) }) {
             drawDriveWorld(engine, fx, projection, art, clock)
         }
-        // Darkens the lower half so the card's title and button stay readable over the scene.
-        drawRect(Brush.verticalGradient(0.3f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.55f)))
+        // Keep the town visible while the title and bottom action remain readable.
+        drawRect(
+            Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = if (fullScreen) 0.72f else 0f),
+                0.34f to Color.Transparent,
+                0.62f to Color.Transparent,
+                1f to Color.Black.copy(alpha = if (fullScreen) 0.78f else 0.55f),
+            )
+        )
     }
 }
 

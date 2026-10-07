@@ -133,20 +133,27 @@ private val SUCCESS_COLORS = listOf(BaliPrimary, BaliAccentYellow, BaliAccentGre
 @Composable
 fun BaliDriveScreen(onExit: () -> Unit, modifier: Modifier = Modifier, viewModel: BaliDriveViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var hasExited by remember { mutableStateOf(false) }
+    val exitOnce: () -> Unit = {
+        if (!hasExited) {
+            hasExited = true
+            onExit()
+        }
+    }
     Box(modifier.fillMaxSize().background(DrivePalette.Grass)) {
         if (state.phase == DriveScreenPhase.LOADING) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (state.error) {
                     Text(stringResource(R.string.drive_load_error))
                     Button(onClick = viewModel::prepare) { Text(stringResource(R.string.drive_retry)) }
-                    TextButton(onClick = onExit) { Text(stringResource(R.string.drive_exit)) }
+                    TextButton(onClick = exitOnce) { Text(stringResource(R.string.drive_exit)) }
                 } else CircularProgressIndicator()
             }
         } else if (state.phase == DriveScreenPhase.TUTORIAL || state.phase == DriveScreenPhase.SAVING_TUTORIAL) {
-            DriveTutorial(state, viewModel::onEvent, onExit)
+            DriveTutorial(state, viewModel::onEvent, exitOnce)
         } else if (state.runId > 0) {
             key(state.runId) {
-                DriveRun(state = state, viewModel = viewModel, onExit = onExit)
+                DriveRun(state = state, viewModel = viewModel, onExit = exitOnce)
             }
         }
     }
