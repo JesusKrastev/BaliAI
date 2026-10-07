@@ -38,8 +38,7 @@ class MigrationV12ToV13 @Inject constructor(
                     "fiftyFifties" to 0,
                     "doubleXpBoosts" to 0,
                     "doubleCoinBoosts" to 0,
-                    "streakBetTarget" to 0,
-                    "activeStreakBet" to false
+                    "streakBetTarget" to 0
                 ),
                 SetOptions.merge()
             )

@@ -229,6 +229,7 @@ class ShopViewModelTest {
                     ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties
                     ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts
                     ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts
+                    ShopInventoryItem.STREAK_BET -> error("Streak bets are not chest rewards")
                 }
                 assertThat(owned).isEqualTo(reward.quantity)
             }

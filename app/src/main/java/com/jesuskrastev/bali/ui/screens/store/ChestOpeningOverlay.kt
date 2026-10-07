@@ -339,6 +339,11 @@ private fun ChestRewardReveal(reward: ChestReward) {
                     scaleY = pulse.value
                     rotationZ = rotation.value / 2f
                 }
+            ShopInventoryItem.STREAK_BET ->
+                Modifier.graphicsLayer {
+                    scaleX = pulse.value
+                    scaleY = pulse.value
+                }
         }
     }
 
@@ -370,7 +375,7 @@ private fun ChestRewardReveal(reward: ChestReward) {
     }
 }
 
-/** Returns the drawable that visually represents [reward]. */
+/** Returns the drawable for [reward], including its inventory item when present. */
 private fun rewardImage(reward: ChestReward): Int = when (reward) {
     is ChestReward.Coins -> R.drawable.coin
     is ChestReward.Inventory -> when (reward.item) {
@@ -378,10 +383,11 @@ private fun rewardImage(reward: ChestReward): Int = when (reward) {
         ShopInventoryItem.FIFTY_FIFTY -> R.drawable.shop_fifty_fifty
         ShopInventoryItem.DOUBLE_XP -> R.drawable.shop_double_xp
         ShopInventoryItem.DOUBLE_COINS -> R.drawable.shop_double_coins
+        ShopInventoryItem.STREAK_BET -> R.drawable.shop_streak_bet
     }
 }
 
-/** Returns the short, prominent label displayed beside [reward]. */
+/** Returns the short label displayed beside [reward]. */
 private fun rewardTitle(reward: ChestReward): String = when (reward) {
     is ChestReward.Coins -> "+${reward.amount}"
     is ChestReward.Inventory -> when (reward.item) {
@@ -389,6 +395,7 @@ private fun rewardTitle(reward: ChestReward): String = when (reward) {
         ShopInventoryItem.FIFTY_FIFTY -> "50/50 ×${reward.quantity}"
         ShopInventoryItem.DOUBLE_XP -> "Doble XP"
         ShopInventoryItem.DOUBLE_COINS -> "Doble moneda"
+        ShopInventoryItem.STREAK_BET -> "Apuesta de racha"
     }
 }
 
@@ -400,5 +407,6 @@ private fun rewardMessage(reward: ChestReward): String = when (reward) {
         ShopInventoryItem.FIFTY_FIFTY -> "¡Has encontrado un 50/50!"
         ShopInventoryItem.DOUBLE_XP -> "¡Recompensa rara: doble XP!"
         ShopInventoryItem.DOUBLE_COINS -> "¡Recompensa rara: doble de monedas!"
+        ShopInventoryItem.STREAK_BET -> "¡Has activado una apuesta de racha!"
     }
 }

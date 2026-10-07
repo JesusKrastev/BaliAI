@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onRoot
@@ -45,19 +44,20 @@ class TestScreenScreenshotTest {
     fun practiceAidsOnlyShowItemsThatCanBeUsed() {
         composeTestRule.setContent {
             MaterialTheme {
-                PracticeAids(
+                PracticeAidChips(
                     hints = 2,
                     fiftyFifties = 0,
                     isHintVisible = false,
                     isFiftyFiftyUsed = false,
+                    isAnswerChecked = false,
                     onUseHint = {},
                     onUseFiftyFifty = {}
                 )
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Usar pista; 2 disponibles").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Usar 50/50; 0 disponibles").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Usar pista, te quedan 2").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Usar 50/50, te quedan 0").assertDoesNotExist()
     }
 
     /** Verifies that the compact aid row is absent when the user owns no usable inventory. */
@@ -65,18 +65,19 @@ class TestScreenScreenshotTest {
     fun practiceAidsAreHiddenWithoutUsableInventory() {
         composeTestRule.setContent {
             MaterialTheme {
-                PracticeAids(
+                PracticeAidChips(
                     hints = 0,
                     fiftyFifties = 0,
                     isHintVisible = false,
                     isFiftyFiftyUsed = false,
+                    isAnswerChecked = false,
                     onUseHint = {},
                     onUseFiftyFifty = {}
                 )
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Usar pista; 0 disponibles").assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("Usar 50/50; 0 disponibles").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Usar pista, te quedan 0").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Usar 50/50, te quedan 0").assertDoesNotExist()
     }
 }
