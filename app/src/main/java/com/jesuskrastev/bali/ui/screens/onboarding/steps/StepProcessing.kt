@@ -178,24 +178,17 @@ private fun ProgressRing(progress: Float, percentage: Int) {
  */
 private fun buildProcessingTasks(data: OnboardingData): List<ProcessingTask> = listOf(
     when (data.experience) {
-        OnboardingConfig.EXPERIENCE_RETRY -> ProcessingTask("🔁", "Revisando tus fallos")
-        OnboardingConfig.EXPERIENCE_FIRST_TIME -> ProcessingTask("🎓", "Empezando desde cero")
+        OnboardingConfig.EXPERIENCE_RETRY -> ProcessingTask("🔁", "Plan para tu segundo intento")
+        OnboardingConfig.EXPERIENCE_FIRST_TIME -> ProcessingTask("🎓", "Plan para aprobar a la primera")
         else -> ProcessingTask("🎯", "Analizando tu nivel")
     },
 
+    quizTask(data),
+
     ProcessingTask(
         emoji = "📍",
-        text = data.province
-            ?.let { "Seleccionando preguntas de $it" }
-            ?: "Seleccionando preguntas de la DGT"
+        text = data.province?.let { "Tu examen en $it" } ?: "Tu examen de la DGT"
     ),
-
-    when (data.theoryBlocker) {
-        OnboardingConfig.BLOCKER_NO_START -> ProcessingTask("🧩", "Ordenando el temario")
-        OnboardingConfig.BLOCKER_NO_PROGRESS -> ProcessingTask("📈", "Midiendo tu avance")
-        OnboardingConfig.BLOCKER_NO_METHOD -> ProcessingTask("🧭", "Fijando tu método")
-        else -> ProcessingTask("🛡️", "Buscando tus puntos débiles")
-    },
 
     ProcessingTask(emoji = "📅", text = examWorkLabel(data.examDate)),
 
@@ -206,13 +199,27 @@ private fun buildProcessingTasks(data: OnboardingData): List<ProcessingTask> = l
             ?: "Ajustando tu ritmo"
     ),
 
-    when (data.motivation) {
-        OnboardingConfig.MOTIVATION_INDEPENDENCE -> ProcessingTask("🕊️", "Meta: independencia")
-        OnboardingConfig.MOTIVATION_WORK -> ProcessingTask("💼", "Meta: mejor trabajo")
-        OnboardingConfig.MOTIVATION_FREEDOM -> ProcessingTask("🌍", "Meta: moverte libre")
-        else -> ProcessingTask("🏁", "Fijando tu meta")
-    }
+    OnboardingConfig.learningStyle(data.learningPreference)
+        ?.let { ProcessingTask(it.emoji, "Tu forma favorita: ${it.label.lowercase()}") }
+        ?: ProcessingTask("🏁", "Fijando tu meta")
 )
+
+/**
+ * The checklist line that answers the mini-test: the first topic to reinforce, the starting
+ * score when nothing was missed, or the syllabus when the test was skipped.
+ *
+ * @param data the answers collected during the onboarding flow
+ * @return the task
+ */
+private fun quizTask(data: OnboardingData): ProcessingTask {
+    val failed = data.failedQuizQuestions().firstOrNull()
+    return when {
+        failed != null -> ProcessingTask("🎯", "Marcando ${failed.topic} para reforzar")
+        data.quizAnswers.isNotEmpty() ->
+            ProcessingTask("🎯", "Nivel de partida: ${data.quizScore()} de ${data.quizAnswers.size}")
+        else -> ProcessingTask("🧩", "Ordenando el temario")
+    }
+}
 
 /**
  * Describes the scheduling task in terms of the user's own exam date.

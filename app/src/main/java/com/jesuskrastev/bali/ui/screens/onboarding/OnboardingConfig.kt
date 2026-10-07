@@ -1,9 +1,9 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
 import androidx.annotation.RawRes
-import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySlot
+import com.jesuskrastev.bali.ui.screens.stats.calendarDaysBetween
 import java.text.Normalizer
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -16,11 +16,13 @@ import java.util.concurrent.TimeUnit
  * @param emoji large symbol shown at the top, used when [animation] is null
  * @param body short, punchy line that lands the idea
  * @param animation optional Lottie raw resource rendered instead of [emoji]
+ * @param scene optional hand-drawn scene, rendered instead of [animation] and [emoji]
  */
 data class NarrativeContent(
     val emoji: String,
     val body: String,
-    @RawRes val animation: Int? = null
+    @RawRes val animation: Int? = null,
+    val scene: com.jesuskrastev.bali.ui.screens.onboarding.steps.NarrativeScene? = null
 )
 
 /**
@@ -31,6 +33,16 @@ data class NarrativeContent(
  * @param body the review itself, rendered between quotes by the screens
  */
 data class Testimonial(val name: String, val title: String, val body: String)
+
+/**
+ * One answer to "¿Cómo te gusta practicar?".
+ *
+ * @property key stable value reported to analytics
+ * @property emoji the big symbol of the tile
+ * @property label two words at most, read at a glance
+ * @property hint one short line under the label
+ */
+data class LearningStyle(val key: String, val emoji: String, val label: String, val hint: String)
 
 /**
  * Strips the leading emoji from an option label, so the answer can be shown as plain text
@@ -85,23 +97,29 @@ object OnboardingConfig {
 
     val theoryBlockers = listOf(BLOCKER_NO_START, BLOCKER_NO_PROGRESS, BLOCKER_NO_METHOD)
 
+    /** The user fears turning up to the exam without really being ready. */
+    const val CONCERN_NOT_READY = "😨 Llegar sin estar realmente preparado"
+
+    /** The user fears the exam will not look like what they studied. */
+    const val CONCERN_EXAM_MISMATCH = "🤨 Que el examen no se parezca a lo que he estudiado"
+
+    /** The user fears failing over a detail they misread. */
+    const val CONCERN_SILLY_MISTAKES = "🤦 Fallar por detalles tontos"
+
     /**
-     * What the user is afraid of on exam day. Asked right after the study blocker so the
-     * diagnosis covers both the problem today and the fear it feeds.
+     * What the user is afraid of on exam day. It picks the questions of the mini-test that
+     * follows, so the first taste of the app tests exactly that fear.
      */
-    val concerns = listOf(
-        "😨 Llegar sin estar realmente preparado",
-        "🤨 Que el examen no se parezca a lo que he estudiado",
-        "🤦 Fallar por detalles tontos"
-    )
+    val concerns = listOf(CONCERN_NOT_READY, CONCERN_EXAM_MISMATCH, CONCERN_SILLY_MISTAKES)
 
     /**
      * Self-assessed starting point. Binary on purpose: it sets the tone of the plan without
-     * asking the user to score themselves on a scale they cannot calibrate.
+     * asking the user to score themselves on a scale they cannot calibrate. Worded so it reads
+     * the same whoever answers it.
      */
     val readinessLevels = listOf(
-        "💪 Tengo una base, pero quiero llegar bien preparado",
-        "🚀 No me siento listo, necesito darle caña"
+        "💪 Tengo una base, pero quiero ir con todo bien atado",
+        "🚀 Aún me falta mucho, necesito darle caña"
     )
 
     /** The licence as a step towards not depending on anyone. */
@@ -115,46 +133,22 @@ object OnboardingConfig {
 
     val motivations = listOf(MOTIVATION_INDEPENDENCE, MOTIVATION_WORK, MOTIVATION_FREEDOM)
 
-    val futureImpacts = listOf(
-        "🚀 Me sentiría mucho más libre",
-        "🗺️ Podría moverme cuando quisiera",
-        "📈 Me ayudaría en el trabajo o los estudios"
-    )
-
-    /** The exam is days away. */
-    const val EXAM_TIMING_IMMINENT = "🔥 En menos de 3 días"
-
-    /** The exam falls within the next fortnight. */
-    const val EXAM_TIMING_SOON = "📅 Esta semana o la siguiente"
-
-    /** The exam is more than two weeks out. */
-    const val EXAM_TIMING_LATER = "🗓️ En más de 2 semanas"
-
-    /** No exam booked yet, so there is no date to schedule the plan against. */
-    const val EXAM_TIMING_UNBOOKED = "🤷 Aún no lo he reservado"
-
     /**
-     * How far away the exam is. Buckets instead of a calendar: a tap answers it, and the
-     * plan only ever needs the order of magnitude, not the exact day.
-     */
-    val examTimings = listOf(
-        EXAM_TIMING_IMMINENT, EXAM_TIMING_SOON, EXAM_TIMING_LATER, EXAM_TIMING_UNBOOKED
-    )
-
-    /**
-     * Turns an exam timing bucket into the approximate date the plan is built around.
+     * Sorts the exam date into the buckets the funnel was segmented by before the date picker,
+     * so analytics can still compare the groups.
      *
-     * @param timing one of [examTimings]
-     * @return the estimated exam date in millis, or null when no exam is booked
+     * @param examDate the exam day picked, or null when the user has no date yet
+     * @param now current time in millis
+     * @return `imminent` (under 3 days), `soon` (up to 2 weeks), `later` or `unbooked`
      */
-    fun examDateFor(timing: String): Long? {
-        val days = when (timing) {
-            EXAM_TIMING_IMMINENT -> 2L
-            EXAM_TIMING_SOON -> 10L
-            EXAM_TIMING_LATER -> 21L
-            else -> return null
+    fun examTimingTag(examDate: Long?, now: Long = System.currentTimeMillis()): String {
+        if (examDate == null) return "unbooked"
+        val days = TimeUnit.MILLISECONDS.toDays(examDate - now)
+        return when {
+            days < 3 -> "imminent"
+            days <= 14 -> "soon"
+            else -> "later"
         }
-        return System.currentTimeMillis() + TimeUnit.DAYS.toMillis(days)
     }
 
     /** Studying every single day. */
@@ -207,7 +201,7 @@ object OnboardingConfig {
      * @param slot the part of the day the user picked
      * @return the hour as the app writes times, e.g. "21:00"
      */
-    fun reminderTimeLabel(slot: StudySlot): String = "%d:00".format(slot.hour)
+    fun reminderTimeLabel(slot: StudySlot): String = "${slot.hour}:00"
 
     /**
      * When the user likes to study, keyed by the option label. The hour is part of the label
@@ -240,21 +234,21 @@ object OnboardingConfig {
     private const val PLAN_WEEKS_WHENEVER = 8
 
     /**
-     * Works out the day the plan promises the license by: the one shown in the plan reveal
-     * ("Puedes tener tu carnet antes del…") and the one saved for Home's plan card, so both
-     * always say the same thing.
+     * Works out the day the plan aims to have the theory exam passed by: the one shown in the
+     * plan reveal ("Puedes aprobar el teórico antes del…") and the one saved for Home's plan card,
+     * so both always say the same thing.
      *
-     * A booked exam still ahead is the honest answer. Without one the date is derived from the
+     * An exam date from today on is the honest answer. Without one the date is derived from the
      * rhythm the user committed to, which keeps the promise personal instead of inventing a
      * deadline.
      *
-     * @param examDate the estimated exam date, or null when no exam is booked
+     * @param examDate the exam day the user picked (local midnight), or null when they have none
      * @param weeklyStudy one of [weeklyStudyOptions], or null if unanswered
      * @param now current time in millis, the day the plan starts
      * @return the target day in millis
      */
     fun planTargetMillis(examDate: Long?, weeklyStudy: String?, now: Long = System.currentTimeMillis()): Long {
-        examDate?.takeIf { it > now }?.let { return it }
+        examDate?.takeIf { calendarDaysBetween(now, it) >= 0 }?.let { return it }
 
         val weeks = when (weeklyStudy) {
             WEEKLY_STUDY_DAILY -> PLAN_WEEKS_DAILY
@@ -269,16 +263,37 @@ object OnboardingConfig {
             .timeInMillis
     }
 
-    val learningPreferences = listOf(
-        "🎯 Tests adaptados a mis fallos",
-        "🎲 Tests aleatorios, para estar listo ante todo",
-        "🤖 Explicaciones con IA de cada error",
-        "🎓 Simulacros de examen reales"
-    )
+    /** Short sessions of ten questions. */
+    val STYLE_QUICK_TESTS = LearningStyle("quick_tests", "⚡", "Tests cortos", "10 preguntas y listo")
+
+    /** Full exam simulations. */
+    val STYLE_MOCK_EXAMS = LearningStyle("mock_exams", "🎓", "Simulacros", "Como el examen real")
+
+    /** The mini-games. */
+    val STYLE_GAMES = LearningStyle("games", "🎮", "Jugando", "Señales y normas en minijuegos")
+
+    /** Understanding the why of every answer. */
+    val STYLE_EXPLANATIONS = LearningStyle("explanations", "💡", "Entendiendo", "Cada fallo bien explicado")
 
     /**
-     * The 52 Spanish provinces, in alphabetical order. Asked so the flow can promise the
-     * user the exact question bank of the traffic office they will sit the exam in.
+     * How the user likes to practise. Four styles that are really different from each other —
+     * each one is a part of the app — so the answer says something, and short enough to read at
+     * a glance in a two-by-two grid.
+     */
+    val learningStyles = listOf(STYLE_QUICK_TESTS, STYLE_MOCK_EXAMS, STYLE_GAMES, STYLE_EXPLANATIONS)
+
+    /**
+     * Looks a learning style up by its key.
+     *
+     * @param key a [LearningStyle.key], or null when unanswered
+     * @return the style, or null when [key] is unknown
+     */
+    fun learningStyle(key: String?): LearningStyle? = learningStyles.firstOrNull { it.key == key }
+
+    /**
+     * The 52 Spanish provinces, in alphabetical order. The theory exam is the same in all of
+     * them, so the answer only makes the plan the user's own: it is never used to claim a
+     * different question bank per province.
      */
     val provinces = listOf(
         "Álava", "Albacete", "Alicante", "Almería", "Asturias", "Ávila", "Badajoz",
@@ -378,62 +393,4 @@ object OnboardingConfig {
      */
     fun provincesByInitial(query: String): Map<Char, List<String>> =
         provincesMatching(query).groupBy { foldForSearch(it).first().uppercaseChar() }
-
-    /**
-     * Copy for every informational screen of the emotional arc, keyed by its step.
-     * The loss block agitates the cost of not having the licence; the gain block
-     * pays it off with the life the licence unlocks.
-     */
-    val narratives: Map<OnboardingStep, NarrativeContent> = mapOf(
-        OnboardingStep.Empathy to NarrativeContent(
-            emoji = "🫂",
-            body = "No tener carnet se siente como una |prisión sin barrotes|.",
-            animation = R.raw.sad_face
-        ),
-        OnboardingStep.LossTime to NarrativeContent(
-            emoji = "⏳",
-            body = "Cada minuto esperando en la parada, con frío o con lluvia, es |tiempo de tu vida que no vuelve|.",
-            animation = R.raw.waiting
-        ),
-        OnboardingStep.LossOpportunity to NarrativeContent(
-            emoji = "🚪",
-            body = "La mitad de las ofertas de trabajo piden carnet. Un |freno invisible| en tu carrera.",
-            animation = R.raw.door_open
-        ),
-        OnboardingStep.LossAutonomy to NarrativeContent(
-            emoji = "⛓️",
-            body = "Sin carnet, |tu vida la deciden otros|: los horarios del transporte y los favores ajenos.",
-            animation = R.raw.bus
-        ),
-        OnboardingStep.GainFreedom to NarrativeContent(
-            emoji = "🕊️",
-            body = "Sal cuando quieras y vuelve cuando quieras, |sin depender de nadie|.",
-            animation = R.raw.freedom
-        ),
-        OnboardingStep.GainExperiences to NarrativeContent(
-            emoji = "🏖️",
-            body = "Esa escapada, ese viaje con amigos, esa playa lejos. Con el carnet, |todo eso pasa a ser un plan real|.",
-            animation = R.raw.experiences
-        ),
-        OnboardingStep.GainLevelUp to NarrativeContent(
-            emoji = "📈",
-            body = "Accedes a trabajos y planes que antes te quedaban fuera. Lo que hoy es un freno |se convierte en tu siguiente paso|.",
-            animation = R.raw.level_up
-        )
-    )
-
-    /**
-     * Copy for the screen that confirms the province, built at runtime because the line
-     * names the province the user just picked.
-     *
-     * @param province the province selected on the previous step, or null if skipped
-     * @return the single-idea content for the confirmation screen
-     */
-    fun provinceConfirmation(province: String?): NarrativeContent = NarrativeContent(
-        emoji = "📋",
-        body = province
-            ?.let { "Practicas con las |mismas preguntas| que se usan en $it. Ni una de relleno." }
-            ?: "Practicas con las |mismas preguntas| que usa la DGT. Ni una de relleno.",
-        animation = R.raw.notebook
-    )
 }

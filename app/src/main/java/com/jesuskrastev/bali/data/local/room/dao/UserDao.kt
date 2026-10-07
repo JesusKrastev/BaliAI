@@ -4,11 +4,38 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
+import com.jesuskrastev.bali.data.local.room.Converters
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
+import com.jesuskrastev.bali.domain.model.RankReward
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {
+    /** Returns the current local profile once for an atomic reward claim. */
+    @Query("SELECT * FROM users LIMIT 1")
+    suspend fun getOnce(): UserEntity?
+
+    /** Adds [coins] and writes [claimedJson] for [id] with [requiredXp]; returns updated row count. */
+    @Query(
+        "UPDATE users SET coins = coins + :coins, claimedRankRewards = :claimedJson " +
+            "WHERE id = :id AND xp >= :requiredXp"
+    )
+    suspend fun saveRankClaim(id: String, requiredXp: Int, coins: Int, claimedJson: String): Int
+
+    /** Returns whether [reward] was newly claimed, checking and updating in one Room transaction. */
+    @Transaction
+    suspend fun claimRankReward(reward: RankReward): Boolean {
+        val user = getOnce() ?: return false
+        if (user.xp < reward.requiredXp || reward.id in user.claimedRankRewards) return false
+        return saveRankClaim(
+            user.id,
+            reward.requiredXp,
+            reward.coins,
+            Converters().fromStringList(user.claimedRankRewards + reward.id)
+        ) == 1
+    }
+
     @Query("SELECT * FROM users LIMIT 1")
     fun get(): Flow<UserEntity?>
 
@@ -81,6 +108,22 @@ interface UserDao {
     suspend fun openSurpriseChest(cost: Int, reward: Int): Int
 
     /**
+     * Opens a surprise chest by charging [cost] and granting either coins or one inventory item
+     * in the same SQLite statement.
+     *
+     * @return 1 if the chest opened, otherwise 0 when the balance was insufficient.
+     */
+    @Query(
+        "UPDATE users SET coins = coins - :cost + :coinReward, " +
+            "hints = hints + CASE WHEN :item = 'HINT' THEN :quantity ELSE 0 END, " +
+            "fiftyFifties = fiftyFifties + CASE WHEN :item = 'FIFTY_FIFTY' THEN :quantity ELSE 0 END, " +
+            "doubleXpBoosts = doubleXpBoosts + CASE WHEN :item = 'DOUBLE_XP' THEN :quantity ELSE 0 END, " +
+            "doubleCoinBoosts = doubleCoinBoosts + CASE WHEN :item = 'DOUBLE_COINS' THEN :quantity ELSE 0 END " +
+            "WHERE coins >= :cost"
+    )
+    suspend fun openSurpriseChest(cost: Int, coinReward: Int, item: String?, quantity: Int): Int
+
+    /**
      * Removes exactly one consumable [item] only when it is available.
      *
      * @return 1 if an item was consumed, otherwise 0.
@@ -104,7 +147,30 @@ interface UserDao {
      * @return 1 if a wager was paid, otherwise 0.
      */
     @Query("UPDATE users SET coins = coins + :payout, activeStreakBet = 0 WHERE activeStreakBet = 1")
+    suspend fun claimStreakBetHead(payout: Int): Int
+
+    /**
+     * Charges [cost] and records the streak bet's [target] in one statement.
+     *
+     * @return 1 if the bet was placed, 0 for insufficient coins or a bet that is already active.
+     */
+    @Query(
+        "UPDATE users SET coins = coins - :cost, streakBetTarget = :target " +
+            "WHERE coins >= :cost AND streakBetTarget = 0"
+    )
+    suspend fun placeStreakBet(cost: Int, target: Int): Int
+
+    /**
+     * Pays the won streak bet one time and clears it.
+     *
+     * @return 1 if a bet was paid, otherwise 0.
+     */
+    @Query("UPDATE users SET coins = coins + :payout, streakBetTarget = 0 WHERE streakBetTarget > 0")
     suspend fun claimStreakBet(payout: Int): Int
+
+    /** Forgets the streak bet without paying it: the stake of a lost bet is not returned. */
+    @Query("UPDATE users SET streakBetTarget = 0")
+    suspend fun clearStreakBet()
 
     /**
      * Replaces the exam date with the one the user picked on Home's plan card.

@@ -133,7 +133,7 @@ tasks.withType<Test>().configureEach {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -168,8 +168,6 @@ dependencies {
     ksp(libs.dagger.hilt.android.compiler)
     implementation(libs.dagger.hilt.android)
     implementation(libs.androidx.hilt.navigation.compose)
-
-    // Gemini
 
     // Coil
     implementation(libs.coil.compose)
@@ -214,7 +212,6 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.mockito.inline)
-    testImplementation(libs.junit4)
 
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
@@ -227,25 +224,21 @@ dependencies {
     kspAndroidTest(libs.dagger.hilt.android.compiler)
 
     // Testing - Compose UI Tests
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.truth)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Testing - Screenshot Tests (Roborazzi)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)
 
     // Testing - Instrumented Tests
-    androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.espresso.core)
 
     // Revenuecat
     implementation(libs.purchases)
     implementation(libs.purchases.ui)
 
     // Compose charts
-    implementation (libs.compose.charts)
+    implementation(libs.compose.charts)
 }
 
 // Workaround for Kotlin FIR symbol resolution bug in lint with build scripts

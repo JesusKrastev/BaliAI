@@ -11,6 +11,7 @@ import coil.util.DebugLogger
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.perf.FirebasePerformance
 import com.jesuskrastev.bali.data.remote.interceptors.UserAgentInterceptor
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.onesignal.OneSignal
 import com.posthog.PostHogInterface
 import com.revenuecat.purchases.LogLevel
@@ -24,10 +25,6 @@ import okhttp3.OkHttpClient
 
 @HiltAndroidApp
 class BaliApplication : Application(), ImageLoaderFactory {
-
-    companion object {
-        const val NOTIFICATION_CHANNEL_ID = "reminders"
-    }
 
     /** Lazy so PostHog is only created after the Robolectric guard in [onCreate]. */
     @Inject
@@ -44,7 +41,7 @@ class BaliApplication : Application(), ImageLoaderFactory {
             }
             .okHttpClient(okHttpClient)
             .crossfade(true)
-            .logger(DebugLogger())
+            .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
             .build()
     }
 
@@ -61,9 +58,9 @@ class BaliApplication : Application(), ImageLoaderFactory {
             FirebasePerformance.getInstance().isPerformanceCollectionEnabled = true
         }
         initAppCheck()
-        createNotificationChannel()
+        createNotificationChannels()
         OneSignal.initWithContext(this, BuildConfig.ONE_SIGNAL_APP_ID)
-        Purchases.logLevel = LogLevel.DEBUG
+        Purchases.logLevel = if (BuildConfig.DEBUG) LogLevel.DEBUG else LogLevel.WARN
         val builder = PurchasesConfiguration.Builder(this, BuildConfig.REVENUECAT_API_KEY)
         Purchases.configure(
             builder
@@ -101,16 +98,25 @@ class BaliApplication : Application(), ImageLoaderFactory {
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(appCheckProviderFactory())
     }
 
-    private fun createNotificationChannel() {
+    /**
+     * Creates one Android channel per [NotificationCategory], so the user can silence a kind of
+     * push from the system settings and the OneSignal messages choose theirs by id. Creating a
+     * channel that exists only refreshes its name and description: the importance the user may
+     * have changed is kept.
+     */
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Bali AI",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Recordatorios de estudio y logros"
+            val manager = getSystemService(NotificationManager::class.java)
+            NotificationCategory.entries.forEach { category ->
+                val importance = when (category) {
+                    NotificationCategory.STUDY, NotificationCategory.STREAK -> NotificationManager.IMPORTANCE_HIGH
+                    NotificationCategory.PROMOTIONS -> NotificationManager.IMPORTANCE_LOW
+                }
+                val channel = NotificationChannel(category.channelId, category.title, importance).apply {
+                    description = category.description
+                }
+                manager.createNotificationChannel(channel)
             }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 }

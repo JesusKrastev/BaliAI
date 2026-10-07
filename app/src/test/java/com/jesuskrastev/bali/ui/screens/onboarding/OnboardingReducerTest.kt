@@ -10,14 +10,9 @@ class OnboardingReducerTest {
     @Test
     fun `informational steps always allow moving forward`() {
         val informationalSteps = listOf(
-            OnboardingStep.Empathy,
-            OnboardingStep.LossTime,
-            OnboardingStep.LossOpportunity,
-            OnboardingStep.LossAutonomy,
-            OnboardingStep.GainFreedom,
-            OnboardingStep.GainExperiences,
-            OnboardingStep.GainLevelUp,
-            OnboardingStep.MethodComparison,
+            OnboardingStep.Problem,
+            OnboardingStep.Risk,
+            OnboardingStep.Solution,
             OnboardingStep.Comparison,
             OnboardingStep.PlanReveal,
             OnboardingStep.SocialProof
@@ -31,7 +26,8 @@ class OnboardingReducerTest {
     @Test
     fun `selection steps do not enable the bottom button`() {
         assertThat(reducer.shouldEnableNextButton(OnboardingStep.Motivation, OnboardingData())).isFalse()
-        assertThat(reducer.shouldEnableNextButton(OnboardingStep.FutureImpact, OnboardingData())).isFalse()
+        assertThat(reducer.shouldEnableNextButton(OnboardingStep.Concern, OnboardingData())).isFalse()
+        assertThat(reducer.shouldEnableNextButton(OnboardingStep.Quiz, OnboardingData())).isFalse()
     }
 
     @Test
@@ -53,9 +49,26 @@ class OnboardingReducerTest {
 
     @Test
     fun `every narrative step has a headline in the mascot bubble`() {
-        OnboardingConfig.narratives.keys.forEach { step ->
+        narrativeSteps.forEach { step ->
             assertThat(reducer.updateMascotMessage(step, OnboardingData(name = "Jesús"))).isNotEmpty()
         }
+    }
+
+    @Test
+    fun `the narrative headline is the one written for the answers given`() {
+        val data = OnboardingData(motivation = OnboardingConfig.MOTIVATION_WORK)
+
+        assertThat(reducer.updateMascotMessage(OnboardingStep.Risk, data))
+            .isEqualTo(OnboardingNarratives.forStep(OnboardingStep.Risk, data)!!.headline)
+    }
+
+    @Test
+    fun `the mini-test headline follows the question on screen`() {
+        val first = reducer.updateMascotMessage(OnboardingStep.Quiz, OnboardingData(), quizIndex = 0)
+        val last = reducer.updateMascotMessage(OnboardingStep.Quiz, OnboardingData(), quizIndex = 2)
+
+        assertThat(first).contains("3 preguntas")
+        assertThat(last).isNotEqualTo(first)
     }
 
     @Test
@@ -70,11 +83,10 @@ class OnboardingReducerTest {
         // The name is asked at the start of the plan block, so everything from the "why"
         // through the whole emotional arc has to read without it.
         val beforeTheName = listOf(
-            OnboardingStep.Motivation, OnboardingStep.TheoryBlocker, OnboardingStep.Concern,
-            OnboardingStep.Experience, OnboardingStep.Readiness, OnboardingStep.FutureImpact,
-            OnboardingStep.Empathy, OnboardingStep.LossTime, OnboardingStep.LossOpportunity,
-            OnboardingStep.LossAutonomy, OnboardingStep.GainFreedom,
-            OnboardingStep.GainExperiences, OnboardingStep.GainLevelUp, OnboardingStep.Name
+            OnboardingStep.Motivation, OnboardingStep.TheoryBlocker,
+            OnboardingStep.Experience, OnboardingStep.Readiness, OnboardingStep.Concern,
+            OnboardingStep.Quiz, OnboardingStep.QuizResult,
+            OnboardingStep.Problem, OnboardingStep.Risk, OnboardingStep.Solution, OnboardingStep.Name
         )
 
         beforeTheName.forEach { step ->
@@ -88,29 +100,68 @@ class OnboardingReducerTest {
     }
 
     @Test
-    fun `the province confirmation names the province the user picked`() {
-        val message = reducer.updateMascotMessage(
-            OnboardingStep.ProvinceConfirmed,
-            OnboardingData(province = "Almería")
-        )
+    fun `the exam date question leaves room for having no date`() {
+        val message = reducer.updateMascotMessage(OnboardingStep.ExamDate, OnboardingData())
 
-        assertThat(message).contains("Almería")
-    }
-
-    @Test
-    fun `the province confirmation still reads without a province`() {
-        val message = reducer.updateMascotMessage(
-            OnboardingStep.ProvinceConfirmed,
-            OnboardingData(province = null)
-        )
-
-        assertThat(message).isNotEmpty()
-        assertThat(message).doesNotContain("null")
+        assertThat(message).contains("Si no, sin problema")
     }
 
     @Test
     fun `progress runs from zero to one across the flow`() {
         assertThat(reducer.calculateProgress(index = 0, totalSteps = 25)).isEqualTo(0f)
         assertThat(reducer.calculateProgress(index = 24, totalSteps = 25)).isEqualTo(1f)
+    }
+
+    private val narrativeSteps = listOf(OnboardingStep.Problem, OnboardingStep.Risk, OnboardingStep.Solution)
+
+    private val shortFlow = listOf(
+        OnboardingStep.Motivation,
+        OnboardingStep.SocialProof,
+        OnboardingStep.Processing,
+        OnboardingStep.PlanReveal,
+        OnboardingStep.Pact
+    )
+
+    @Test
+    fun `back leads to the screen shown just before`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.SocialProof))
+            .isEqualTo(OnboardingStep.Motivation)
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Pact))
+            .isEqualTo(OnboardingStep.PlanReveal)
+    }
+
+    @Test
+    fun `there is nothing to go back to from the first screen`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Motivation)).isNull()
+    }
+
+    @Test
+    fun `back from the plan reveal skips the plan being built`() {
+        // The building screen advances on its own and has no controls: landing on it again
+        // would leave the user stuck there.
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.PlanReveal))
+            .isEqualTo(OnboardingStep.SocialProof)
+    }
+
+    @Test
+    fun `back jumps over a step left out of this run`() {
+        val flow = listOf(OnboardingStep.Quiz, OnboardingStep.QuizResult, OnboardingStep.Problem)
+
+        assertThat(reducer.previousStep(flow, OnboardingStep.Problem) { it == OnboardingStep.QuizResult })
+            .isEqualTo(OnboardingStep.Quiz)
+        assertThat(reducer.previousStep(flow, OnboardingStep.Problem))
+            .isEqualTo(OnboardingStep.QuizResult)
+    }
+
+    @Test
+    fun `back is refused while the plan is being built`() {
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Processing)).isNull()
+    }
+
+    @Test
+    fun `back is refused outside the flow`() {
+        // The paywall and the finished state are not part of the order.
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.PaywallPending)).isNull()
+        assertThat(reducer.previousStep(shortFlow, OnboardingStep.Completed)).isNull()
     }
 }

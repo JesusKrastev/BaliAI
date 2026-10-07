@@ -1,5 +1,9 @@
 package com.jesuskrastev.bali.di
 
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV11ToV12
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV12ToV13
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV13ToV14
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV1ToV2
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV2ToV3
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV3ToV4
@@ -72,12 +76,28 @@ object FirestoreMigrationsModule {
     @Singleton
     fun provideMigrationV9ToV10(migration: MigrationV9ToV10): FirestoreMigration = migration
 
-    /** Registers the shop-inventory schema migration for authenticated profiles. */
+
     @Provides
     @IntoSet
     @Singleton
     fun provideMigrationV10ToV11(migration: MigrationV10ToV11): FirestoreMigration = migration
 
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV11ToV12(migration: MigrationV11ToV12): FirestoreMigration = migration
+
+    /** Registers the coin-shop inventory migration for authenticated profiles (v12 is reserved). */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV12ToV13(migration: MigrationV12ToV13): FirestoreMigration = migration
+
+    /** Registers the optional XP reward claim ledger. */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV13ToV14(migration: MigrationV13ToV14): FirestoreMigration = migration
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides
     @dagger.multibindings.ElementsIntoSet

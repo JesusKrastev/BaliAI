@@ -3,9 +3,13 @@ package com.jesuskrastev.bali.ui.screens.chat
 import com.google.common.truth.Truth.assertThat
 import com.jesuskrastev.bali.domain.model.ChatMessage
 import com.jesuskrastev.bali.domain.model.ChatRole
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.usecase.AskDrivingTutorUseCase
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.util.MainDispatcherRule
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -20,14 +24,17 @@ class ChatViewModelTest {
 
     private fun viewModelWith(
         chatRepository: FakeChatRepository = FakeChatRepository(),
-        tutor: FakeAiTutorRepository = FakeAiTutorRepository()
+        tutor: FakeAiTutorRepository = FakeAiTutorRepository(),
+        userRepository: FakeUserRepository = FakeUserRepository(),
+        pendingRewards: PendingFirstStepRewards = PendingFirstStepRewards()
     ) = ChatViewModel(
         chatRepository = chatRepository,
         askDrivingTutorUseCase = AskDrivingTutorUseCase(
             chatRepository = chatRepository,
             aiTutorRepository = tutor,
-            userRepository = FakeUserRepository()
+            userRepository = userRepository
         ),
+        completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, pendingRewards),
         analytics = analytics
     )
 
@@ -158,5 +165,46 @@ class ChatViewModelTest {
         viewModelWith(chatRepository)
 
         assertThat(analytics.opened).containsExactly(true)
+    }
+
+    @Test
+    fun `an answered question completes the ask-Bali step and queues its reward`() = runTest {
+        val userRepository = FakeUserRepository().apply { enrollInFirstStepsForTest() }
+        val pendingRewards = PendingFirstStepRewards()
+        val viewModel = viewModelWith(userRepository = userRepository, pendingRewards = pendingRewards)
+
+        viewModel.onEvent(ChatEvent.SendSuggestion("¿Qué significa la señal R-1?"))
+
+        val user = userRepository.get().first()!!
+        assertThat(user.firstSteps.completed).containsExactly(FirstStepTask.ASK_BALI)
+        assertThat(user.coins).isEqualTo(500 + FirstStepTask.ASK_BALI.coins)
+        assertThat(pendingRewards.next.first()?.task).isEqualTo(FirstStepTask.ASK_BALI)
+        assertThat(analytics.firstStepRewards.map { it.task }).containsExactly(FirstStepTask.ASK_BALI)
+    }
+
+    @Test
+    fun `a failed answer does not complete the ask-Bali step`() = runTest {
+        val userRepository = FakeUserRepository().apply { enrollInFirstStepsForTest() }
+        val viewModel = viewModelWith(
+            tutor = FakeAiTutorRepository(failure = IOException("sin red")),
+            userRepository = userRepository
+        )
+
+        viewModel.onEvent(ChatEvent.SendSuggestion("¿Qué significa la señal R-1?"))
+
+        assertThat(userRepository.get().first()!!.firstSteps.completed).isEmpty()
+        assertThat(analytics.firstStepRewards).isEmpty()
+    }
+
+    @Test
+    fun `asking for a second time pays the ask-Bali step only once`() = runTest {
+        val userRepository = FakeUserRepository().apply { enrollInFirstStepsForTest() }
+        val viewModel = viewModelWith(userRepository = userRepository)
+
+        viewModel.onEvent(ChatEvent.SendSuggestion("¿Qué significa la señal R-1?"))
+        viewModel.onEvent(ChatEvent.SendSuggestion("¿Y la R-2?"))
+
+        assertThat(userRepository.get().first()!!.coins).isEqualTo(500 + FirstStepTask.ASK_BALI.coins)
+        assertThat(analytics.firstStepRewards).hasSize(1)
     }
 }

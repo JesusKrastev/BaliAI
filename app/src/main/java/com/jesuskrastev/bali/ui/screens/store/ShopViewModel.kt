@@ -2,15 +2,19 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jesuskrastev.bali.domain.audio.SoundEffects
+import com.jesuskrastev.bali.domain.model.ChestReward
+import com.jesuskrastev.bali.domain.model.ChestRewardTable
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.StreakBet
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.usecase.DecrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.RecoverStreakUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 import javax.inject.Inject
 
 sealed class ShopItem {
@@ -30,37 +34,33 @@ sealed class ShopEvent {
     data object PurchaseStreakFreezer : ShopEvent()
     data object PurchaseStreakRecovery : ShopEvent()
     data object ConfirmPurchase : ShopEvent()
-    data object AdvanceChestOpening : ShopEvent()
-    data object ChestOpeningAnimationFinished : ShopEvent()
+    data object DismissFeedback : ShopEvent()
+    data object DismissChest : ShopEvent()
+
+    /** The lid of the revealed chest started to open: time for its sound. */
+    data object ChestOpening : ShopEvent()
 }
 
-/** The stages of the full-screen surprise-chest reveal. */
-enum class ChestOpeningStep {
-    AWAITING_OPEN,
-    OPENING,
-    AWAITING_REWARD,
-    REWARD_REVEALED
-}
-
-/** A purchased chest's reward and the point reached in its reveal interaction. */
-data class ChestOpening(
-    val reward: Int,
-    val step: ChestOpeningStep = ChestOpeningStep.AWAITING_OPEN
-)
-
-/** Coin prices and payout rules for the shop's consumables. */
+/**
+ * Coin prices and payout rules for the shop's products. The streak bet's own numbers live in
+ * [StreakBet] and the recovery's in [DailyStreak.RECOVERY_COST_COINS].
+ */
 object ShopCatalog {
     const val STREAK_FREEZER_COST = 120
-    const val STREAK_BET_COST = 50
-    const val STREAK_BET_PAYOUT = 100
     const val HINT_COST = 30
     const val FIFTY_FIFTY_COST = 45
     const val SURPRISE_CHEST_COST = 60
     const val DOUBLE_XP_COST = 80
     const val DOUBLE_COINS_COST = 70
-    const val CHEST_MIN_REWARD = 30
-    const val CHEST_MAX_REWARD = 120
+
 }
+
+/** Shown when a purchase could not be completed, usually for lack of connection. */
+private const val PURCHASE_FAILED_MESSAGE =
+    "No se ha podido completar la compra. Comprueba tu conexión e inténtalo de nuevo."
+
+/** One-shot visual confirmation or error emitted after a shop purchase attempt. */
+data class ShopFeedback(val message: String, val isSuccess: Boolean)
 
 /**
  * What the shop shows.
@@ -75,8 +75,12 @@ object ShopCatalog {
  * @property fiftyFifties practice 50/50 aids currently owned
  * @property doubleXpBoosts double-XP rewards waiting for the next completed activity
  * @property doubleCoinBoosts double-coin rewards waiting for the next completed activity
- * @property hasActiveStreakBet true when the next new study day will pay the wager
- * @property chestOpening purchased chest currently being revealed, null outside that interaction
+ * @property hasActiveStreakBet true while a streak bet is running and not lost
+ * @property streakBetDaysDone study days completed since the bet was placed, 0 without a bet
+ * @property canBetOnStreak true when a bet could be placed now: no bet running and a streak to bet on
+ * @property purchaseFeedback one-time success or error shown after a purchase attempt
+ * @property chestReward reward granted by a paid surprise chest while its opening animation is on
+ *   screen; null when no chest is being opened
  */
 data class ShopUiState(
     val coinsCount: Int = 0,
@@ -89,40 +93,53 @@ data class ShopUiState(
     val doubleXpBoosts: Int = 0,
     val doubleCoinBoosts: Int = 0,
     val hasActiveStreakBet: Boolean = false,
-    val chestOpening: ChestOpening? = null
+    val streakBetDaysDone: Int = 0,
+    val canBetOnStreak: Boolean = false,
+    val purchaseFeedback: ShopFeedback? = null,
+    val chestReward: ChestReward? = null
 )
 
 @HiltViewModel
 class ShopViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val decrementCoinsUseCase: DecrementCoinsUseCase,
-    private val recoverStreakUseCase: RecoverStreakUseCase
+    private val recoverStreakUseCase: RecoverStreakUseCase,
+    private val soundEffects: SoundEffects
 ) : ViewModel() {
 
     private val _selectedItem = MutableStateFlow<ShopItem?>(null)
     private val _isProcessing = MutableStateFlow(false)
-    private val _chestOpening = MutableStateFlow<ChestOpening?>(null)
+    private val _purchaseFeedback = MutableStateFlow<ShopFeedback?>(null)
+    private val _chestReward = MutableStateFlow<ChestReward?>(null)
 
     val uiState: StateFlow<ShopUiState> = combine(
         userRepository.get(),
         _selectedItem,
         _isProcessing,
-        _chestOpening
-    ) { user, selected, isProcessing, chestOpening ->
+        _purchaseFeedback,
+        _chestReward
+    ) { user, selected, isProcessing, purchaseFeedback, chestReward ->
         user?.let {
             val now = System.currentTimeMillis()
+            val settledStreak = DailyStreak.of(it).settledAt(now)
+            val betRunning =
+                it.streakBetTarget > 0 && !StreakBet.isLost(it.streakBetTarget, settledStreak.current)
             ShopUiState(
                 coinsCount = it.coins,
                 streakFreezes = it.streakFreezes,
-                recoverableStreak = DailyStreak.of(it).settledAt(now).recoverableStreakAt(now),
+                recoverableStreak = settledStreak.recoverableStreakAt(now),
                 selectedItem = selected,
                 isProcessing = isProcessing,
                 hints = it.hints,
                 fiftyFifties = it.fiftyFifties,
                 doubleXpBoosts = it.doubleXpBoosts,
                 doubleCoinBoosts = it.doubleCoinBoosts,
-                hasActiveStreakBet = it.activeStreakBet,
-                chestOpening = chestOpening
+                hasActiveStreakBet = betRunning,
+                streakBetDaysDone =
+                    if (betRunning) StreakBet.daysDone(it.streakBetTarget, settledStreak.current) else 0,
+                canBetOnStreak = !betRunning && StreakBet.canBetOn(settledStreak.current),
+                purchaseFeedback = purchaseFeedback,
+                chestReward = chestReward
             )
         } ?: ShopUiState()
     }.stateIn(
@@ -131,12 +148,7 @@ class ShopViewModel @Inject constructor(
         initialValue = ShopUiState()
     )
 
-    /**
-     * Reduces a shop interaction [event] into selection, purchase, or chest-reveal state.
-     *
-     * @param event interaction received from the shop UI
-     * @return Unit; state updates or a guarded purchase launch are performed as appropriate.
-     */
+    /** Reduces a shop interaction [event] into selection, feedback or one guarded purchase. */
     fun onEvent(event: ShopEvent) {
         when (event) {
             is ShopEvent.SelectItem -> {
@@ -146,8 +158,9 @@ class ShopViewModel @Inject constructor(
             ShopEvent.PurchaseStreakFreezer -> purchaseStreakFreezer()
             ShopEvent.PurchaseStreakRecovery -> purchaseStreakRecovery()
             ShopEvent.ConfirmPurchase -> purchaseSelectedItem()
-            ShopEvent.AdvanceChestOpening -> advanceChestOpening()
-            ShopEvent.ChestOpeningAnimationFinished -> finishChestOpeningAnimation()
+            ShopEvent.DismissFeedback -> _purchaseFeedback.value = null
+            ShopEvent.DismissChest -> _chestReward.value = null
+            ShopEvent.ChestOpening -> soundEffects.playChestOpen()
         }
     }
 
@@ -156,7 +169,7 @@ class ShopViewModel @Inject constructor(
         when (_selectedItem.value) {
             ShopItem.StreakFreezer -> purchaseStreakFreezer()
             ShopItem.StreakRecovery -> purchaseStreakRecovery()
-            ShopItem.StreakBet -> purchaseInventory(ShopInventoryItem.STREAK_BET, ShopCatalog.STREAK_BET_COST)
+            ShopItem.StreakBet -> purchaseStreakBet()
             ShopItem.Hint -> purchaseInventory(ShopInventoryItem.HINT, ShopCatalog.HINT_COST)
             ShopItem.FiftyFifty -> purchaseInventory(ShopInventoryItem.FIFTY_FIFTY, ShopCatalog.FIFTY_FIFTY_COST)
             ShopItem.DoubleXp -> purchaseInventory(ShopInventoryItem.DOUBLE_XP, ShopCatalog.DOUBLE_XP_COST)
@@ -166,110 +179,115 @@ class ShopViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Runs one purchase with the guards every purchase needs: a second tap while one is in
+     * flight is ignored (so nothing is charged twice), and a failure such as no connection
+     * becomes a message instead of crashing the app.
+     *
+     * @param purchase the purchase itself; it closes the sheet when it worked
+     */
+    private fun runPurchase(purchase: suspend () -> Unit) {
+        if (_isProcessing.value) return
+        viewModelScope.launch {
+            _isProcessing.value = true
+            try {
+                purchase()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _purchaseFeedback.value = ShopFeedback(PURCHASE_FAILED_MESSAGE, isSuccess = false)
+            } finally {
+                _isProcessing.value = false
+            }
+        }
+    }
+
     /** Charges [cost] and adds [item] to the user's synchronized inventory. */
-    private fun purchaseInventory(item: ShopInventoryItem, cost: Int) {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                if (userRepository.purchaseInventoryItem(item, cost)) _selectedItem.value = null
-            } finally {
-                _isProcessing.value = false
-            }
+    private fun purchaseInventory(item: ShopInventoryItem, cost: Int) = runPurchase {
+        if (userRepository.purchaseInventoryItem(item, cost)) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = inventoryPurchaseFeedback(item)
         }
     }
 
     /**
-     * Purchases a chest, then keeps its reward private until the full-screen reveal is completed.
+     * Opens a paid chest and keeps its prize in [uiState] until the UI has played the opening
+     * animation and the user dismisses it with [ShopEvent.DismissChest].
+     */
+    private fun openSurpriseChest() = runPurchase {
+        val reward = ChestRewardTable.roll()
+        if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
+            _selectedItem.value = null
+            _chestReward.value = reward
+        }
+    }
+
+    /**
+     * Places the streak bet when there is a streak to bet on and no bet is running. A bet whose
+     * streak was already lost is forgotten first, so the user can bet again.
+     */
+    private fun purchaseStreakBet() = runPurchase {
+        val user = userRepository.get().first() ?: return@runPurchase
+        val settledStreak = DailyStreak.of(user).settledAt(System.currentTimeMillis()).current
+        if (!StreakBet.canBetOn(settledStreak)) return@runPurchase
+        if (StreakBet.isLost(user.streakBetTarget, settledStreak)) {
+            userRepository.clearStreakBet()
+        } else if (user.streakBetTarget > 0) {
+            return@runPurchase
+        }
+        if (userRepository.placeStreakBet(StreakBet.COST_COINS, StreakBet.targetFor(settledStreak))) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Apuesta activada! Estudia ${StreakBet.DAYS} días más y gana ${StreakBet.PAYOUT_COINS} monedas 🎯",
+                isSuccess = true
+            )
+        }
+    }
+
+    /**
+     * Buys back the lost streak, closing the purchase sheet when it worked. Guarded like every
+     * purchase, so a second tap cannot charge twice.
+     */
+    private fun purchaseStreakRecovery() = runPurchase {
+        if (recoverStreakUseCase() != null) {
+            _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Racha recuperada! Ya puedes seguir sumando días 🔥",
+                isSuccess = true
+            )
+        }
+    }
+
+    /**
+     * Buys a streak freezer for [ShopCatalog.STREAK_FREEZER_COST] coins, capped at
+     * [DailyStreak.MAX_FREEZES] owned at once.
      *
-     * @return Unit; the reveal state is emitted when the repository confirms the purchase.
+     * Guarded by [runPurchase] so a second tap while a purchase is already in flight is ignored
+     * instead of racing it: two concurrent calls could otherwise both pass the limit check before
+     * either write lands, charging twice for one freezer.
      */
-    private fun openSurpriseChest() {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                val reward = Random.nextInt(ShopCatalog.CHEST_MIN_REWARD, ShopCatalog.CHEST_MAX_REWARD + 1)
-                if (userRepository.openSurpriseChest(ShopCatalog.SURPRISE_CHEST_COST, reward)) {
-                    _selectedItem.value = null
-                    _chestOpening.value = ChestOpening(reward = reward)
-                }
-            } finally {
-                _isProcessing.value = false
-            }
+    private fun purchaseStreakFreezer() = runPurchase {
+        val user = userRepository.get().first() ?: return@runPurchase
+        if (user.streakFreezes >= DailyStreak.MAX_FREEZES) return@runPurchase
+
+        if (decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)) {
+            userRepository.updateStreakFreezes(user.streakFreezes + 1)
+            _selectedItem.value = null
+            _purchaseFeedback.value = ShopFeedback(
+                "¡Congelador conseguido! Ya está listo para proteger tu racha 🧊",
+                isSuccess = true
+            )
         }
     }
 
-    /**
-     * Moves a chest reveal forward after a tap, ignoring taps while its opening animation runs.
-     *
-     * @return Unit; the state becomes opening, reward-revealed, or is cleared after the final tap.
-     */
-    private fun advanceChestOpening() {
-        _chestOpening.update { chest ->
-            when (chest?.step) {
-                ChestOpeningStep.AWAITING_OPEN -> chest.copy(step = ChestOpeningStep.OPENING)
-                ChestOpeningStep.AWAITING_REWARD -> chest.copy(step = ChestOpeningStep.REWARD_REVEALED)
-                ChestOpeningStep.REWARD_REVEALED -> null
-                ChestOpeningStep.OPENING, null -> chest
-            }
+    /** Returns the celebratory confirmation shown after buying inventory [item]. */
+    private fun inventoryPurchaseFeedback(item: ShopInventoryItem): ShopFeedback {
+        val message = when (item) {
+            ShopInventoryItem.HINT -> "¡Pista conseguida! Ya está en tu inventario 💡"
+            ShopInventoryItem.FIFTY_FIFTY -> "¡50/50 conseguido! Ya puedes usarlo en práctica ✨"
+            ShopInventoryItem.DOUBLE_XP -> "¡Doble XP conseguido! Se activará en tu próxima actividad ⚡"
+            ShopInventoryItem.DOUBLE_COINS -> "¡Doble moneda conseguido! Tu próxima recompensa valdrá el doble 🪙"
         }
-    }
-
-    /**
-     * Marks the opening animation as finished so the next tap can disclose the reward.
-     *
-     * @return Unit; no state changes when no chest animation is in progress.
-     */
-    private fun finishChestOpeningAnimation() {
-        _chestOpening.update { chest ->
-            if (chest?.step == ChestOpeningStep.OPENING) {
-                chest.copy(step = ChestOpeningStep.AWAITING_REWARD)
-            } else {
-                chest
-            }
-        }
-    }
-
-    /**
-     * Buys back the lost streak, closing the purchase sheet when it worked. Guarded by
-     * [_isProcessing] like [purchaseStreakFreezer], so a second tap cannot charge twice.
-     */
-    private fun purchaseStreakRecovery() {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                if (recoverStreakUseCase() != null) _selectedItem.value = null
-            } finally {
-                _isProcessing.value = false
-            }
-        }
-    }
-
-    /**
-     * Buys a streak freezer for 120 coins, capped at 2 owned at once.
-     *
-     * Guarded by [_isProcessing] so a second tap while a purchase is already in flight is
-     * ignored instead of racing it — two concurrent calls could otherwise both pass the
-     * `streakFreezes < 2` check before either write lands, charging twice for one freezer.
-     */
-    private fun purchaseStreakFreezer() {
-        if (_isProcessing.value) return
-        viewModelScope.launch {
-            _isProcessing.value = true
-            try {
-                val user = userRepository.get().first() ?: return@launch
-                if (user.streakFreezes >= 2) return@launch
-
-                val success = decrementCoinsUseCase(ShopCatalog.STREAK_FREEZER_COST)
-                if (success) {
-                    userRepository.updateStreakFreezes(user.streakFreezes + 1)
-                    _selectedItem.value = null
-                }
-            } finally {
-                _isProcessing.value = false
-            }
-        }
+        return ShopFeedback(message, isSuccess = true)
     }
 }

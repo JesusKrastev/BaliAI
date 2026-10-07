@@ -61,7 +61,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
 - **Language**: Kotlin 2.0.21, JVM target 11
 - **UI**: Jetpack Compose (BOM 2024.09.00), Material3, Compose Navigation 2.8.9
 - **DI**: Hilt 2.52 with KSP (not KAPT)
-- **Local DB**: Room 2.6.1 (DB version 15, `exportSchema = false`)
+- **Local DB**: Room 2.6.1 (DB version 20, `exportSchema = false`)
 - **Preferences**: DataStore 1.1.2
 - **Backend**: Firebase BOM 33.16.0 (Auth, Firestore, Analytics, Crashlytics, Messaging, Remote Config, App Check)
 - **AI**: Firebase AI Logic (`firebase-ai`) against the Gemini Developer API backend. No API key ships
@@ -139,7 +139,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - Screenshot tests only run in debug build variants — do not run them against release.
 - When adding a new `Room` migration, increment `BaliDatabase.version`, add a `Migration` object to the `BaliDatabase` companion, and test it with an instrumented DAO test.
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
-- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + PostHog), never call any of those SDKs directly from a ViewModel.
+- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + PostHog), never call either SDK directly from a ViewModel.
 
 ## Branches and releases
 
@@ -188,15 +188,17 @@ the edge cases live in the brain: `05-Patrones\patron-ramas-git.md` and D-024.
 - Each migration class must implement `FirestoreMigration` (from `domain/migration/`), providing `targetVersion: Int`, `description: String`, and `suspend fun migrate(userId: String)`.
 - Register each new migration in `FirestoreMigrationsModule` using `@IntoSet` so `FirestoreMigrationManager` picks it up automatically. Ensure `provideEmptyMigrations()` remains in the module to satisfy Hilt when no migrations are bound.
 - NEVER modify Firestore structure directly without a corresponding migration. Treat schema changes the same way you would a Room database migration.
+- A new account's document is created already stamped with the current schema version (`UserRepositoryImpl.uploadAll` writes `schemaVersion = FirestoreMigrationManager.getTargetSchemaVersion()`), so migrations only ever run on documents older than the app. Keep that stamp: `MigrationV1ToV2`/`V2ToV3` delete results and reset XP, and would wipe a new account on its second launch. `FirestoreMigrationManager` also never assumes a version it could not read (offline): it skips migrations until the next launch.
 
 ## Important Rules
 
 - **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
+- **First-steps bar state is account-scoped and Firestore-only** (`firstStepsStartedAt`, `firstStepsDone`, `firstStepsDismissed` on the user document; no Room columns, because Home is only reachable signed in). Coins are paid only through `UserRepository.completeFirstStep`, a Firestore transaction — never pay them with a separate `incrementCoins`, or a retry pays twice. Enrollment happens once, at sign-up (`AuthViewModel`). `MigrationV11ToV12` must NEVER write `firstStepsStartedAt`: it still runs on accounts created before new documents were stamped with their schema version (their document starts at v1) and would switch their bar off.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
 - `RobolectricDetector.isRobolectric()` (root package) guards skip SDK initialization (OneSignal, PostHog, RevenueCat) in unit tests — called from `BaliApplication.onCreate()` and from the PostHog Hilt module. NEVER remove this guard, and never reimplement the check inline (e.g. `Build.FINGERPRINT == "robolectric"`) instead of calling it — those SDKs crash under Robolectric.
-- `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date plus a two-digit counter for that day's builds, so several builds can be uploaded per day. NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
+- `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date (UTC) plus `NN`, the quarter-hour of the UTC day (00-95), so a later build always has a higher code whichever workflow builds it and several builds can be uploaded per day (two in the same quarter-hour collide and Play rejects the second: re-run later). NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
 - The daily streak is computed only in the app (`domain/model/DailyStreak.kt`); no server job may write `currentStreak`, `streakFreezes` or `frozenDays`. The Cloud Functions deployed in `bali-ai-facc4` have **no source in this repo** (only the compiled bundle in Cloud Storage): list them with `firebase functions:list --project bali-ai-facc4` before assuming what the backend does.
 - The `lintVitalAnalyze/Report/Release` tasks are explicitly disabled in `build.gradle.kts` due to a KSP/Lint bug — do not re-enable them.
 - All API keys are injected via `BuildConfig` fields resolved by the `secret(key, default)` helper in `app/build.gradle.kts`, which reads `local.properties` first and falls back to environment variables (that is how CI supplies them). NEVER hardcode keys in source files.
@@ -209,4 +211,5 @@ The sweep of the whole codebase is finished (migrations were intentionally exclu
 - **Free practice is unreachable.** The Topics and Mistakes screens were deleted (nothing linked to them), which leaves `TestRoute()` without a node (free practice) and `TestRoute.topic` / `TestViewModel.setTopic` as dead paths: `TestRoute` is only navigated to from Home's learning-path nodes. Remove them (plus `TestViewModelTest`'s `setTopic` test and `ScreenNameTest`'s route string) or give free practice a new entry point.
 - `SectionHeaderCard` prints "SECCIÓN n, UNIDAD n" using the same index for both numbers.
 - `SenalRelampagoGame`'s `SIGN_POOL` has two entries for sign R-102 with different Spanish names — possibly a duplicate, unverified against the official DGT catalogue.
+- **First-steps bar (day 0–1): who sees it and for how long.** Only accounts created from this version are enrolled, so subscribers who already exist never see it (a later migration could enrol those with no `firstStepsStartedAt`). It has no expiry: it stays until the three tasks and the simulacro are done or the student dismisses it (dismissing gives up the pending coins).
 - `TestResultScreen`'s `XpRow(isBonus: Boolean)` parameter is passed by every caller but never read by the composable — bonus and base XP rows render identically.

@@ -23,23 +23,7 @@ class AnswerRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository
 ) : AnswerRepository {
 
-    /**
-     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
-     * Both actions run on [Dispatchers.IO].
-     */
-    private suspend inline fun <T> withAuthRouting(
-        crossinline actionRemote: suspend (String) -> T,
-        crossinline actionLocal: suspend () -> T
-    ): T = withContext(Dispatchers.IO) {
-        val userId = authRepository.currentUser()
-        if (userId != null) {
-            actionRemote(userId)
-        } else {
-            actionLocal()
-        }
-    }
-
-    override suspend fun insert(answer: Answer) = withAuthRouting(
+    override suspend fun insert(answer: Answer) = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.insertAnswer(userId, answer.toFirestore()) },
         actionLocal = { answerDao.insert(answer.toEntity()) }
     )
@@ -68,7 +52,7 @@ class AnswerRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun markAsCorrected(questionText: String) = withAuthRouting(
+    override suspend fun markAsCorrected(questionText: String) = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.markAnswerAsCorrected(userId, questionText) },
         actionLocal = { answerDao.markAsCorrected(questionText) }
     )

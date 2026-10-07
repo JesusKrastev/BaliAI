@@ -1,7 +1,6 @@
 ﻿package com.jesuskrastev.bali.ui.screens.home
 
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.R
@@ -9,10 +8,9 @@ import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
-import com.jesuskrastev.bali.domain.model.Answer
-import com.jesuskrastev.bali.domain.model.TestResult
-import com.jesuskrastev.bali.domain.model.User
-import com.jesuskrastev.bali.domain.util.DateTimeHelper
+import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.domain.model.RankProgression
+import com.jesuskrastev.bali.domain.util.PendingFirstStepRewards
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.GenerateInitialPathUseCase
@@ -20,10 +18,10 @@ import com.jesuskrastev.bali.domain.usecase.GenerateNextPathNodesUseCase
 import com.jesuskrastev.bali.domain.usecase.SettleStreakUseCase
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.LessonNode
-import com.jesuskrastev.bali.ui.util.StreakUiHelper
 import com.jesuskrastev.bali.data.remote.RemoteConfigProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -39,9 +37,9 @@ class HomeViewModel @Inject constructor(
     private val generateNextPathNodesUseCase: GenerateNextPathNodesUseCase,
     private val generateInitialPathUseCase: GenerateInitialPathUseCase,
     private val analyticsTracker: AnalyticsTracker,
-    private val dateTimeHelper: DateTimeHelper,
     private val remoteConfigProvider: RemoteConfigProvider,
     private val settleStreak: SettleStreakUseCase,
+    private val pendingFirstStepRewards: PendingFirstStepRewards,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -50,6 +48,10 @@ class HomeViewModel @Inject constructor(
 
     private val _dailyTip = MutableStateFlow("")
 
+    /** Guards [AnalyticsTracker.firstStepsShown] so it fires once per Home, not per recomposition. */
+    private var hasTrackedFirstStepsShown = false
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     private val _pathNodes: StateFlow<List<LessonNode>?> = authRepository.currentUserFlow
         .flatMapLatest { userId -> 
              pathRepository.getPathNodes(userId ?: "") 
@@ -105,74 +107,99 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    val uiState: StateFlow<HomeUiState> = combine(
-        userRepository.get(),
+    /** What Home shows about the student's results, gathered so the flows fit typed `combine`s. */
+    private data class ResultsSummary(
+        val totalTests: Int,
+        val mistakesCount: Int,
+        val avgScore: Int,
+        val hasTakenExam: Boolean
+    )
+
+    /** The learning path as Home needs it: its nodes and whether more are being generated. */
+    private data class PathSummary(
+        val nodes: List<LessonNode>,
+        val isLoading: Boolean,
+        val error: String?
+    )
+
+    /** Signed-in account details and the tip of the day, which are not part of the user document. */
+    private data class AccountDetails(
+        val profilePictureUrl: String?,
+        val userEmail: String?,
+        val dailyTip: String
+    )
+
+    private val resultsSummary = combine(
         testResultRepository.count(),
         answerRepository.getRecentMistakes(),
         testResultRepository.getAverageScore(),
-        _dailyTip,
-        _pathNodes,
-        _isPathLoading,
-        _pathError,
+        testResultRepository.get().map { results -> results.any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY } }
+    ) { totalTests, mistakes, avgScore, hasTakenExam ->
+        ResultsSummary(
+            totalTests = totalTests,
+            mistakesCount = mistakes.size,
+            avgScore = (avgScore ?: 0.0).toInt(),
+            hasTakenExam = hasTakenExam
+        )
+    }
+
+    private val pathSummary = combine(_pathNodes, _isPathLoading, _pathError) { nodes, isLoading, error ->
+        PathSummary(nodes = nodes.orEmpty(), isLoading = isLoading, error = error)
+    }
+
+    private val accountDetails = combine(
         authRepository.currentUserPhotoUrlFlow,
-        authRepository.currentUserEmailFlow
-    ) { flows ->
-        val user = flows[0] as User?
-        val totalTests = flows[1] as Int
-        val mistakes = flows[2] as List<*>
-        val avgScore = flows[3] as Double? ?: 0.0
-        val dailyTip = flows[4] as String
-        val pathNodes = flows[5] as List<*>?
-        val isPathLoading = flows[6] as Boolean
-        val pathError = flows[7] as String?
-        val profilePictureUrl = flows[8] as String?
-        val userEmail = flows[9] as String?
+        authRepository.currentUserEmailFlow,
+        _dailyTip
+    ) { profilePictureUrl, userEmail, dailyTip ->
+        AccountDetails(profilePictureUrl = profilePictureUrl, userEmail = userEmail, dailyTip = dailyTip)
+    }
 
-        @Suppress("UNCHECKED_CAST")
-        val typedMistakes = mistakes as List<Answer>
-
-        @Suppress("UNCHECKED_CAST")
-        val typedPathNodes = (pathNodes ?: emptyList<LessonNode>()) as List<LessonNode>
-
+    val uiState: StateFlow<HomeUiState> = combine(
+        userRepository.get(),
+        resultsSummary,
+        pathSummary,
+        accountDetails,
+        pendingFirstStepRewards.next
+    ) { user, results, path, account, firstStepReward ->
         if (user == null) {
             HomeUiState(
-                dailyTip = dailyTip,
-                profilePictureUrl = profilePictureUrl,
-                userEmail = userEmail
+                dailyTip = account.dailyTip,
+                profilePictureUrl = account.profilePictureUrl,
+                userEmail = account.userEmail
             )
         } else {
             val now = System.currentTimeMillis()
             // Settled here too, so a lost streak never flashes as alive while the save lands.
             val streak = DailyStreak.of(user).settledAt(now)
-            val weeklyStreak = StreakUiHelper.generateWeeklyStreak(streak.practiceDays, streak.frozenDays, now)
-            // Counted from practiceDays like the streak screens: user.weekSessions is only
-            // refreshed on the next practice, so it can still hold last week's number.
-            val weekSessions = weeklyStreak.count { it.status == StreakStatus.COMPLETED }
-            val weeklyGoal = remoteConfigProvider.getWeeklyGoal()
             HomeUiState(
                 userName = user.name ?: "Futuro Conductor",
-                profilePictureUrl = profilePictureUrl,
-                userEmail = userEmail,
-                plan = planSummaryOf(user.examDateMillis, user.planTargetMillis, now),
+                profilePictureUrl = account.profilePictureUrl,
+                userEmail = account.userEmail,
                 streak = streak.current,
                 practicedToday = streak.hasPracticedOn(now),
-                weekSessions = weekSessions,
-                weeklyGoal = weeklyGoal,
-                weekProgressPercent = (weekSessions * 100 / weeklyGoal.coerceAtLeast(1)).coerceIn(0, 100),
-                avgScore = avgScore.toInt(),
-                totalTests = totalTests,
+                avgScore = results.avgScore,
+                totalTests = results.totalTests,
                 practiceDays = user.practiceDays,
                 xpLevel = user.level,
-                mistakesCount = typedMistakes.size,
+                xp = user.xp,
+                claimableRankRewards = RankProgression.rewards.count { reward ->
+                    reward.requiredXp <= user.xp && reward.id !in user.claimedRankRewards
+                },
+                mistakesCount = results.mistakesCount,
                 coinsCount = user.coins,
                 streakFreezes = streak.freezes,
                 highestStreak = streak.highest,
-                dailyTip = dailyTip,
-                weeklyStreak = weeklyStreak,
+                dailyTip = account.dailyTip,
                 lastPracticeTimestamp = user.lastPracticeTimestamp,
-                pathNodes = typedPathNodes,
-                isPathLoading = isPathLoading,
-                pathError = pathError
+                pathNodes = path.nodes,
+                isPathLoading = path.isLoading,
+                pathError = path.error,
+                // The bar stays up until everything is done *and* the closing simulacro was
+                // taken, so an unfinished task keeps its coins available even after an exam.
+                firstSteps = user.firstSteps.takeIf { it.isActive && !(it.isComplete && results.hasTakenExam) },
+                firstStepTestNode = firstStepTestNodeOf(path.nodes),
+                firstStepReward = firstStepReward
             )
         }
     }.stateIn(
@@ -189,35 +216,33 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Saves the exam date picked on the plan card; from then on the card counts down to it.
-     *
-     * @param pickerMillis the date picker's selection, midnight UTC of the chosen day
-     */
-    fun setExamDate(pickerMillis: Long) {
-        val examDay = localDayFromPickerMillis(pickerMillis)
-        val hadPlanDate = uiState.value.plan.targetMillis != null
-        viewModelScope.launch {
-            userRepository.updateExamDate(examDay)
-            analyticsTracker.examDateSet(
-                daysUntil = calendarDaysBetween(System.currentTimeMillis(), examDay),
-                hadPlanDate = hadPlanDate
-            )
-        }
+    /** Reports that the first-steps bar is on screen; only the first call per Home is tracked. */
+    fun onFirstStepsShown() {
+        if (hasTrackedFirstStepsShown) return
+        hasTrackedFirstStepsShown = true
+        analyticsTracker.firstStepsShown(tasksDone = uiState.value.firstSteps?.doneCount ?: 0)
+    }
+
+    /** Reports that the student tapped the bar's closing "haz tu primer simulacro" button. */
+    fun onFirstStepsExamClicked() {
+        analyticsTracker.firstStepsExamClicked()
     }
 
     /**
-     * Records a tap on the plan card's study button, right before the lesson it opens, to tell
-     * how many sessions start from the card rather than from the path.
+     * Hides the first-steps bar for good. Tasks stop paying from here on, so the screen asks
+     * for confirmation before calling this while coins are still pending.
      */
-    fun trackPlanStudyClick() {
-        val state = uiState.value
-        val pace = weekPaceOf(state.weeklyStreak, state.weekSessions, state.weeklyGoal)
-        analyticsTracker.planStudyClicked(
-            daysLeft = state.plan.daysLeft,
-            practicedToday = pace.practicedToday,
-            weekSessions = pace.sessions
-        )
+    fun dismissFirstSteps() {
+        val tasksDone = uiState.value.firstSteps?.doneCount ?: 0
+        viewModelScope.launch {
+            userRepository.dismissFirstSteps()
+            analyticsTracker.firstStepsDismissed(tasksDone)
+        }
+    }
+
+    /** Marks the reward on screen as celebrated so the next queued one (if any) can show. */
+    fun dismissFirstStepReward() {
+        pendingFirstStepRewards.consume()
     }
 
     fun generateNextPathNodesCount(count: Int = 5) {

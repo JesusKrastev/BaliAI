@@ -38,7 +38,6 @@ import androidx.compose.ui.unit.dp
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
-import com.jesuskrastev.bali.ui.theme.BaliSecondary
 import kotlin.random.Random
 
 /**

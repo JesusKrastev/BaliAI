@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.chat
 
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.model.ChatMessage
+import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AiTutorRepository
 import com.jesuskrastev.bali.domain.repository.ChatRepository
@@ -72,6 +73,7 @@ class RecordingChatAnalytics : AnalyticsTracker(mock(), mock()) {
     val opened = mutableListOf<Boolean>()
     val sent = mutableListOf<Triple<Int, Boolean, Int>>()
     val failed = mutableListOf<String>()
+    val firstStepRewards = mutableListOf<FirstStepReward>()
     var clearedCount: Int = 0
         private set
 
@@ -89,5 +91,9 @@ class RecordingChatAnalytics : AnalyticsTracker(mock(), mock()) {
 
     override fun chatCleared() {
         clearedCount++
+    }
+
+    override fun firstStepRewarded(reward: FirstStepReward) {
+        firstStepRewards.add(reward)
     }
 }

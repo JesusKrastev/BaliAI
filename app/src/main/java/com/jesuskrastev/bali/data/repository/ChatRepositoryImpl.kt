@@ -8,12 +8,10 @@ import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreChatDao
 import com.jesuskrastev.bali.domain.model.ChatMessage
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.ChatRepository
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,18 +26,6 @@ class ChatRepositoryImpl @Inject constructor(
     private val authRepository: AuthRepository
 ) : ChatRepository {
 
-    /**
-     * Runs [actionRemote] when a user is authenticated and [actionLocal] otherwise.
-     * Both run on [Dispatchers.IO].
-     */
-    private suspend inline fun <T> withAuthRouting(
-        crossinline actionRemote: suspend (String) -> T,
-        crossinline actionLocal: suspend () -> T
-    ): T = withContext(Dispatchers.IO) {
-        val userId = authRepository.currentUser()
-        if (userId != null) actionRemote(userId) else actionLocal()
-    }
-
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeHistory(): Flow<List<ChatMessage>> =
         authRepository.currentUserFlow.flatMapLatest { userId ->
@@ -50,12 +36,12 @@ class ChatRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun save(message: ChatMessage) = withAuthRouting(
+    override suspend fun save(message: ChatMessage) = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreChatDao.insert(userId, message.toFirestore()) },
         actionLocal = { chatMessageDao.insert(message.toEntity()) }
     )
 
-    override suspend fun clear() = withAuthRouting(
+    override suspend fun clear() = authRepository.withAuthRouting(
         actionRemote = { userId ->
             firestoreChatDao.clear(userId)
             // The local table is cleared too: it is what this user sees if they sign out.

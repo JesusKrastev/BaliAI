@@ -17,7 +17,11 @@ interface FirestoreMigrationManager {
     suspend fun executePendingMigrations(userId: String)
 
     /**
-     * Obtiene la versión de esquema actual desde Firestore para un usuario específico
+     * Obtiene la versión de esquema actual desde Firestore para un usuario específico.
+     *
+     * @return la versión guardada; 1 si el documento no existe o no tiene el campo
+     * @throws Exception si no se puede leer: quien llama no debe suponer ninguna versión, porque
+     *   las primeras migraciones borran datos
      */
     suspend fun getCurrentSchemaVersion(userId: String): Int
 

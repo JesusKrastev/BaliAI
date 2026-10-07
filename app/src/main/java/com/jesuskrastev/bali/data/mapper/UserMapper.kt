@@ -2,6 +2,8 @@ package com.jesuskrastev.bali.data.mapper
 
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
 import com.jesuskrastev.bali.domain.model.User
 
 /** Converts the local Room [UserEntity] into the framework-free [User] domain model. */
@@ -28,7 +30,9 @@ fun UserEntity.toDomain(): User = User(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    activeStreakBet = activeStreakBet,
+    streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts this [User] into the Room entity stored for offline access. */
@@ -55,7 +59,9 @@ fun User.toEntity(): UserEntity = UserEntity(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    activeStreakBet = activeStreakBet,
+    streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts this [User] into its Firestore document representation. */
@@ -82,7 +88,12 @@ fun User.toFirestore(): UserFirestore = UserFirestore(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    activeStreakBet = activeStreakBet,
+    streakBetTarget = streakBetTarget,
+    firstStepsStartedAt = firstSteps.startedAtMillis,
+    firstStepsDone = firstSteps.completed.map { it.id },
+    firstStepsDismissed = firstSteps.dismissed,
+    claimedRankRewards = claimedRankRewards
 )
 
 /** Converts a Firestore profile document into the framework-free [User] domain model. */
@@ -109,5 +120,13 @@ fun UserFirestore.toDomain(): User = User(
     fiftyFifties = fiftyFifties,
     doubleXpBoosts = doubleXpBoosts,
     doubleCoinBoosts = doubleCoinBoosts,
-    activeStreakBet = activeStreakBet
+    activeStreakBet = activeStreakBet,
+    streakBetTarget = streakBetTarget,
+    claimedRankRewards = claimedRankRewards,
+    firstSteps = FirstStepsProgress(
+        startedAtMillis = firstStepsStartedAt,
+        // Ids this build does not know (written by a newer version) are ignored, not crashed on.
+        completed = firstStepsDone.mapNotNull(FirstStepTask::fromId).toSet(),
+        dismissed = firstStepsDismissed
+    )
 )

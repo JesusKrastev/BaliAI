@@ -25,7 +25,18 @@ data class UserFirestore(
     val fiftyFifties: Int = 0,
     val doubleXpBoosts: Int = 0,
     val doubleCoinBoosts: Int = 0,
+<<<<<<< HEAD
     val activeStreakBet: Boolean = false,
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),
     val fcmToken: String = ""
+=======
+    val streakBetTarget: Int = 0,
+    val fcmToken: String = "",
+    val firstStepsStartedAt: Long = 0L,
+    val firstStepsDone: List<String> = emptyList(),
+    val firstStepsDismissed: Boolean = false,
+    val claimedRankRewards: List<String> = emptyList(),
+    /** Schema version of the document; written once, when the account is created. */
+    val schemaVersion: Int = 0
+>>>>>>> origin/develop
 )

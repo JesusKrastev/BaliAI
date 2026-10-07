@@ -1,15 +1,15 @@
 package com.jesuskrastev.bali.ui.screens.test
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,18 +17,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,19 +39,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentGreen
+import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
+import com.jesuskrastev.bali.ui.theme.BaliFlameColors
+import com.jesuskrastev.bali.ui.theme.BaliPrimaryDark
+import kotlinx.coroutines.launch
+
+/** Peak scale of the run label's pulse when the run reaches [ComboTier.HOT]. */
+private const val COMBO_PULSE_HOT = 1.25f
+
+/** Peak scale of the run label's pulse when the run reaches [ComboTier.ON_FIRE]. */
+private const val COMBO_PULSE_ON_FIRE = 1.4f
 
 /**
  * Title content shared by the quiz top bars (practice, mistakes review, exam): an optional
- * "N SEGUIDAS" streak label above a rounded progress bar, followed by any [footer] content.
+ * "N SEGUIDAS" run label above a rounded progress bar, followed by any [footer] content. The
+ * label grows with the run (see [ComboTier]) and pulses once on the answer that reaches five and
+ * the one that reaches ten.
  *
  * @param currentIndex zero-based index of the question being answered
  * @param totalQuestions number of questions in the session; must be greater than zero
  * @param sessionStreak consecutive correct answers in this session
- * @param isAnswerChecked true once the current answer has been checked; the streak label only
+ * @param isAnswerChecked true once the current answer has been checked; the run label only
  *   shows then, and only from two correct answers in a row
  * @param footer extra content drawn under the progress bar (for example the exam timer)
  */
@@ -60,19 +74,26 @@ fun QuizProgressTitle(
     isAnswerChecked: Boolean,
     footer: @Composable ColumnScope.() -> Unit = {}
 ) {
+    val tier = ComboTier.of(sessionStreak)
+    val pulse = remember { Animatable(1f) }
+    // The question whose answer last pulsed the label, saved so a rotation does not replay it.
+    var pulsedQuestion by rememberSaveable { mutableIntStateOf(-1) }
+
+    LaunchedEffect(isAnswerChecked, currentIndex) {
+        if (isAnswerChecked && isComboThreshold(sessionStreak) && pulsedQuestion != currentIndex) {
+            pulsedQuestion = currentIndex
+            val peak = if (tier == ComboTier.ON_FIRE) COMBO_PULSE_ON_FIRE else COMBO_PULSE_HOT
+            pulse.animateTo(peak, tween(durationMillis = 140, easing = FastOutSlowInEasing))
+            pulse.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMediumLow))
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(end = 16.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        if (sessionStreak >= 2 && isAnswerChecked) {
-            Text(
-                text = "$sessionStreak SEGUIDAS",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(start = 8.dp)
-            )
+        if (isAnswerChecked && tier != ComboTier.HIDDEN) {
+            ComboLabel(run = sessionStreak, tier = tier, scale = { pulse.value })
             Spacer(modifier = Modifier.height(4.dp))
         }
         LinearProgressIndicator(
@@ -86,6 +107,54 @@ fun QuizProgressTitle(
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
         footer()
+    }
+}
+
+/**
+ * The "N SEGUIDAS" label in the size and colour of its tier: plain orange for a short run, then
+ * bigger with the app's flame, and in the flame's gradient from ten on. Its height stays within
+ * 20dp so the exam's top bar, which also holds the timer, still fits.
+ *
+ * @param run consecutive correct answers, at least two
+ * @param tier the tier of [run]; never [ComboTier.HIDDEN]
+ * @param scale current pulse scale, read at draw time so the pulse does not recompose
+ */
+@Composable
+private fun ComboLabel(run: Int, tier: ComboTier, scale: () -> Float) {
+    val (style, flameSize) = when (tier) {
+        ComboTier.ON_FIRE -> TextStyle(
+            brush = Brush.horizontalGradient(BaliFlameColors),
+            fontSize = 16.sp,
+            lineHeight = 20.sp
+        ) to 20.dp
+        ComboTier.HOT -> TextStyle(color = BaliPrimaryDark, fontSize = 13.sp, lineHeight = 18.sp) to 16.dp
+        else -> MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary) to null
+    }
+    Row(
+        modifier = Modifier
+            .padding(start = 8.dp)
+            .graphicsLayer {
+                val pulseScale = scale()
+                scaleX = pulseScale
+                scaleY = pulseScale
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (flameSize != null) {
+            Image(
+                painter = painterResource(id = R.drawable.streak_icon),
+                contentDescription = null,
+                modifier = Modifier.size(flameSize)
+            )
+        }
+        Text(
+            text = "$run SEGUIDAS",
+            style = style,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
     }
 }
 
@@ -123,6 +192,19 @@ fun TestScreen(
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.Rounded.Close, contentDescription = "Cerrar")
                     }
+                },
+                actions = {
+                    if (!uiState.isLoading && uiState.questions.isNotEmpty()) {
+                        PracticeAidChips(
+                            hints = uiState.hints,
+                            fiftyFifties = uiState.fiftyFifties,
+                            isHintVisible = uiState.isHintVisible,
+                            isFiftyFiftyUsed = uiState.eliminatedOptionIndices.isNotEmpty(),
+                            isAnswerChecked = uiState.isAnswerChecked,
+                            onUseHint = { viewModel.onEvent(TestEvent.UseHint) },
+                            onUseFiftyFifty = { viewModel.onEvent(TestEvent.UseFiftyFifty) }
+                        )
+                    }
                 }
             )
         }
@@ -147,8 +229,6 @@ fun TestScreen(
                         uiState = uiState,
                         onOptionSelect = { viewModel.onEvent(TestEvent.SelectOption(it)) },
                         onCheckClick = { viewModel.onEvent(TestEvent.CheckAnswer) },
-                        onUseHint = { viewModel.onEvent(TestEvent.UseHint) },
-                        onUseFiftyFifty = { viewModel.onEvent(TestEvent.UseFiftyFifty) },
                         onNextClick = {
                             if (uiState.currentQuestionIndex == uiState.questions.size - 1) {
                                 viewModel.onEvent(TestEvent.FinishTest { result ->
@@ -159,93 +239,16 @@ fun TestScreen(
                             }
                         }
                     )
+                    StreakCheer(
+                        currentIndex = uiState.currentQuestionIndex,
+                        sessionStreak = uiState.sessionStreak,
+                        isAnswerChecked = uiState.isAnswerChecked,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 12.dp, bottom = CHEER_ABOVE_BUTTON_PADDING)
+                    )
                 }
             }
-        }
-    }
-}
-
-/** Full-screen loading state shown while the AI prepares the questions: a bobbing mascot and a spinner. */
-@Composable
-fun LoadingView() {
-    val infiniteTransition = rememberInfiniteTransition(label = "loading")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "scale"
-    )
-    val translateY by infiniteTransition.animateFloat(
-        initialValue = -15f,
-        targetValue = 15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = EaseInOutSine),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "translation"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.bali),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(180.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationY = translateY
-                    }
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            Text(
-                text = "Estoy preparando un test para ti...",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Solo tomará unos segundos",
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.alpha(0.7f)
-            )
-
-            Spacer(modifier = Modifier.height(40.dp))
-
-            CircularProgressIndicator(
-                modifier = Modifier.size(36.dp),
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 3.5.dp,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            )
         }
     }
 }
@@ -303,8 +306,6 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
  * @param uiState quiz state; must contain at least one question
  * @param onOptionSelect invoked with the index of the tapped option while the answer is unchecked
  * @param onCheckClick invoked when the "Comprobar" button is tapped
- * @param onUseHint consumes a hint to reveal the explanation before answering
- * @param onUseFiftyFifty consumes a 50/50 aid to hide incorrect options
  * @param onNextClick invoked when the "Siguiente" / "Finalizar práctica" button is tapped
  */
 @Composable
@@ -312,8 +313,6 @@ fun TestContentView(
     uiState: TestUiState,
     onOptionSelect: (Int) -> Unit,
     onCheckClick: () -> Unit,
-    onUseHint: () -> Unit,
-    onUseFiftyFifty: () -> Unit,
     onNextClick: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -366,43 +365,25 @@ fun TestContentView(
                 }
             }
 
-            val hasUsablePracticeAid =
-                (uiState.hints > 0 && !uiState.isHintVisible) ||
-                    (uiState.fiftyFifties > 0 && uiState.eliminatedOptionIndices.isEmpty())
-            if (!uiState.isAnswerChecked && hasUsablePracticeAid) {
-                item {
-                    PracticeAids(
-                        hints = uiState.hints,
-                        fiftyFifties = uiState.fiftyFifties,
-                        isHintVisible = uiState.isHintVisible,
-                        isFiftyFiftyUsed = uiState.eliminatedOptionIndices.isNotEmpty(),
-                        onUseHint = onUseHint,
-                        onUseFiftyFifty = onUseFiftyFifty
+            // Once checked, the explanation card below says the same thing, so the hint steps aside.
+            if (uiState.isHintVisible && !uiState.isAnswerChecked) {
+                item(key = HINT_ITEM_KEY) {
+                    HintCard(
+                        explanation = currentQuestion.explanation,
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
 
-            if (uiState.isHintVisible) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
-                    ) {
-                        Text(
-                            text = "Pista: ${currentQuestion.explanation}",
-                            modifier = Modifier.padding(16.dp),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-
-            itemsIndexed(currentQuestion.options, key = { index, _ -> index }) { optionIndex, option ->
-                if (optionIndex in uiState.eliminatedOptionIndices) return@itemsIndexed
+            // Options the 50/50 removed fade out and the rest slide together, instead of jumping.
+            val visibleOptions = currentQuestion.options.withIndex()
+                .filter { it.index !in uiState.eliminatedOptionIndices }
+            items(visibleOptions, key = { it.index }) { (optionIndex, option) ->
                 val isSelected = uiState.selectedAnswers[uiState.currentQuestionIndex] == optionIndex
                 val isCorrect = currentQuestion.correctAnswerIndex == optionIndex
 
                 OptionCard(
+                    modifier = Modifier.animateItem(),
                     text = option,
                     isSelected = isSelected,
                     isCorrect = if (uiState.isAnswerChecked) isCorrect else null,
@@ -450,44 +431,69 @@ fun TestContentView(
     }
 }
 
+/** Peak scale of the hop a correct answer makes when it is checked. */
+private const val CORRECT_HOP_SCALE = 1.04f
+
+/** Extra green the card flashes with when a correct answer is checked, fading back in 600 ms. */
+private const val CORRECT_FLASH_ALPHA = 0.22f
+
+/** Lazy-list key of the hint card, a string so it never collides with the options' index keys. */
+private const val HINT_ITEM_KEY = "hint"
+
+/** Gap between the bottom of the quiz content and Bali's cheer: clears the pinned button. */
+private val CHEER_ABOVE_BUTTON_PADDING = 92.dp
+
+/** Opacity of an aid chip that cannot be used right now (answer already checked). */
+private const val AID_DISABLED_ALPHA = 0.4f
+
 /**
- * Shows only the owned, still-applicable practice aids as compact image buttons.
+ * The practice aids as two compact chips in the top bar, each with its shop picture and how many
+ * the user owns, so they are at hand without pushing the question down. A chip only shows while
+ * the user owns that aid or is using it on this question; an aid in use stays highlighted until
+ * the next question, and both dim once the answer is checked.
  *
- * @param hints number of hints still owned
- * @param fiftyFifties number of 50/50 aids still owned
- * @param isHintVisible whether this question's hint has already been used
- * @param isFiftyFiftyUsed whether this question's 50/50 aid has already been used
- * @param onUseHint consumes one hint
- * @param onUseFiftyFifty consumes one 50/50 aid
- * @return Unit; no layout is emitted when neither aid can be used.
+ * @param hints hints the user owns
+ * @param fiftyFifties 50/50 aids the user owns
+ * @param isHintVisible true when a hint is already revealed for this question
+ * @param isFiftyFiftyUsed true when a 50/50 already removed options from this question
+ * @param isAnswerChecked true once the current answer has been checked
+ * @param onUseHint spends a hint to reveal the explanation before answering
+ * @param onUseFiftyFifty spends a 50/50 to remove incorrect options
  */
 @Composable
-internal fun PracticeAids(
+fun PracticeAidChips(
     hints: Int,
     fiftyFifties: Int,
     isHintVisible: Boolean,
     isFiftyFiftyUsed: Boolean,
+    isAnswerChecked: Boolean,
     onUseHint: () -> Unit,
     onUseFiftyFifty: () -> Unit
 ) {
-    val canUseHint = hints > 0 && !isHintVisible
-    val canUseFiftyFifty = fiftyFifties > 0 && !isFiftyFiftyUsed
-    if (!canUseHint && !canUseFiftyFifty) return
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (canUseHint) {
-            PracticeAidButton(
+    Row(
+        modifier = Modifier.padding(end = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (hints > 0 || isHintVisible) {
+            AidChip(
                 imageRes = R.drawable.shop_hint,
+                name = "pista",
                 count = hints,
-                contentDescription = "Usar pista; $hints disponibles",
+                isInUse = isHintVisible,
+                enabled = hints > 0 && !isHintVisible && !isAnswerChecked,
+                isDimmed = isAnswerChecked,
                 onClick = onUseHint
             )
         }
-        if (canUseFiftyFifty) {
-            PracticeAidButton(
+        if (fiftyFifties > 0 || isFiftyFiftyUsed) {
+            AidChip(
                 imageRes = R.drawable.shop_fifty_fifty,
+                name = "50/50",
                 count = fiftyFifties,
-                contentDescription = "Usar 50/50; $fiftyFifties disponibles",
+                isInUse = isFiftyFiftyUsed,
+                enabled = fiftyFifties > 0 && !isFiftyFiftyUsed && !isAnswerChecked,
+                isDimmed = isAnswerChecked,
                 onClick = onUseFiftyFifty
             )
         }
@@ -495,43 +501,115 @@ internal fun PracticeAids(
 }
 
 /**
- * Renders one compact inventory action with an item image and its available count.
+ * One aid chip: the aid's picture and the number owned. Visually 32dp tall, but its touch target
+ * is the full 48dp the clickable [Surface] guarantees.
  *
- * @param imageRes drawable resource representing the aid
- * @param count number of available uses displayed in the badge
- * @param contentDescription accessible action description
- * @param onClick invoked to consume the aid
- * @return Unit; a 48 dp icon button is emitted.
+ * @param imageRes the aid's shop picture
+ * @param name the aid's name as TalkBack reads it
+ * @param count how many the user owns
+ * @param isInUse true while the aid is active on this question; the chip is highlighted
+ * @param enabled whether tapping spends one now
+ * @param isDimmed true to fade the chip because aids no longer apply to this question
+ * @param onClick spends one
  */
 @Composable
-private fun PracticeAidButton(
-    imageRes: Int,
+private fun AidChip(
+    @DrawableRes imageRes: Int,
+    name: String,
     count: Int,
-    contentDescription: String,
+    isInUse: Boolean,
+    enabled: Boolean,
+    isDimmed: Boolean,
     onClick: () -> Unit
 ) {
-    BadgedBox(
-        badge = {
-            Badge(containerColor = MaterialTheme.colorScheme.primary) {
-                Text(count.toString(), fontWeight = FontWeight.Black)
-            }
-        }
+    val description = if (isInUse) "$name en uso" else "Usar $name, te quedan $count"
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        color = if (isInUse) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
+        border = if (isInUse) BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+        modifier = Modifier
+            .graphicsLayer { alpha = if (isDimmed) AID_DISABLED_ALPHA else 1f }
+            .clearAndSetSemantics { contentDescription = description }
     ) {
-        FilledTonalIconButton(
-            onClick = onClick,
-            modifier = Modifier.size(48.dp)
+        Row(
+            modifier = Modifier.height(32.dp).padding(start = 4.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Image(
                 painter = painterResource(id = imageRes),
-                contentDescription = contentDescription,
+                contentDescription = null,
+                modifier = Modifier.size(26.dp)
+            )
+            AnimatedContent(
+                targetState = count,
+                transitionSpec = {
+                    (slideInVertically { -it } + fadeIn()) togetherWith (slideOutVertically { it } + fadeOut())
+                },
+                label = "aidCount"
+            ) { shown ->
+                Text(
+                    text = shown.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = if (isInUse) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The revealed hint: the bulb from the shop beside the question's explanation.
+ *
+ * @param explanation the text the hint reveals
+ * @param modifier layout modifier, used for the list's appear animation
+ */
+@Composable
+private fun HintCard(explanation: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = BaliAccentYellow.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, BaliAccentYellow.copy(alpha = 0.55f))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.shop_hint),
+                contentDescription = null,
                 modifier = Modifier.size(28.dp)
             )
+            Column {
+                Text(
+                    text = "Pista",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = explanation,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
 
 /**
  * Selectable answer option that reflects the check result once the answer has been verified.
+ *
+ * When the user's own choice turns out correct, the card makes a short hop, flashes green and
+ * pops its tick, at the moment the right-answer sound plays. Only that flip celebrates: a card
+ * that first appears already answered (after a rotation or when scrolled back into view) stays
+ * still, and a wrong answer gets no animation at all.
  *
  * @param modifier layout modifier applied to the card
  * @param text answer text
@@ -549,6 +627,30 @@ fun OptionCard(
     wasSelectedAndIncorrect: Boolean,
     onClick: () -> Unit
 ) {
+    val celebrate = isSelected && isCorrect == true
+    val hop = remember { Animatable(1f) }
+    val flash = remember { Animatable(0f) }
+    val tickScale = remember { Animatable(1f) }
+    val wasCelebrating = remember { mutableStateOf(celebrate) }
+
+    LaunchedEffect(celebrate) {
+        val flippedToCorrect = celebrate && !wasCelebrating.value
+        wasCelebrating.value = celebrate
+        if (!flippedToCorrect) return@LaunchedEffect
+        launch {
+            hop.animateTo(CORRECT_HOP_SCALE, tween(durationMillis = 110, easing = FastOutSlowInEasing))
+            hop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMedium))
+        }
+        launch {
+            flash.snapTo(1f)
+            flash.animateTo(0f, tween(durationMillis = 600))
+        }
+        launch {
+            tickScale.snapTo(0.4f)
+            tickScale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessMedium))
+        }
+    }
+
     val borderColor = when {
         isCorrect == true -> BaliAccentGreen
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error
@@ -557,7 +659,7 @@ fun OptionCard(
     }
 
     val containerColor = when {
-        isCorrect == true -> BaliAccentGreen.copy(alpha = 0.1f)
+        isCorrect == true -> BaliAccentGreen.copy(alpha = 0.1f + CORRECT_FLASH_ALPHA * flash.value)
         wasSelectedAndIncorrect -> MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surface
@@ -565,7 +667,12 @@ fun OptionCard(
 
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = hop.value
+                scaleY = hop.value
+            },
         shape = RoundedCornerShape(20.dp),
         color = containerColor,
         border = BorderStroke(width = if (isSelected || isCorrect != null) 2.dp else 1.dp, color = borderColor),
@@ -575,26 +682,32 @@ fun OptionCard(
             modifier = Modifier.padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isMarked = isSelected || isCorrect == true
             Box(
                 modifier = Modifier
                     .size(24.dp)
                     .border(
                         width = 2.dp,
-                        color = if (isSelected || isCorrect == true) borderColor else MaterialTheme.colorScheme.outline,
+                        color = if (isMarked) borderColor else MaterialTheme.colorScheme.outline,
                         shape = CircleShape
                     )
                     .background(
-                        color = if (isSelected || isCorrect == true) borderColor else Color.Transparent,
+                        color = if (isMarked) borderColor else Color.Transparent,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (isSelected || isCorrect == true) {
+                if (isMarked) {
                     Icon(
                         imageVector = if (wasSelectedAndIncorrect) Icons.Rounded.Close else Icons.Rounded.Check,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer {
+                                scaleX = tickScale.value
+                                scaleY = tickScale.value
+                            }
                     )
                 }
             }

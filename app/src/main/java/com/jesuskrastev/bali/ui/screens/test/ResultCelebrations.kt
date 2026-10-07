@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,6 +54,9 @@ private const val STAMP_ANGLE = -8f
 /** Extra time the level-up overlay stays after its animation ends, before closing by itself. */
 private const val LEVEL_UP_LINGER_MS = 800L
 
+/** How long the record and first-win overlays stay before closing by themselves. */
+private const val SMALL_OVERLAY_MS = 3_500L
+
 /** Green ink of the stamp on a light background, dark enough to read on white. */
 private val StampGreenOnLight = Color(0xFF15803D)
 
@@ -64,9 +70,16 @@ private val StampGreenOnLight = Color(0xFF15803D)
  * @param landed whether the stamp is already down; false plays the slam, true shows it at rest
  *   (e.g. after a rotation, so it is not replayed)
  * @param onLanded invoked at the moment of impact, once
+ * @param message motivational message shown under the score, picked from [ResultMessages]
  */
 @Composable
-internal fun PassedExamStamp(score: Int, total: Int, landed: Boolean, onLanded: () -> Unit) {
+internal fun PassedExamStamp(
+    score: Int,
+    total: Int,
+    landed: Boolean,
+    onLanded: () -> Unit,
+    message: ResultMessage
+) {
     val haptics = LocalHapticFeedback.current
     val ink = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) BaliAccentGreen else StampGreenOnLight
     val startLanded = remember { landed }
@@ -148,9 +161,8 @@ internal fun PassedExamStamp(score: Int, total: Int, landed: Boolean, onLanded: 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (total > 0) {
-                val mistakes = total - score
                 Text(
-                    text = "$score de $total · ${if (mistakes == 1) "1 fallo" else "$mistakes fallos"}",
+                    text = examScoreLine(score, total),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
                     textAlign = TextAlign.Center
@@ -158,7 +170,14 @@ internal fun PassedExamStamp(score: Int, total: Int, landed: Boolean, onLanded: 
                 Spacer(modifier = Modifier.height(4.dp))
             }
             Text(
-                text = "Con este resultado aprobarías el teórico de la DGT.",
+                text = message.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = message.subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -178,10 +197,121 @@ internal fun PassedExamStamp(score: Int, total: Int, landed: Boolean, onLanded: 
  */
 @Composable
 internal fun LevelUpOverlay(newLevel: Int, onDismiss: () -> Unit) {
-    val haptics = LocalHapticFeedback.current
     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.level_up))
     val progress by animateLottieCompositionAsState(composition = composition, iterations = 1)
+
+    CelebrationOverlay(
+        title = if (newLevel > 0) "¡NIVEL $newLevel!" else "¡SUBISTE DE NIVEL!",
+        message = "Has subido de nivel. Cada test te acerca al aprobado.",
+        accent = BaliAccentYellow,
+        autoDismissAfterMs = composition?.let { it.duration.toLong() + LEVEL_UP_LINGER_MS },
+        onDismiss = onDismiss
+    ) {
+        LottieAnimation(
+            composition = composition,
+            progress = { progress },
+            modifier = Modifier.size(220.dp)
+        )
+    }
+}
+
+/**
+ * Full-screen celebration of a mock exam better than every earlier one. A trophy drops in over
+ * confetti that plays once; the confetti is left out when the exam was failed, so the screen
+ * never celebrates a failure, only the progress.
+ *
+ * @param score correct answers of this exam
+ * @param total questions of this exam
+ * @param previousBest best score of the earlier exams, or a negative number when unknown
+ * @param passed whether this exam was passed; a failed one gets no confetti and a calmer line
+ * @param onDismiss invoked when the overlay should close
+ */
+@Composable
+internal fun NewRecordOverlay(
+    score: Int,
+    total: Int,
+    previousBest: Int,
+    passed: Boolean,
+    onDismiss: () -> Unit
+) {
+    val comparison = if (previousBest >= 0) " Tu mejor marca anterior: $previousBest." else ""
+    CelebrationOverlay(
+        title = "¡NUEVO RÉCORD!",
+        message = if (passed) {
+            "$score de $total: tu mejor simulacro hasta ahora.$comparison"
+        } else {
+            "$score de $total: tu mejor simulacro hasta ahora.$comparison Vas a mejor."
+        },
+        accent = BaliAccentYellow,
+        autoDismissAfterMs = SMALL_OVERLAY_MS,
+        confettiOnce = passed,
+        onDismiss = onDismiss
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.exam_new_record_trophy),
+            contentDescription = null,
+            modifier = Modifier.size(160.dp)
+        )
+    }
+}
+
+/**
+ * Full-screen celebration of the user's first win, shown once in their life: Bali over confetti
+ * that plays once.
+ *
+ * @param onDismiss invoked when the overlay should close
+ */
+@Composable
+internal fun FirstWinOverlay(onDismiss: () -> Unit) {
+    CelebrationOverlay(
+        title = "¡TU PRIMERA VICTORIA!",
+        message = "El primer test superado es el más difícil. Esto no ha hecho más que empezar.",
+        accent = BaliAccentGreen,
+        autoDismissAfterMs = SMALL_OVERLAY_MS,
+        confettiOnce = true,
+        onDismiss = onDismiss
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.bali),
+            contentDescription = "Bali",
+            modifier = Modifier.size(160.dp)
+        )
+    }
+}
+
+/**
+ * Shared frame of the full-screen celebrations: an opaque dark background with a soft glow,
+ * the [hero], a title and a line under it, and a hint that a tap closes it. It closes on a tap,
+ * on back and, when [autoDismissAfterMs] is set, by itself, so it never traps the student. Nothing
+ * in it loops: the confetti, when asked for, plays once.
+ *
+ * @param title large headline, in [accent]
+ * @param message line under the headline
+ * @param accent colour of the headline and the glow
+ * @param autoDismissAfterMs time before it closes by itself; null waits (e.g. for an animation
+ *   that has not loaded yet) and the overlay then closes only on a tap or on back
+ * @param onDismiss invoked when the overlay should close
+ * @param confettiOnce whether confetti plays once behind the content
+ * @param hero the picture above the headline
+ */
+@Composable
+private fun CelebrationOverlay(
+    title: String,
+    message: String,
+    accent: Color,
+    autoDismissAfterMs: Long?,
+    onDismiss: () -> Unit,
+    confettiOnce: Boolean = false,
+    hero: @Composable () -> Unit
+) {
+    val haptics = LocalHapticFeedback.current
     val contentScale = remember { Animatable(0.6f) }
+    val confetti by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.confetti))
+    val confettiProgress by animateLottieCompositionAsState(
+        composition = confetti,
+        isPlaying = confettiOnce,
+        iterations = 1
+    )
 
     BackHandler(onBack = onDismiss)
 
@@ -189,9 +319,9 @@ internal fun LevelUpOverlay(newLevel: Int, onDismiss: () -> Unit) {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         contentScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
     }
-    LaunchedEffect(composition) {
-        val loaded = composition ?: return@LaunchedEffect
-        delay(loaded.duration.toLong() + LEVEL_UP_LINGER_MS)
+    LaunchedEffect(autoDismissAfterMs) {
+        val wait = autoDismissAfterMs ?: return@LaunchedEffect
+        delay(wait)
         onDismiss()
     }
 
@@ -200,9 +330,7 @@ internal fun LevelUpOverlay(newLevel: Int, onDismiss: () -> Unit) {
             .fillMaxSize()
             // Opaque: the result screen showing through would clash with the overlay's text.
             .background(BaliDarkBackground)
-            .background(
-                Brush.radialGradient(listOf(BaliAccentYellow.copy(alpha = 0.18f), Color.Transparent))
-            )
+            .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.18f), Color.Transparent)))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -211,6 +339,14 @@ internal fun LevelUpOverlay(newLevel: Int, onDismiss: () -> Unit) {
             ),
         contentAlignment = Alignment.Center
     ) {
+        if (confettiOnce) {
+            LottieAnimation(
+                composition = confetti,
+                progress = { confettiProgress },
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
         Column(
             modifier = Modifier
                 .padding(horizontal = 32.dp)
@@ -220,21 +356,17 @@ internal fun LevelUpOverlay(newLevel: Int, onDismiss: () -> Unit) {
                 },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            LottieAnimation(
-                composition = composition,
-                progress = { progress },
-                modifier = Modifier.size(220.dp)
-            )
+            hero()
             Text(
-                text = if (newLevel > 0) "¡NIVEL $newLevel!" else "¡SUBISTE DE NIVEL!",
+                text = title,
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,
-                color = BaliAccentYellow,
+                color = accent,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Has subido de nivel. Cada test te acerca al aprobado.",
+                text = message,
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.85f),
                 textAlign = TextAlign.Center

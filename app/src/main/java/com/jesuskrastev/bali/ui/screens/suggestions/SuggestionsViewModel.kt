@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.Suggestion
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SuggestionsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,7 +45,7 @@ class SuggestionsViewModel @Inject constructor(
             try {
                 val userId = authRepository.currentUser()
                 val userEmail = authRepository.currentUserEmailFlow.first()
-                
+
                 val result = suggestionsRepository.sendSuggestion(
                     Suggestion(
                         text = text,
@@ -60,6 +61,7 @@ class SuggestionsViewModel @Inject constructor(
                     _uiState.update { it.copy(isLoading = false, error = result.exceptionOrNull()?.localizedMessage) }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(isLoading = false, error = e.localizedMessage) }
             }
         }
