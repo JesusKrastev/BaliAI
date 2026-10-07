@@ -2,11 +2,11 @@ package com.jesuskrastev.bali
 
 /**
  * Detects whether the process is running under Robolectric, so callers can skip
- * initializing third-party SDKs (OneSignal, Mixpanel, PostHog, RevenueCat) that are known
+ * initializing third-party SDKs (OneSignal, PostHog, RevenueCat) that are known
  * to crash in that environment.
  *
  * Shared by [BaliApplication] and the Hilt modules that provide those SDK clients
- * ([com.jesuskrastev.bali.di.MixpanelModule], [com.jesuskrastev.bali.di.PostHogModule])
+ * ([com.jesuskrastev.bali.di.PostHogModule])
  * so there is exactly one place that decides this, instead of each call site guessing at
  * `Build.FINGERPRINT`'s exact value.
  */

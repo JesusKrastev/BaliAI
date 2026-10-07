@@ -26,6 +26,7 @@ open class IncrementStreakUseCase @Inject constructor(
 
         val updated = streak.practicedAt(now)
         userRepository.updateStreak(updated)
+        userRepository.claimStreakBet()
         return updated.current
     }
 }

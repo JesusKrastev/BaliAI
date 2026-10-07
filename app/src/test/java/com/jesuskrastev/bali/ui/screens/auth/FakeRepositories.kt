@@ -5,6 +5,7 @@ import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.repository.*
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import kotlinx.coroutines.flow.Flow
@@ -66,6 +67,59 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
 
     override suspend fun updateStreakFreezes(count: Int) {
         _user.update { it?.copy(streakFreezes = count) }
+    }
+
+    /** Buys [item] from the fake inventory when the test profile can afford [cost]. */
+    override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost || (item == ShopInventoryItem.STREAK_BET && user.activeStreakBet)) {
+            return false
+        }
+        _user.value = user.copy(
+            coins = user.coins - cost,
+            hints = user.hints + if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties + if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts + if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0,
+            activeStreakBet = user.activeStreakBet || item == ShopInventoryItem.STREAK_BET
+        )
+        return true
+    }
+
+    /** Opens a fake surprise chest by charging [cost] and crediting its [reward]. */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost) return false
+        _user.value = user.copy(coins = user.coins - cost + reward)
+        return true
+    }
+
+    /** Consumes one fake inventory [item] when it is owned. */
+    override suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean {
+        val user = _user.value ?: return false
+        val canConsume = when (item) {
+            ShopInventoryItem.HINT -> user.hints > 0
+            ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties > 0
+            ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts > 0
+            ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts > 0
+            ShopInventoryItem.STREAK_BET -> false
+        }
+        if (!canConsume) return false
+        _user.value = user.copy(
+            hints = user.hints - if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties - if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts - if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts - if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
+        )
+        return true
+    }
+
+    /** Pays the fixed 100-coin wager reward if the fake profile has one pending. */
+    override suspend fun claimStreakBet(): Boolean {
+        val user = _user.value ?: return false
+        if (!user.activeStreakBet) return false
+        _user.value = user.copy(coins = user.coins + 100, activeStreakBet = false)
+        return true
     }
 
 
@@ -136,9 +190,8 @@ data class GameCompletedEvent(val gameId: String, val score: Int, val totalRound
 
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
-    mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
     posthog: com.posthog.PostHogInterface
-) : AnalyticsTracker(firebase, mixpanel, posthog) {
+) : AnalyticsTracker(firebase, posthog) {
     val identifiedUsers = mutableListOf<Pair<String, String?>>()
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()

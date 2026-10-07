@@ -39,17 +39,6 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
-        <!-- Mixpanel EU data residency endpoints -->
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.EventsEndpoint"
-            android:value="https://api-eu.mixpanel.com/track/" />
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.PeopleEndpoint"
-            android:value="https://api-eu.mixpanel.com/engage/" />
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.GroupsEndpoint"
-            android:value="https://api-eu.mixpanel.com/groups/" />
     </application>
 
 </manifest>

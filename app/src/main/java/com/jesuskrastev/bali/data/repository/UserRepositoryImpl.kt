@@ -11,6 +11,7 @@ import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.DailyStreak
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import kotlinx.coroutines.Dispatchers
@@ -127,6 +128,56 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateStreakFreezes(count) }
     )
 
+    /**
+     * Charges [cost] and persists the purchased [item] together, in the current data source.
+     *
+     * @return true when the inventory item was granted, false when it could not be purchased.
+     */
+    override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean =
+        withContext(Dispatchers.IO) {
+            withAuthRouting(
+                actionRemote = { userId -> firestoreUserDao.purchaseInventoryItem(userId, item, cost) },
+                actionLocal = { userDao.purchaseInventoryItem(item.name, cost) == 1 }
+            )
+        }
+
+    /**
+     * Applies a surprise chest's [reward] while charging its [cost] in the same persistence write.
+     *
+     * @return true when the chest opened, false for an insufficient balance.
+     */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean = withContext(Dispatchers.IO) {
+        withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
+            actionLocal = { userDao.openSurpriseChest(cost, reward) == 1 }
+        )
+    }
+
+    /**
+     * Decrements one inventory [item] only when it is still owned.
+     *
+     * @return true when a consumable was spent.
+     */
+    override suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean =
+        withContext(Dispatchers.IO) {
+            withAuthRouting(
+                actionRemote = { userId -> firestoreUserDao.consumeInventoryItem(userId, item) },
+                actionLocal = { userDao.consumeInventoryItem(item.name) == 1 }
+            )
+        }
+
+    /**
+     * Pays the active streak wager in whichever store currently owns the user's profile.
+     *
+     * @return true when a wager was paid.
+     */
+    override suspend fun claimStreakBet(): Boolean = withContext(Dispatchers.IO) {
+        withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.claimStreakBet(userId, STREAK_BET_PAYOUT) },
+            actionLocal = { userDao.claimStreakBet(STREAK_BET_PAYOUT) == 1 }
+        )
+    }
+
 
     /** See [UserRepository.updateExamDate]. */
     override suspend fun updateExamDate(examDateMillis: Long) = updateField(
@@ -172,4 +223,8 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
+
+    private companion object {
+        const val STREAK_BET_PAYOUT = 100
+    }
 }

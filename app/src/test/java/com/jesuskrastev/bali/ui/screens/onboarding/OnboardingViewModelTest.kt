@@ -20,7 +20,7 @@ class OnboardingViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val fakeUserRepository = FakeUserRepository()
-    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock())
+    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
     private var fakeNotificationsRepository = FakeNotificationsRepository()
 
     private lateinit var viewModel: OnboardingViewModel

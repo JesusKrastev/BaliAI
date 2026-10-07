@@ -21,6 +21,11 @@ data class UserFirestore(
     val lostStreakDayMillis: Long = 0L,
     val practiceDays: List<Long> = emptyList(),
     val frozenDays: List<Long> = emptyList(),
+    val hints: Int = 0,
+    val fiftyFifties: Int = 0,
+    val doubleXpBoosts: Int = 0,
+    val doubleCoinBoosts: Int = 0,
+    val activeStreakBet: Boolean = false,
     val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),
     val fcmToken: String = ""
 )

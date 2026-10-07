@@ -26,12 +26,11 @@ import com.jesuskrastev.bali.ui.screens.games.mechanics.LegalOMultaGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PrioridadCruceGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PuntosCarneGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.SenalRelampagoGame
-import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 
 /**
  * Hosts an active arcade mini-game session: shows the round chrome and the mechanic matching
- * [game] while the session is in progress, then reuses [TestResultScreen] to celebrate the
- * result once all rounds are done, wiring in a "play again" action on top of the usual continue.
+ * [game] while the session is in progress, then shows [GameResultScreen] with full arcade
+ * styling once all rounds are done.
  */
 @Composable
 fun GamePlayScreen(
@@ -54,7 +53,7 @@ fun GamePlayScreen(
             if (rewards == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                TestResultScreen(
+                GameResultScreen(
                     xpGained = rewards.xpEarned.xpGained,
                     baseXp = rewards.xpEarned.baseXp,
                     bonusPerfection = rewards.xpEarned.bonusPerfection,
@@ -62,11 +61,11 @@ fun GamePlayScreen(
                     bonusStreak = rewards.xpEarned.bonusStreak,
                     leveledUp = rewards.xpEarned.levelUp,
                     newLevel = rewards.xpEarned.newLevel,
-                    durationSeconds = rewards.durationSeconds,
+                    score = state.score,
                     accuracy = rewards.accuracy,
+                    durationSeconds = rewards.durationSeconds,
                     onContinueClick = onBackClick,
-                    secondaryActionLabel = "JUGAR OTRA VEZ",
-                    onSecondaryActionClick = viewModel::replay,
+                    onPlayAgainClick = viewModel::replay,
                 )
             }
         } else {

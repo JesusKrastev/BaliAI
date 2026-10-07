@@ -28,7 +28,7 @@ class GameViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val fakeUserRepository = FakeUserRepository()
-    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock(), mock())
+    private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
 
     private val fakeIncrementXpUseCase = IncrementXpUseCase(fakeUserRepository)
     private val fakeIncrementCoinsUseCase = IncrementCoinsUseCase(fakeUserRepository)

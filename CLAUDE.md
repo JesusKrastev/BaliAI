@@ -70,7 +70,7 @@ Repositories transparently sync: local Room for offline, Firestore when authenti
   Note the project is on Kotlin 2.0.21, so Firebase BOM 34.x will not compile against it.
 - **Payments**: RevenueCat 10.16.0 (`purchases` + `purchases-ui`: paywall and Customer Center)
 - **Push**: OneSignal + Firebase Messaging
-- **Analytics**: Mixpanel + PostHog + Firebase Analytics (all three tracked via `AnalyticsTracker`)
+- **Analytics**: PostHog + Firebase Analytics (both tracked via `AnalyticsTracker`)
 - **Images**: Coil 2.7.0 with SVG support
 - **Animations**: Lottie 6.4.1
 - **Testing**: JUnit4, Truth, Mockito-Kotlin, Robolectric 4.14.1, Roborazzi 1.6.0
@@ -139,7 +139,7 @@ val uiState: StateFlow<TestUiState> = _uiState.asStateFlow()
 - Screenshot tests only run in debug build variants — do not run them against release.
 - When adding a new `Room` migration, increment `BaliDatabase.version`, add a `Migration` object to the `BaliDatabase` companion, and test it with an instrumented DAO test.
 - When adding a new Hilt module, always specify the component scope explicitly (`@Singleton`, etc.) — never rely on implicit scoping.
-- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + Mixpanel + PostHog), never call any of those SDKs directly from a ViewModel.
+- When adding a new analytics event, track it in `AnalyticsTracker` (dual-sends to Firebase + PostHog), never call any of those SDKs directly from a ViewModel.
 
 ## Branches and releases
 
@@ -191,11 +191,11 @@ the edge cases live in the brain: `05-Patrones\patron-ramas-git.md` and D-024.
 
 ## Important Rules
 
-- **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `MIXPANEL_TOKEN`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
+- **NEVER commit `local.properties`** — it contains `ONE_SIGNAL_APP_ID`, `REVENUECAT_API_KEY`, and `POSTHOG_API_KEY`. Add it locally; without it the app builds but ships empty SDK keys.
 - **NEVER put the Gemini API key back into `BuildConfig`.** A `buildConfigField` is a plain string in the shipped APK; that is why the app moved to Firebase AI Logic. Gemini credentials belong in the Firebase project only.
 - Debug builds need their App Check debug token registered once per machine (Firebase console -> App Check -> Apps -> Debug tokens), otherwise every AI request is rejected. The token is printed to Logcat on first run.
 - **NEVER commit `google-services.json` to a public repo** — it contains Firebase project credentials.
-- `RobolectricDetector.isRobolectric()` (root package) guards skip SDK initialization (OneSignal, Mixpanel, PostHog, RevenueCat) in unit tests — called from `BaliApplication.onCreate()` and from the Mixpanel/PostHog Hilt modules. NEVER remove this guard, and never reimplement the check inline (e.g. `Build.FINGERPRINT == "robolectric"`) instead of calling it — those SDKs crash under Robolectric.
+- `RobolectricDetector.isRobolectric()` (root package) guards skip SDK initialization (OneSignal, PostHog, RevenueCat) in unit tests — called from `BaliApplication.onCreate()` and from the PostHog Hilt module. NEVER remove this guard, and never reimplement the check inline (e.g. `Build.FINGERPRINT == "robolectric"`) instead of calling it — those SDKs crash under Robolectric.
 - `versionCode` format is `YYYYMMDDNN` (e.g., `2026032007`): publish date plus a two-digit counter for that day's builds, so several builds can be uploaded per day. NEVER use sequential integers. CI injects it via the `CI_VERSION_CODE` env var; the literal in `defaultConfig` is only the local-dev fallback. Play requires codes to increase monotonically — never go back to the old 8-digit form.
 - The daily streak is computed only in the app (`domain/model/DailyStreak.kt`); no server job may write `currentStreak`, `streakFreezes` or `frozenDays`. The Cloud Functions deployed in `bali-ai-facc4` have **no source in this repo** (only the compiled bundle in Cloud Storage): list them with `firebase functions:list --project bali-ai-facc4` before assuming what the backend does.
 - The `lintVitalAnalyze/Report/Release` tasks are explicitly disabled in `build.gradle.kts` due to a KSP/Lint bug — do not re-enable them.

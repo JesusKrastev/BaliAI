@@ -296,7 +296,7 @@ class SubscriptionViewModel @Inject constructor(
     private fun recordPaywallError(context: String, cause: Throwable? = null) {
         // Crashlytics reaches into real Android/Play Services classes that the plain JVM unit
         // tests for this ViewModel don't mock, unlike the Robolectric-backed tests that do —
-        // same guard used for OneSignal/Mixpanel/PostHog/RevenueCat init, see [RobolectricDetector].
+        // same guard used for OneSignal/PostHog/RevenueCat init, see [RobolectricDetector].
         if (RobolectricDetector.isRobolectric()) return
         FirebaseCrashlytics.getInstance().recordException(Exception("Paywall: $context", cause))
     }

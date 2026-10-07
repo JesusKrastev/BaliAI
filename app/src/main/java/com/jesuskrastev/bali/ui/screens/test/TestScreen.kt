@@ -147,6 +147,8 @@ fun TestScreen(
                         uiState = uiState,
                         onOptionSelect = { viewModel.onEvent(TestEvent.SelectOption(it)) },
                         onCheckClick = { viewModel.onEvent(TestEvent.CheckAnswer) },
+                        onUseHint = { viewModel.onEvent(TestEvent.UseHint) },
+                        onUseFiftyFifty = { viewModel.onEvent(TestEvent.UseFiftyFifty) },
                         onNextClick = {
                             if (uiState.currentQuestionIndex == uiState.questions.size - 1) {
                                 viewModel.onEvent(TestEvent.FinishTest { result ->
@@ -301,6 +303,8 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
  * @param uiState quiz state; must contain at least one question
  * @param onOptionSelect invoked with the index of the tapped option while the answer is unchecked
  * @param onCheckClick invoked when the "Comprobar" button is tapped
+ * @param onUseHint consumes a hint to reveal the explanation before answering
+ * @param onUseFiftyFifty consumes a 50/50 aid to hide incorrect options
  * @param onNextClick invoked when the "Siguiente" / "Finalizar práctica" button is tapped
  */
 @Composable
@@ -308,6 +312,8 @@ fun TestContentView(
     uiState: TestUiState,
     onOptionSelect: (Int) -> Unit,
     onCheckClick: () -> Unit,
+    onUseHint: () -> Unit,
+    onUseFiftyFifty: () -> Unit,
     onNextClick: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -360,7 +366,39 @@ fun TestContentView(
                 }
             }
 
-            itemsIndexed(currentQuestion.options) { optionIndex, option ->
+            val hasUsablePracticeAid =
+                (uiState.hints > 0 && !uiState.isHintVisible) ||
+                    (uiState.fiftyFifties > 0 && uiState.eliminatedOptionIndices.isEmpty())
+            if (!uiState.isAnswerChecked && hasUsablePracticeAid) {
+                item {
+                    PracticeAids(
+                        hints = uiState.hints,
+                        fiftyFifties = uiState.fiftyFifties,
+                        isHintVisible = uiState.isHintVisible,
+                        isFiftyFiftyUsed = uiState.eliminatedOptionIndices.isNotEmpty(),
+                        onUseHint = onUseHint,
+                        onUseFiftyFifty = onUseFiftyFifty
+                    )
+                }
+            }
+
+            if (uiState.isHintVisible) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+                    ) {
+                        Text(
+                            text = "Pista: ${currentQuestion.explanation}",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            itemsIndexed(currentQuestion.options, key = { index, _ -> index }) { optionIndex, option ->
+                if (optionIndex in uiState.eliminatedOptionIndices) return@itemsIndexed
                 val isSelected = uiState.selectedAnswers[uiState.currentQuestionIndex] == optionIndex
                 val isCorrect = currentQuestion.correctAnswerIndex == optionIndex
 
@@ -408,6 +446,86 @@ fun TestContentView(
                     Text(if (isLast) "Finalizar práctica" else "Siguiente")
                 }
             }
+        }
+    }
+}
+
+/**
+ * Shows only the owned, still-applicable practice aids as compact image buttons.
+ *
+ * @param hints number of hints still owned
+ * @param fiftyFifties number of 50/50 aids still owned
+ * @param isHintVisible whether this question's hint has already been used
+ * @param isFiftyFiftyUsed whether this question's 50/50 aid has already been used
+ * @param onUseHint consumes one hint
+ * @param onUseFiftyFifty consumes one 50/50 aid
+ * @return Unit; no layout is emitted when neither aid can be used.
+ */
+@Composable
+internal fun PracticeAids(
+    hints: Int,
+    fiftyFifties: Int,
+    isHintVisible: Boolean,
+    isFiftyFiftyUsed: Boolean,
+    onUseHint: () -> Unit,
+    onUseFiftyFifty: () -> Unit
+) {
+    val canUseHint = hints > 0 && !isHintVisible
+    val canUseFiftyFifty = fiftyFifties > 0 && !isFiftyFiftyUsed
+    if (!canUseHint && !canUseFiftyFifty) return
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (canUseHint) {
+            PracticeAidButton(
+                imageRes = R.drawable.shop_hint,
+                count = hints,
+                contentDescription = "Usar pista; $hints disponibles",
+                onClick = onUseHint
+            )
+        }
+        if (canUseFiftyFifty) {
+            PracticeAidButton(
+                imageRes = R.drawable.shop_fifty_fifty,
+                count = fiftyFifties,
+                contentDescription = "Usar 50/50; $fiftyFifties disponibles",
+                onClick = onUseFiftyFifty
+            )
+        }
+    }
+}
+
+/**
+ * Renders one compact inventory action with an item image and its available count.
+ *
+ * @param imageRes drawable resource representing the aid
+ * @param count number of available uses displayed in the badge
+ * @param contentDescription accessible action description
+ * @param onClick invoked to consume the aid
+ * @return Unit; a 48 dp icon button is emitted.
+ */
+@Composable
+private fun PracticeAidButton(
+    imageRes: Int,
+    count: Int,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    BadgedBox(
+        badge = {
+            Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                Text(count.toString(), fontWeight = FontWeight.Black)
+            }
+        }
+    ) {
+        FilledTonalIconButton(
+            onClick = onClick,
+            modifier = Modifier.size(48.dp)
+        ) {
+            Image(
+                painter = painterResource(id = imageRes),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 }

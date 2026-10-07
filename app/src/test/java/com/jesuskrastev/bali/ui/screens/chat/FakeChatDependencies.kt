@@ -66,8 +66,8 @@ class FakeAiTutorRepository(
     }
 }
 
-/** Records chat analytics without touching Firebase, Mixpanel or PostHog. */
-class RecordingChatAnalytics : AnalyticsTracker(mock(), mock(), mock()) {
+/** Records chat analytics without touching Firebase or PostHog. */
+class RecordingChatAnalytics : AnalyticsTracker(mock(), mock()) {
 
     val opened = mutableListOf<Boolean>()
     val sent = mutableListOf<Triple<Int, Boolean, Int>>()

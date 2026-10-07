@@ -9,6 +9,7 @@ import com.jesuskrastev.bali.data.migration.migrations.MigrationV6ToV7
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV7ToV8
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV8ToV9
 import com.jesuskrastev.bali.data.migration.migrations.MigrationV9ToV10
+import com.jesuskrastev.bali.data.migration.migrations.MigrationV10ToV11
 import com.jesuskrastev.bali.domain.migration.FirestoreMigration
 import dagger.Module
 import dagger.Provides
@@ -70,6 +71,12 @@ object FirestoreMigrationsModule {
     @IntoSet
     @Singleton
     fun provideMigrationV9ToV10(migration: MigrationV9ToV10): FirestoreMigration = migration
+
+    /** Registers the shop-inventory schema migration for authenticated profiles. */
+    @Provides
+    @IntoSet
+    @Singleton
+    fun provideMigrationV10ToV11(migration: MigrationV10ToV11): FirestoreMigration = migration
 
     // Proporcionar un Set vacío seguro si no hay migraciones activas (para que Hilt compile correctamente)
     @Provides

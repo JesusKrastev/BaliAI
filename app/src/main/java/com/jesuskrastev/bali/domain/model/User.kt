@@ -30,6 +30,11 @@ package com.jesuskrastev.bali.domain.model
  *   [DailyStreak.HISTORY_DAYS] only.
  * @property frozenDays Local midnights of the days a streak freeze covered, the last
  *   [DailyStreak.HISTORY_DAYS] only.
+ * @property hints practice hints available to reveal an explanation before answering.
+ * @property fiftyFifties practice 50/50 aids available to remove incorrect options.
+ * @property doubleXpBoosts one-session double-XP boosts waiting to be applied.
+ * @property doubleCoinBoosts one-session double-coin boosts waiting to be applied.
+ * @property activeStreakBet whether the next newly extended streak pays 100 coins.
  */
 data class User(
     val id: String = "",
@@ -49,5 +54,10 @@ data class User(
     val lostStreak: Int = 0,
     val lostStreakDayMillis: Long = 0,
     val practiceDays: List<Long> = emptyList(),
-    val frozenDays: List<Long> = emptyList()
+    val frozenDays: List<Long> = emptyList(),
+    val hints: Int = 0,
+    val fiftyFifties: Int = 0,
+    val doubleXpBoosts: Int = 0,
+    val doubleCoinBoosts: Int = 0,
+    val activeStreakBet: Boolean = false
 )

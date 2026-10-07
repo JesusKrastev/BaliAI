@@ -24,7 +24,7 @@ import com.jesuskrastev.bali.data.local.room.dao.LessonNodeDao
         LessonNodeEntity::class,
         ChatMessageEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -36,6 +36,18 @@ abstract class BaliDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
 
     companion object {
+        /** Adds the persisted inventory and pending reward boosts sold by the coin shop. */
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            /** Adds empty inventory counters so every existing profile starts unchanged. */
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE users ADD COLUMN hints INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN fiftyFifties INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN doubleXpBoosts INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN doubleCoinBoosts INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE users ADD COLUMN activeStreakBet INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /** Adds the streak that was just lost and the day it ended, so it can be bought back. */
         val MIGRATION_16_17 = object : Migration(16, 17) {
             /** Both columns start at zero: nobody has a recoverable streak yet. */
