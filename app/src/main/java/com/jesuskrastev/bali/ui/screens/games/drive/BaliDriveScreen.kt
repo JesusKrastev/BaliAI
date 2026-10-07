@@ -33,6 +33,12 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import com.jesuskrastev.bali.ui.util.LightSystemBarIcons
+import com.jesuskrastev.bali.ui.util.drawSafe
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -140,6 +146,7 @@ fun BaliDriveScreen(onExit: () -> Unit, modifier: Modifier = Modifier, viewModel
             onExit()
         }
     }
+    LightSystemBarIcons()
     Box(modifier.fillMaxSize().background(DrivePalette.Grass)) {
         if (state.phase == DriveScreenPhase.LOADING) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -150,7 +157,9 @@ fun BaliDriveScreen(onExit: () -> Unit, modifier: Modifier = Modifier, viewModel
                 } else CircularProgressIndicator()
             }
         } else if (state.phase == DriveScreenPhase.TUTORIAL || state.phase == DriveScreenPhase.SAVING_TUTORIAL) {
-            DriveTutorial(state, viewModel::onEvent, exitOnce)
+            Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.drawSafe)) {
+                DriveTutorial(state, viewModel::onEvent, exitOnce)
+            }
         } else if (state.runId > 0) {
             key(state.runId) {
                 DriveRun(state = state, viewModel = viewModel, onExit = exitOnce)
@@ -373,7 +382,9 @@ internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit
                 viewModel.abandonRun(engine.situations.count { it.status != SituationStatus.UPCOMING })
                 onExit()
             },
-            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerHeight = it.height },
+            // Measured before the inset padding so headerHeight includes the status bar.
+            modifier = Modifier.align(Alignment.TopCenter).onSizeChanged { headerHeight = it.height }
+                .windowInsetsPadding(WindowInsets.drawSafe.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
         )
 
         HintBanner(
@@ -388,8 +399,18 @@ internal fun DriveRun(state: DriveUiState, viewModel: BaliDriveViewModel, onExit
             }
         }
 
-        BaliCorner(line = baliLine, modifier = Modifier.align(Alignment.BottomStart).padding(12.dp))
-        Speedometer(speedKmh = hud.speedKmh, braking = hud.braking, limit = hud.speedLimit, modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp))
+        BaliCorner(
+            line = baliLine,
+            modifier = Modifier.align(Alignment.BottomStart)
+                .windowInsetsPadding(WindowInsets.drawSafe.only(WindowInsetsSides.Bottom + WindowInsetsSides.Start))
+                .padding(12.dp),
+        )
+        Speedometer(
+            speedKmh = hud.speedKmh, braking = hud.braking, limit = hud.speedLimit,
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .windowInsetsPadding(WindowInsets.drawSafe.only(WindowInsetsSides.Bottom + WindowInsetsSides.End))
+                .padding(12.dp),
+        )
 
         if (hud.phase == DrivePhase.COUNTDOWN) CountdownOverlay(hud.countdown)
         hud.fault?.let { FaultOverlay(it, shielded = hud.faultShielded, onTap = { engine.resumeFromFault() }) }

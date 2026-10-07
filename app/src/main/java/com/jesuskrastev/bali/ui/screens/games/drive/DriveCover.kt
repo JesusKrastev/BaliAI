@@ -77,9 +77,9 @@ fun BaliDriveCover(modifier: Modifier = Modifier, fullScreen: Boolean = false) {
         // Keep the town visible while the title and bottom action remain readable.
         drawRect(
             Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = if (fullScreen) 0.72f else 0f),
-                0.34f to Color.Transparent,
-                0.62f to Color.Transparent,
+                0f to Color.Black.copy(alpha = if (fullScreen) 0.8f else 0f),
+                0.4f to Color.Transparent,
+                0.55f to Color.Transparent,
                 1f to Color.Black.copy(alpha = if (fullScreen) 0.78f else 0.55f),
             )
         )

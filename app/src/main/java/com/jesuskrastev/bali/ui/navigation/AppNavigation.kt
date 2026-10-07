@@ -3,6 +3,7 @@ package com.jesuskrastev.bali.ui.navigation
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -116,6 +117,11 @@ fun AppNavigation(
             destination.hasRoute<SettingsRoute>()
     } == true
 
+    // Games and the Bali Drive run paint under the system bars, so they take no top inset and the
+    // run takes no bottom one either: each of them places its own controls clear of the bars.
+    val isGamePlay = currentDestination?.hasRoute<GamePlayRoute>() == true
+    val isImmersive = isGamePlay || currentDestination?.hasRoute<GamesRoute>() == true
+
     SharedTransitionLayout {
         Scaffold(
             bottomBar = {
@@ -133,10 +139,15 @@ fun AppNavigation(
         ) { contentPadding ->
             // consumeWindowInsets is what stops each screen's own Scaffold/TopAppBar/bottom bar
             // from applying the status and navigation bar insets a second time on top of this padding.
+            val hostPadding = when {
+                isGamePlay -> PaddingValues()
+                isImmersive -> PaddingValues(bottom = contentPadding.calculateBottomPadding())
+                else -> contentPadding
+            }
             NavHost(
                 modifier = modifier
-                    .padding(contentPadding)
-                    .consumeWindowInsets(contentPadding),
+                    .padding(hostPadding)
+                    .consumeWindowInsets(hostPadding),
                 navController = navController,
                 startDestination = startDestination
             ) {
