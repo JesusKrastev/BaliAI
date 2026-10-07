@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.ui.screens.onboarding
 
+import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
@@ -13,8 +14,10 @@ import com.jesuskrastev.bali.ui.screens.auth.FakeAnalyticsTracker
 import com.jesuskrastev.bali.ui.screens.auth.FakeNotificationsRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -30,12 +33,19 @@ class OnboardingViewModelTest {
     private val fakeAnalyticsTracker = FakeAnalyticsTracker(mock(), mock())
     private var fakeNotificationsRepository = FakeNotificationsRepository()
     private val fakeSoundEffects = FakeSoundEffects()
+    private val createdViewModels = mutableListOf<OnboardingViewModel>()
 
     private lateinit var viewModel: OnboardingViewModel
 
     @Before
     fun setup() {
         viewModel = newViewModel()
+    }
+
+    /** Cancels every ViewModel created by the test before the Main dispatcher is reset. */
+    @After
+    fun tearDown() {
+        createdViewModels.forEach { it.viewModelScope.cancel() }
     }
 
     /**
@@ -53,7 +63,7 @@ class OnboardingViewModelTest {
             analyticsTracker = fakeAnalyticsTracker,
             notificationsRepository = notificationsRepository,
             soundEffects = fakeSoundEffects
-        )
+        ).also { createdViewModels.add(it) }
     }
 
     @Test
@@ -548,6 +558,7 @@ class OnboardingViewModelTest {
             override suspend fun requestPermission(): Boolean = dialog.await()
         }
         viewModel = OnboardingViewModel(fakeUserRepository, fakeAnalyticsTracker, dialogOpen, fakeSoundEffects)
+            .also { createdViewModels.add(it) }
         advanceToNotifications()
 
         viewModel.onEvent(OnboardingEvent.AnswerNotifications(accepted = true))
