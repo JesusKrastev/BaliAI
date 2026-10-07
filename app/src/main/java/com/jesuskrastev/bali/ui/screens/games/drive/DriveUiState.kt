@@ -3,7 +3,7 @@ package com.jesuskrastev.bali.ui.screens.games.drive
 import com.jesuskrastev.bali.ui.screens.games.GameRewards
 
 /** Screen phases are independent of the engine countdown and driving phases. */
-enum class DriveScreenPhase { LOADING, TUTORIAL, SAVING_TUTORIAL, PLAYING, RESULTS }
+enum class DriveScreenPhase { LOADING, PLAYING, RESULTS }
 
 /** Rewards are never represented as zero while pending or failed. */
 enum class DriveRewardStatus { PENDING, COMPLETE, FAILED }
@@ -11,6 +11,7 @@ enum class DriveRewardStatus { PENDING, COMPLETE, FAILED }
 /**
  * Screen state of Bali Drive.
  *
+ * @param coached whether the run teaches the controls (the player has not finished the lesson yet)
  * @param runId increases with every run; the screen rebuilds the simulation when it changes
  * @param runSeed seed of the current run's route
  * @param bestScore personal best before the current run
@@ -19,7 +20,7 @@ enum class DriveRewardStatus { PENDING, COMPLETE, FAILED }
  */
 data class DriveUiState(
     val phase: DriveScreenPhase = DriveScreenPhase.LOADING,
-    val tutorialStep: Int = 0,
+    val coached: Boolean = false,
     val error: Boolean = false,
     val runId: Int = 0,
     val runSeed: Long = 0L,

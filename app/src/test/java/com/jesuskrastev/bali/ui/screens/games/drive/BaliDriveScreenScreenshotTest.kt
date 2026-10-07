@@ -42,18 +42,18 @@ class BaliDriveScreenScreenshotTest {
         compose.onNodeWithText("Todos").assertDoesNotExist()
     }
 
-    /** Accessible tutorial buttons permit both steps without demanding gesture accuracy. */
-    @Test fun tutorialExplainsBothControls() {
-        var state by mutableStateOf(DriveUiState(phase = DriveScreenPhase.TUTORIAL))
+    /** The coach card names the gesture being taught for each lesson. */
+    @Test fun coachNamesEachGesture() {
+        var step by mutableStateOf(CoachStep.STEER)
         compose.mainClock.autoAdvance = true
-        compose.setContent { BaliTheme { DriveTutorial(state, { state = BaliDriveReducer.reduce(state, it) }, {}) } }
-        compose.onNodeWithText("Desliza a izquierda o derecha para dirigir").assertExists()
-        compose.onNodeWithText("Siguiente").performScrollTo().performClick()
+        compose.setContent { BaliTheme { Box { DriveCoachOverlay(step) } } }
+        compose.onNodeWithText("¡DESLIZA!").assertExists()
+        step = CoachStep.BRAKE
         compose.mainClock.advanceTimeByFrame()
-        compose.onNodeWithText("Mantén pulsado sin mover el dedo para frenar").assertExists()
-        compose.onNodeWithText("Suelta para continuar").assertExists()
-        compose.onNodeWithText("¡A conducir!").performScrollTo().performClick()
-        assertThat(state.phase).isEqualTo(DriveScreenPhase.SAVING_TUTORIAL)
+        compose.onNodeWithText("¡FRENA!").assertExists()
+        step = CoachStep.DRIVE
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("¡FRENA!").assertDoesNotExist()
     }
 
     /** Pending rewards stay explicit, and both actions remain visible on a narrow display. */

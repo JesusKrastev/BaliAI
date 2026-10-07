@@ -64,7 +64,7 @@ class BaliDriveViewModel @Inject constructor(
 
     init { prepare() }
 
-    /** Loads the record and persistent tutorial preference; exposes a retry on read failure. */
+    /** Loads the record and the persistent lesson flag, then starts the (possibly coached) run; exposes a retry on read failure. */
     fun prepare() {
         _uiState.update { it.copy(phase = DriveScreenPhase.LOADING, error = false) }
         viewModelScope.launch {
@@ -73,9 +73,9 @@ class BaliDriveViewModel @Inject constructor(
                 tutorialUserId = prepared.userId
                 _uiState.update {
                     it.copy(bestScore = prepared.record.bestScore, showHints = prepared.record.runsPlayed < HINT_RUNS,
-                        phase = if (prepared.tutorialCompleted) DriveScreenPhase.PLAYING else DriveScreenPhase.TUTORIAL)
+                        coached = !prepared.tutorialCompleted, phase = DriveScreenPhase.PLAYING)
                 }
-                if (prepared.tutorialCompleted) startRun()
+                startRun()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
@@ -84,21 +84,20 @@ class BaliDriveViewModel @Inject constructor(
         }
     }
 
-    /** Applies [event] through the pure reducer, persisting only the completed second step. */
-    fun onEvent(event: BaliDriveEvent) {
-        val before = _uiState.value
-        _uiState.update { BaliDriveReducer.reduce(it, event) }
-        if (before.phase == DriveScreenPhase.TUTORIAL && _uiState.value.phase == DriveScreenPhase.SAVING_TUTORIAL) {
-            viewModelScope.launch {
-                try {
-                    completeTutorial(gameId, tutorialUserId)
-                    _uiState.update { it.copy(phase = DriveScreenPhase.PLAYING) }
-                    startRun()
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failure: Exception) {
-                    _uiState.update { it.copy(phase = DriveScreenPhase.TUTORIAL, error = true) }
-                }
+    /**
+     * Stores that the player passed the in-run lesson so later runs start without the coach.
+     * A failed write is ignored: the lesson simply shows again next time.
+     */
+    fun completeCoach() {
+        if (!_uiState.value.coached) return
+        _uiState.update { it.copy(coached = false) }
+        viewModelScope.launch {
+            try {
+                completeTutorial(gameId, tutorialUserId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                // Not persisted: the coach returns on the next visit, which is harmless.
             }
         }
     }

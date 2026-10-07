@@ -147,36 +147,33 @@ class BaliDriveViewModelTest {
         assertThat(sounds.pickupPitches).isInOrder()
         assertThat(sounds.pickupPitches.first()).isEqualTo(1f)
     }
-    /** Completing both steps persists the preference and starts the countdown exactly once. */
+    /** A player without the lesson starts a coached run at once; finishing the coach persists it exactly once. */
     @Test
-    fun `tutorial stays pending until both steps are completed and is skipped on reopening`() = runTest {
+    fun `first run is coached and completing the coach persists it`() = runTest {
         val records = FakeGameRecordRepository(tutorialDone = false)
         val vm = viewModel(records)
-        assertThat(vm.uiState.value.phase).isEqualTo(DriveScreenPhase.TUTORIAL)
-        assertThat(vm.uiState.value.runId).isEqualTo(0)
-        vm.onEvent(BaliDriveEvent.CompleteTutorial)
-        assertThat(records.tutorialDone).isFalse()
-        vm.onEvent(BaliDriveEvent.NextTutorialStep)
-        vm.onEvent(BaliDriveEvent.CompleteTutorial)
-        vm.onEvent(BaliDriveEvent.CompleteTutorial)
-        assertThat(records.tutorialDone).isTrue()
+        assertThat(vm.uiState.value.phase).isEqualTo(DriveScreenPhase.PLAYING)
+        assertThat(vm.uiState.value.coached).isTrue()
         assertThat(vm.uiState.value.runId).isEqualTo(1)
-        assertThat(viewModel(records).uiState.value.phase).isEqualTo(DriveScreenPhase.PLAYING)
+        assertThat(records.tutorialDone).isFalse()
+        vm.completeCoach()
+        vm.completeCoach()
+        assertThat(records.tutorialDone).isTrue()
+        assertThat(vm.uiState.value.coached).isFalse()
+        assertThat(viewModel(records).uiState.value.coached).isFalse()
     }
 
-    /** A failed preference write leaves the second step available for a safe retry. */
+    /** A failed preference write never blocks the run; the coach just returns next time. */
     @Test
-    fun `failed tutorial persistence does not start a run or mark completion`() = runTest {
+    fun `failed coach persistence keeps the run going`() = runTest {
         val records = object : FakeGameRecordRepository(tutorialDone = false) {
             /** Fails the [gameId]/[userId] write so completion remains pending. */
             override suspend fun completeTutorial(gameId: String, userId: String?) { error("disk unavailable") }
         }
         val vm = viewModel(records)
-        vm.onEvent(BaliDriveEvent.NextTutorialStep)
-        vm.onEvent(BaliDriveEvent.CompleteTutorial)
-        assertThat(vm.uiState.value.error).isTrue()
-        assertThat(vm.uiState.value.phase).isEqualTo(DriveScreenPhase.TUTORIAL)
-        assertThat(vm.uiState.value.runId).isEqualTo(0)
+        vm.completeCoach()
+        assertThat(vm.uiState.value.error).isFalse()
+        assertThat(vm.uiState.value.phase).isEqualTo(DriveScreenPhase.PLAYING)
         assertThat(records.tutorialDone).isFalse()
     }
 
