@@ -4,6 +4,8 @@
     <string name="drive_games">Juegos</string>
     <string name="drive_description">Conduce con un dedo, recoge estrellas y supera situaciones de tráfico. ¡Bate tu récord!</string>
     <string name="drive_play">Jugar</string>
+    <string name="drive_cover_prompt">¿Listo para llegar a la meta?</string>
+    <string name="drive_cover_controls">DESLIZA · FRENA · ESQUIVA</string>
     <string name="drive_exit">Salir</string>
     <string name="drive_replay">Otra vez</string>
     <string name="drive_next">Siguiente</string>
@@ -20,7 +22,11 @@
     <string name="drive_load_error">No se pudo preparar la partida.</string>
     <string name="drive_retry">Reintentar</string>
     <string name="drive_route_progress">Distancia recorrida</string>
-    <string name="drive_result_title">¡Has llegado a la meta!</string>
+    <string name="drive_route_label">RUTA HASTA LA META</string>
+    <string name="drive_result_title">¡META!</string>
+    <string name="drive_result_one_star">Has llegado a la meta. ¡La próxima ruta saldrá mejor!</string>
+    <string name="drive_result_two_stars">¡Buen recorrido! Sigue atento a cada situación.</string>
+    <string name="drive_result_three_stars">¡Conducción brillante! Has dominado la ruta.</string>
     <string name="drive_rating">Valoración: %1$d de 3 estrellas</string>
     <string name="drive_points">Puntos</string>
     <string name="drive_record">Récord</string>

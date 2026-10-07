@@ -57,6 +57,7 @@ class BaliDriveViewModel @Inject constructor(
 
     /** Runs already rewarded since the screen opened: replays earn the reduced repeat XP. */
     private var rewardedRuns = 0
+    private var abandonedRunId = 0
 
     private var tutorialUserId: String? = null
     private var session: DriveSession? = null
@@ -184,7 +185,11 @@ class BaliDriveViewModel @Inject constructor(
      * @param situationsCleared situations already behind the player
      */
     fun abandonRun(situationsCleared: Int) {
-        if (_uiState.value.phase == DriveScreenPhase.PLAYING && _uiState.value.result == null) analyticsTracker.gameAbandoned(gameId, situationsCleared)
+        val state = _uiState.value
+        if (state.phase == DriveScreenPhase.PLAYING && state.result == null && abandonedRunId != state.runId) {
+            abandonedRunId = state.runId
+            analyticsTracker.gameAbandoned(gameId, situationsCleared)
+        }
     }
 
     /** Chime of a situation handled well. */

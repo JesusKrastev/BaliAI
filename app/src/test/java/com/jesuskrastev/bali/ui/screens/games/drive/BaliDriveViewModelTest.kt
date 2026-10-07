@@ -125,10 +125,12 @@ class BaliDriveViewModelTest {
         assertThat(analytics.gameCompletedEvents).hasSize(1)
     }
 
+    /** A second close event for the same run does not emit duplicate abandonment analytics. */
     @Test
     fun `leaving mid-run is logged as abandoned, leaving the results is not`() = runTest {
         val vm = viewModel()
 
+        vm.abandonRun(situationsCleared = 3)
         vm.abandonRun(situationsCleared = 3)
         vm.finishRun(summary)
         vm.abandonRun(situationsCleared = 11)
