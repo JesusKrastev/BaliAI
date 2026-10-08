@@ -63,6 +63,7 @@ import com.jesuskrastev.bali.R
 import com.jesuskrastev.bali.ui.theme.BaliAccentRed
 import com.jesuskrastev.bali.ui.theme.BaliAccentYellow
 import com.jesuskrastev.bali.ui.theme.BaliPrimary
+import com.jesuskrastev.bali.ui.review.InAppReviewEffect
 import com.jesuskrastev.bali.ui.util.drawSafe
 import java.text.NumberFormat
 import java.util.Locale
@@ -131,6 +132,12 @@ internal fun DriveResultsContent(result: DriveResult, onReplay: () -> Unit, onEx
             onStarShown(star)
         }
     }
+
+    // Ask for a Play review only after the stars and rewards have settled, never mid-celebration.
+    InAppReviewEffect(
+        accuracy = summary.resolved * 100 / summary.situations.coerceAtLeast(1),
+        enabled = !pending && revealedStars >= summary.rating,
+    )
 
     Box(Modifier.fillMaxSize()) {
         Confetti(summary.rating)

@@ -5,34 +5,46 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.google.android.play.core.review.ReviewManagerFactory
 import kotlinx.coroutines.delay
 
-internal const val EXCELLENT_RESULT_ACCURACY = 90
 private const val REVIEW_PROMPT_DELAY_MILLIS = 1_200L
 
 /**
- * Requests Google Play's in-app review flow after the user reaches an excellent result.
+ * Counts a finished test, exam or game and, once the user has finished several and this result is a
+ * good one, requests Google Play's in-app review flow (see [shouldRequestInAppReview]).
  *
- * Google Play applies its own quota and may intentionally decide not to display the prompt.
+ * Each result screen counts once, even across recompositions or rotation. Google Play applies its
+ * own quota and may intentionally decide not to display the prompt.
  *
- * @param accuracy percentage of correctly answered questions
- * @param enabled false holds the request back, e.g. while a celebration is still on screen; the
- *   delay starts once it turns true
+ * @param accuracy percentage of correctly answered questions (or resolved situations)
+ * @param enabled false holds the count and the request back, e.g. while a celebration is still on
+ *   screen; the delay starts once it turns true
  */
 @Composable
 fun InAppReviewEffect(accuracy: Int, enabled: Boolean = true) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    var counted by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(accuracy, activity, enabled) {
-        if (!enabled || !shouldRequestInAppReview(accuracy) || activity == null) return@LaunchedEffect
+    LaunchedEffect(enabled, activity) {
+        if (!enabled || counted || activity == null) return@LaunchedEffect
+        counted = true
+
+        val store = ReviewPromptStore(context.applicationContext)
+        val state = store.recordCompletion()
+        if (!shouldRequestInAppReview(state, accuracy)) return@LaunchedEffect
 
         delay(REVIEW_PROMPT_DELAY_MILLIS)
         if (activity.isFinishing || activity.isDestroyed) return@LaunchedEffect
 
+        store.markRequested(state)
         val reviewManager = ReviewManagerFactory.create(context)
         reviewManager.requestReviewFlow().addOnCompleteListener { request ->
             if (request.isSuccessful && !activity.isFinishing && !activity.isDestroyed) {
@@ -41,15 +53,6 @@ fun InAppReviewEffect(accuracy: Int, enabled: Boolean = true) {
         }
     }
 }
-
-/**
- * Determines whether a score represents the success peak used for asking for a review.
- *
- * @param accuracy percentage of correctly answered questions
- * @return true when the result is excellent enough to trigger the Play review flow
- */
-internal fun shouldRequestInAppReview(accuracy: Int): Boolean =
-    accuracy >= EXCELLENT_RESULT_ACCURACY
 
 /**
  * Unwraps a Compose context until its hosting activity is found.
