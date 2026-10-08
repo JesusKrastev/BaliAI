@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.LocalFireDepartment
@@ -50,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -69,6 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.util.LegalLinks
+import com.jesuskrastev.bali.ui.util.openWhatsAppChat
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
 
@@ -192,6 +196,8 @@ fun SettingsScreen(
                 )
             )
         )
+
+        WhatsAppFeedbackCard(onClick = { context.openWhatsAppChat() })
 
         SettingsSection(
             title = "Soporte",
@@ -643,6 +649,58 @@ private fun SettingsActionCard(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     ) {
         SettingsRowContent(icon = icon, label = label, accentColor = accentColor, labelColor = labelColor)
+    }
+}
+
+/**
+ * Permanent invitation to chat with the team on WhatsApp. It lives in Settings, a root destination
+ * that is always one tap away, so it is visible every time without ever getting in the way of
+ * studying or playing.
+ *
+ * @param onClick opens the team's WhatsApp chat
+ */
+@Composable
+private fun WhatsAppFeedbackCard(onClick: () -> Unit) {
+    val green = Color(0xFF25D366)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.5.dp, green.copy(alpha = 0.6f))
+    ) {
+        Column(
+            modifier = Modifier
+                .background(Brush.linearGradient(listOf(green.copy(alpha = 0.22f), green.copy(alpha = 0.06f))))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(shape = CircleShape, color = green, modifier = Modifier.size(48.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Forum, contentDescription = null, tint = Color.White)
+                    }
+                }
+                Text(
+                    text = "Tu opinión vale oro",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+            }
+            Text(
+                text = "Queremos saber qué piensas de Bali: qué te gusta, qué te falla y qué echas de menos. " +
+                    "Escríbenos directamente por WhatsApp; leemos todos los mensajes y tu feedback nos ayuda a seguir mejorando la app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(shape = CircleShape, color = green, contentColor = Color.White) {
+                Text(
+                    text = "Escribir por WhatsApp",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
     }
 }
 

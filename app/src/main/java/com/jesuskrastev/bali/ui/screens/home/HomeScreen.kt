@@ -165,6 +165,7 @@ fun HomeScreen(
                         )
                     }
                 )
+                HomeFeedbackStrip(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
             }
         },
         // Pinned right above the app's bottom bar so the day-0 tasks stay in sight while
