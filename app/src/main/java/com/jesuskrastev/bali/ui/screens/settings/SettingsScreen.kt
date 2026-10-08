@@ -72,7 +72,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.util.LegalLinks
-import com.jesuskrastev.bali.ui.util.SupportLinks
+import com.jesuskrastev.bali.ui.util.openWhatsAppChat
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
 
@@ -197,7 +197,7 @@ fun SettingsScreen(
             )
         )
 
-        WhatsAppFeedbackCard(onClick = { context.openLink(SupportLinks.whatsappUrl()) })
+        WhatsAppFeedbackCard(onClick = { context.openWhatsAppChat() })
 
         SettingsSection(
             title = "Soporte",

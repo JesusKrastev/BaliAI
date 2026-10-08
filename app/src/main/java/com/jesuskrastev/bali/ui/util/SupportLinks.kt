@@ -1,5 +1,8 @@
 package com.jesuskrastev.bali.ui.util
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 
 /** Direct contact channels with the Bali team, opened from Settings. */
@@ -17,4 +20,13 @@ object SupportLinks {
      * @return a wa.me URL that opens WhatsApp (or the browser if it is not installed)
      */
     fun whatsappUrl(): String = "https://wa.me/$WHATSAPP_NUMBER?text=${Uri.encode(WHATSAPP_GREETING)}"
+}
+
+/** Opens the team's WhatsApp chat; does nothing when no app can handle the link. */
+fun Context.openWhatsAppChat() {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SupportLinks.whatsappUrl())))
+    } catch (e: ActivityNotFoundException) {
+        // No WhatsApp and no browser: nothing else to offer.
+    }
 }
