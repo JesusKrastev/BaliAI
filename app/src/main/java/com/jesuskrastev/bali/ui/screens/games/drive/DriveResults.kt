@@ -13,8 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -46,6 +45,7 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -94,7 +94,8 @@ internal fun DriveResultsDialog(result: DriveResult, onReplay: () -> Unit, onExi
     Box(
         Modifier.fillMaxSize()
             .background(Brush.verticalGradient(listOf(Color(0xF2271A55), Color(0xF2140F33), Color(0xF20B1220))))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            // Not clickable{}: that would merge every child into one semantics node and hide them from TalkBack.
+            .pointerInput(Unit) { detectTapGestures { } },
     ) {
         DriveResultsContent(result, onReplay, onExit, onStarShown)
     }
