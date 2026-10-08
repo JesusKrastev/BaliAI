@@ -12,6 +12,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.google.android.play.core.review.ReviewManagerFactory
+import com.jesuskrastev.bali.RobolectricDetector
+import java.io.IOException
 import kotlinx.coroutines.delay
 
 private const val REVIEW_PROMPT_DELAY_MILLIS = 1_200L
@@ -34,17 +36,28 @@ fun InAppReviewEffect(accuracy: Int, enabled: Boolean = true) {
     var counted by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(enabled, activity) {
-        if (!enabled || counted || activity == null) return@LaunchedEffect
+        // Unit tests never ask for reviews; skipping also keeps DataStore writes from leaking
+        // coroutines (and their uncaught errors) into the next test.
+        if (!enabled || counted || activity == null || RobolectricDetector.isRobolectric()) return@LaunchedEffect
         counted = true
 
         val store = ReviewPromptStore(context.applicationContext)
-        val state = store.recordCompletion()
+        // A review prompt is never worth breaking the results screen: a storage error just skips it.
+        val state = try {
+            store.recordCompletion()
+        } catch (e: IOException) {
+            return@LaunchedEffect
+        }
         if (!shouldRequestInAppReview(state, accuracy)) return@LaunchedEffect
 
         delay(REVIEW_PROMPT_DELAY_MILLIS)
         if (activity.isFinishing || activity.isDestroyed) return@LaunchedEffect
 
-        store.markRequested(state)
+        try {
+            store.markRequested(state)
+        } catch (e: IOException) {
+            return@LaunchedEffect
+        }
         val reviewManager = ReviewManagerFactory.create(context)
         reviewManager.requestReviewFlow().addOnCompleteListener { request ->
             if (request.isSuccessful && !activity.isFinishing && !activity.isDestroyed) {
