@@ -1,6 +1,6 @@
-﻿package com.jesuskrastev.bali.data.repository
+package com.jesuskrastev.bali.data.repository
 
-import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.mapper.toDomain
 import com.jesuskrastev.bali.data.mapper.toEntity
@@ -8,13 +8,20 @@ import com.jesuskrastev.bali.data.local.room.Converters
 import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.dao.FirestoreUserDao
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
+import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.model.RankReward
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.repository.AuthRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -25,8 +32,15 @@ import javax.inject.Singleton
 class UserRepositoryImpl @Inject constructor(
     private val userDao: UserDao,
     private val firestoreUserDao: FirestoreUserDao,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val migrationManager: FirestoreMigrationManager
 ) : UserRepository {
+
+    /** Returns whether [reward] was collected through the active Firestore or Room profile. */
+    override suspend fun claimRankReward(reward: RankReward): Boolean = authRepository.withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.claimRankReward(userId, reward) },
+        actionLocal = { userDao.claimRankReward(reward) }
+    )
 
     override fun get(): Flow<User?> = authRepository.currentUserFlow.flatMapLatest { userId ->
         if (userId != null) {
@@ -43,28 +57,12 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Executes [remoteAction] if the user is authenticated, otherwise [localAction].
-     * Both actions run on [Dispatchers.IO].
-     */
-    private suspend inline fun <T> withAuthRouting(
-        actionRemote: suspend (String) -> T,
-        actionLocal: suspend () -> T
-    ): T {
-        val userId = authRepository.currentUser()
-        return if (userId != null) {
-            actionRemote(userId)
-        } else {
-            actionLocal()
-        }
-    }
-
-    /**
      * Writes [fields] to Firestore if logged in, or runs [localAction] otherwise.
      */
     private suspend fun updateField(
         fields: Map<String, Any>,
         localAction: suspend () -> Unit
-    ) = withAuthRouting(
+    ) = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.updateFields(userId, fields) },
         actionLocal = localAction
     )
@@ -77,38 +75,30 @@ class UserRepositoryImpl @Inject constructor(
         userDao.insert(user.toEntity())
     }
 
-    override suspend fun resetStreak() = updateField(
-        fields = mapOf("currentStreak" to 0),
-        localAction = { userDao.resetStreak() }
-    )
-
-    override suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) = updateField(
+    /** See [UserRepository.updateStreak]. */
+    override suspend fun updateStreak(streak: DailyStreak) = updateField(
         fields = mapOf(
-            "currentStreak" to streak, 
-            "lastPracticeTimestamp" to timestamp,
-            "practiceDays" to practiceDays
+            "currentStreak" to streak.current,
+            "highestStreak" to streak.highest,
+            "streakFreezes" to streak.freezes,
+            "lastPracticeTimestamp" to streak.lastPracticeMillis,
+            "lostStreak" to streak.lostStreak,
+            "lostStreakDayMillis" to streak.lostStreakDayMillis,
+            "practiceDays" to streak.practiceDays,
+            "frozenDays" to streak.frozenDays
         ),
         localAction = {
-            val practiceDaysStr = Converters().fromLongList(practiceDays)
-            userDao.updateStreak(streak, timestamp, practiceDaysStr)
-        }
-    )
-
-    override suspend fun updateWeeklyProgress(
-        weekSessions: Int,
-        currentWeekStart: Long,
-        lastPracticeTimestamp: Long,
-        practiceDays: List<Long>
-    ) = updateField(
-        fields = mapOf(
-            "weekSessions" to weekSessions,
-            "currentWeekStart" to currentWeekStart,
-            "lastPracticeTimestamp" to lastPracticeTimestamp,
-            "practiceDays" to practiceDays
-        ),
-        localAction = {
-            val practiceDaysStr = Converters().fromLongList(practiceDays)
-            userDao.updateWeeklyProgress(weekSessions, currentWeekStart, lastPracticeTimestamp, practiceDaysStr)
+            val converters = Converters()
+            userDao.updateStreak(
+                current = streak.current,
+                highest = streak.highest,
+                freezes = streak.freezes,
+                lastPracticeMillis = streak.lastPracticeMillis,
+                lostStreak = streak.lostStreak,
+                lostStreakDayMillis = streak.lostStreakDayMillis,
+                practiceDaysJson = converters.fromLongList(streak.practiceDays),
+                frozenDaysJson = converters.fromLongList(streak.frozenDays)
+            )
         }
     )
 
@@ -118,15 +108,48 @@ class UserRepositoryImpl @Inject constructor(
     )
 
     /** See [UserRepository.incrementCoins]. */
-    override suspend fun incrementCoins(amount: Int) = withAuthRouting(
+    override suspend fun incrementCoins(amount: Int) = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.incrementCoins(userId, amount) },
         actionLocal = { userDao.incrementCoins(amount) }
     )
 
     /** See [UserRepository.decrementCoinsIfEnough]. */
-    override suspend fun decrementCoinsIfEnough(amount: Int): Boolean = withAuthRouting(
+    override suspend fun decrementCoinsIfEnough(amount: Int): Boolean = authRepository.withAuthRouting(
         actionRemote = { userId -> firestoreUserDao.decrementCoinsIfEnough(userId, amount) },
         actionLocal = { userDao.decrementCoinsIfEnough(amount) == 1 }
+    )
+
+    /**
+     * See [UserRepository.completeFirstStep]. First steps live on the Firestore account only, so a
+     * signed-out user (who can't reach Home anyway) has nothing to record. A failed write is
+     * reported to Crashlytics and swallowed: it must never break the test, chat or game the
+     * student just finished.
+     */
+    override suspend fun completeFirstStep(task: FirstStepTask): Int = authRepository.withAuthRouting(
+        actionRemote = { userId ->
+            try {
+                firestoreUserDao.completeFirstStep(
+                    userId = userId,
+                    taskId = task.id,
+                    taskCoins = task.coins,
+                    allTaskIds = FirstStepTask.entries.map { it.id },
+                    bonusCoins = FIRST_STEPS_BONUS_COINS
+                )
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                FirebaseCrashlytics.getInstance().recordException(e)
+                0
+            }
+        },
+        actionLocal = { 0 }
+    )
+
+    /** See [UserRepository.dismissFirstSteps]. */
+    override suspend fun dismissFirstSteps() = authRepository.withAuthRouting(
+        actionRemote = { userId ->
+            firestoreUserDao.updateFields(userId, mapOf(FirestoreUserDao.FIRST_STEPS_DISMISSED to true))
+        },
+        actionLocal = {}
     )
 
     override suspend fun updateStreakFreezes(count: Int) = updateField(
@@ -134,9 +157,93 @@ class UserRepositoryImpl @Inject constructor(
         localAction = { userDao.updateStreakFreezes(count) }
     )
 
-    override suspend fun updateHighestStreak(highestStreak: Int) = updateField(
-        fields = mapOf("highestStreak" to highestStreak),
-        localAction = { userDao.updateHighestStreak(highestStreak) }
+    /**
+     * Charges [cost] and persists the purchased [item] together, in the current data source.
+     *
+     * @return true when the inventory item was granted, false when it could not be purchased.
+     */
+    override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.purchaseInventoryItem(userId, item, cost) },
+            actionLocal = { userDao.purchaseInventoryItem(item.name, cost) == 1 }
+        )
+
+    /**
+     * Applies a surprise chest's [reward] while charging its [cost] in the same persistence write.
+     *
+     * @return true when the chest opened, false for an insufficient balance.
+     */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
+            actionLocal = { userDao.openSurpriseChest(cost, reward) == 1 }
+        )
+
+
+    /**
+     * Applies a surprise chest's [reward] while charging its [cost] in one persistence write.
+     *
+     * @return true when the chest opened, false for an insufficient balance.
+     */
+    override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.openSurpriseChest(userId, cost, reward) },
+            actionLocal = {
+                val coins = (reward as? ChestReward.Coins)?.amount ?: 0
+                val inventory = reward as? ChestReward.Inventory
+                userDao.openSurpriseChest(
+                    cost = cost,
+                    coinReward = coins,
+                    item = inventory?.item?.name,
+                    quantity = inventory?.quantity ?: 0
+                ) == 1
+            }
+        )
+
+    /**
+     * Decrements one inventory [item] only when it is still owned.
+     *
+     * @return true when a consumable was spent.
+     */
+    override suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.consumeInventoryItem(userId, item) },
+            actionLocal = { userDao.consumeInventoryItem(item.name) == 1 }
+        )
+
+    /**
+     * Pays the active streak wager in whichever store currently owns the user's profile.
+     *
+     * @return true when a wager was paid.
+     */
+    override suspend fun claimStreakBet(): Boolean =
+        authRepository.withAuthRouting(
+            actionRemote = { userId -> firestoreUserDao.claimStreakBetHead(userId, STREAK_BET_PAYOUT) },
+            actionLocal = { userDao.claimStreakBetHead(STREAK_BET_PAYOUT) == 1 }
+        )
+
+    /** See [UserRepository.placeStreakBet]. */
+    override suspend fun placeStreakBet(cost: Int, target: Int): Boolean = authRepository.withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.placeStreakBet(userId, cost, target) },
+        actionLocal = { userDao.placeStreakBet(cost, target) == 1 }
+    )
+
+    /** See [UserRepository.claimStreakBet]. */
+    override suspend fun claimStreakBet(payout: Int): Boolean = authRepository.withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.claimStreakBet(userId, payout) },
+        actionLocal = { userDao.claimStreakBet(payout) == 1 }
+    )
+
+    /** See [UserRepository.clearStreakBet]. */
+    override suspend fun clearStreakBet() = authRepository.withAuthRouting(
+        actionRemote = { userId -> firestoreUserDao.clearStreakBet(userId) },
+        actionLocal = { userDao.clearStreakBet() }
+    )
+
+    /** See [UserRepository.updateExamDate]. */
+    override suspend fun updateExamDate(examDateMillis: Long) = updateField(
+        fields = mapOf("examDateMillis" to examDateMillis),
+        localAction = { userDao.updateExamDate(examDateMillis) }
     )
 
     override fun exists(userId: String?): Flow<Boolean> = authRepository.currentUserFlow.flatMapLatest { currentUserId ->
@@ -148,23 +255,27 @@ class UserRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * See [UserRepository.uploadAll]. The new document is written already stamped with the
+     * current schema version: it has today's structure, so the migrations written for older
+     * documents (the first ones delete results and reset xp) must never run on it.
+     */
     override suspend fun uploadAll(
         userId: String,
         user: User,
         results: List<TestResult>,
         answers: List<Answer>
-    ): Result<Unit> {
-        return try {
-            firestoreUserDao.uploadAll(
-                userId,
-                user.toFirestore(),
-                results.map { it.toFirestore() },
-                answers.map { it.toFirestore() }
-            )
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    ): Result<Unit> = try {
+        firestoreUserDao.uploadAll(
+            userId,
+            user.toFirestore().copy(schemaVersion = migrationManager.getTargetSchemaVersion()),
+            results.map { it.toFirestore() },
+            answers.map { it.toFirestore() }
+        )
+        Result.success(Unit)
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Result.failure(e)
     }
 
     override suspend fun updateFcmToken(token: String) = withContext(Dispatchers.IO) {
@@ -177,4 +288,8 @@ class UserRepositoryImpl @Inject constructor(
     }
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = userDao.exists()
+
+    private companion object {
+        const val STREAK_BET_PAYOUT = 100
+    }
 }

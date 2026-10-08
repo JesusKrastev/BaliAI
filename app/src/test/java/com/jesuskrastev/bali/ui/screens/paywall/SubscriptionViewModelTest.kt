@@ -154,7 +154,7 @@ class SubscriptionViewModelTest {
         val outcome = viewModel.onCloseAttempt()
 
         assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
-        verify(analytics).paywallWinbackClosed()
+        verify(analytics).paywallWinbackClosed(any())
         verify(analytics).paywallClosed(any())
     }
 
@@ -166,7 +166,7 @@ class SubscriptionViewModelTest {
 
         assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
         verify(analytics, never()).paywallWinbackShown()
-        verify(analytics, never()).paywallWinbackClosed()
+        verify(analytics, never()).paywallWinbackClosed(any())
         verify(analytics).paywallClosed(any())
     }
 
@@ -180,7 +180,7 @@ class SubscriptionViewModelTest {
         val outcome = viewModel.onCloseAttempt()
 
         assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(true))
-        verify(analytics).paywallWinbackPurchased()
+        verify(analytics).paywallWinbackPurchased(any())
         verify(analytics).paywallPurchased(any())
     }
 
@@ -201,7 +201,7 @@ class SubscriptionViewModelTest {
 
         viewModel.onPremiumConfirmed()
 
-        verify(analytics).paywallWinbackPurchased()
+        verify(analytics).paywallWinbackPurchased(any())
         verify(analytics).paywallPurchased(any())
     }
 
@@ -238,6 +238,41 @@ class SubscriptionViewModelTest {
         assertThat(outcome).isEqualTo(PaywallCloseOutcome.Exit(false))
         verify(analytics, never()).paywallWinbackShown()
     }
+
+    @Test
+    fun `backgrounding the main paywall reports the generic event`() {
+        val viewModel = viewModel()
+
+        viewModel.onPaywallBackgrounded()
+
+        verify(analytics).paywallBackgrounded()
+        verify(analytics, never()).paywallWinbackBackgrounded()
+    }
+
+    @Test
+    fun `backgrounding after the win-back offer is shown reports the win-back event instead`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+        viewModel.onCloseAttempt() // first close: shows the win-back offer
+
+        viewModel.onPaywallBackgrounded()
+
+        verify(analytics).paywallWinbackBackgrounded()
+        verify(analytics, never()).paywallBackgrounded()
+    }
+
+    @Test
+    fun `resuming after backgrounding the win-back offer reports the win-back event instead`() = runTest {
+        repository.winbackOffering = mock()
+        val viewModel = viewModel()
+        viewModel.onCloseAttempt() // first close: shows the win-back offer
+        viewModel.onPaywallBackgrounded()
+
+        viewModel.onPaywallResumed()
+
+        verify(analytics).paywallWinbackResumed()
+        verify(analytics, never()).paywallResumed()
+    }
 }
 
 private class FakeSubscriptionRepository : SubscriptionRepository {
@@ -258,6 +293,9 @@ private class FakeSubscriptionRepository : SubscriptionRepository {
         Result.failure(IllegalStateException("not needed by these tests"))
 
     override fun hasPremiumEntitlement(customerInfo: CustomerInfo): Boolean = premium
+
+    override fun premiumSinceMillis(customerInfo: CustomerInfo): Long? = null
+    override fun premiumSubscription(customerInfo: CustomerInfo): com.jesuskrastev.bali.domain.model.PremiumSubscription? = null
 
     override suspend fun getOffering(identifier: String): Result<Offering?> =
         offeringFailure?.let { Result.failure(it) } ?: Result.success(winbackOffering)

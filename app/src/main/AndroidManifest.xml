@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="com.android.vending.BILLING" />
+    <!-- Asked on the onboarding's reminders screen. OneSignal's manifest also declares it;
+         kept here so the app's own feature does not depend on a library's manifest. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".BaliApplication"
@@ -37,16 +40,6 @@
             </intent-filter>
         </service>
 
-        <!-- Mixpanel EU data residency endpoints -->
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.EventsEndpoint"
-            android:value="https://api-eu.mixpanel.com/track/" />
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.PeopleEndpoint"
-            android:value="https://api-eu.mixpanel.com/engage/" />
-        <meta-data
-            android:name="com.mixpanel.android.MPConfig.GroupsEndpoint"
-            android:value="https://api-eu.mixpanel.com/groups/" />
     </application>
 
 </manifest>

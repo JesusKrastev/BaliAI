@@ -47,7 +47,13 @@ class FirestoreMigrationManagerImpl @Inject constructor(
      */
     override suspend fun executePendingMigrations(userId: String) {
         migrationMutex.withLock {
-            val currentVersion = getCurrentSchemaVersion(userId)
+            val currentVersion = try {
+                getCurrentSchemaVersion(userId)
+            } catch (e: MigrationException) {
+                // Sin leer la versión (normalmente sin conexión) no se sabe qué falta: suponer v1
+                // volvería a ejecutar las migraciones que borran datos. Se reintenta en el próximo arranque.
+                return
+            }
             val targetVersion = getTargetSchemaVersion()
 
             if (currentVersion >= targetVersion) {
@@ -95,25 +101,19 @@ class FirestoreMigrationManagerImpl @Inject constructor(
      * Reads the user's current schema version from their Firestore document.
      *
      * @param userId the Firestore user to check.
-     * @return the stored version, 1 for a user with no document yet, or 1 (reported to
-     *   Crashlytics) if the read itself fails.
+     * @return the stored version, or 1 for a document with no `schemaVersion` (or none at all).
+     * @throws MigrationException if the read itself fails; the failure is reported to Crashlytics.
      */
     override suspend fun getCurrentSchemaVersion(userId: String): Int {
-        return try {
-            val userDocRef = collection.document(userId)
-            val userDoc = userDocRef.get().await()
-
-            if (userDoc.exists()) {
-                userDoc.getLong("schemaVersion")?.toInt() ?: 1
-            } else {
-                1 // Usuario nuevo o sin datos aún
-            }
+        val userDoc = try {
+            collection.document(userId).get().await()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             Log.e(TAG, "Error obteniendo versión de esquema: ${e.message}", e)
             FirebaseCrashlytics.getInstance().recordException(e)
-            1  // Default a v1 en caso de error
+            throw MigrationException("No se pudo leer la versión de esquema de $userId: ${e.message}", e)
         }
+        return userDoc.getLong("schemaVersion")?.toInt() ?: 1
     }
 
     /** @return the highest [FirestoreMigration.targetVersion] registered, or 1 when none are. */

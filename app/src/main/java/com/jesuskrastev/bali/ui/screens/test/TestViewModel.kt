@@ -6,34 +6,40 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.DrivingTopic
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.NodeStatus
+import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
 import javax.inject.Inject
 
@@ -46,7 +52,11 @@ data class TestUiState(
     val isAnswerChecked: Boolean = false,
     val isLoading: Boolean = true,
     val error: String? = null,
-    val sessionStreak: Int = 0
+    val sessionStreak: Int = 0,
+    val hints: Int = 0,
+    val fiftyFifties: Int = 0,
+    val isHintVisible: Boolean = false,
+    val eliminatedOptionIndices: Set<Int> = emptySet()
 )
 
 data class TestSummary(
@@ -60,8 +70,22 @@ data class TestSummary(
     val bonusFast: Int?,
     val bonusStreak: Int?,
     val leveledUp: Boolean,
+    /** The level after this result; 0 when unknown. The result screen names it when [leveledUp]. */
+    val newLevel: Int = 0,
+    /** The user's experience after this result, to fill the level bar; 0 when unknown. */
+    val newTotalXp: Int = 0,
     val coinsGained: Int,
-    val newWeekSessions: Int
+    val newStreakDays: Int,
+    /** True only for an official exam below the DGT pass mark; the result screen skips the confetti. */
+    val isFailedExam: Boolean = false,
+    /** True only for an official exam at or above the DGT pass mark; the result screen stamps it "APROBADO". */
+    val isPassedExam: Boolean = false,
+    /** True when this is the user's first win ever; the result screen celebrates it once. */
+    val isFirstWin: Boolean = false,
+    /** True when this exam beats every earlier one; needs at least one earlier exam. */
+    val isNewRecord: Boolean = false,
+    /** Best score of the earlier exams, shown with the record; -1 when there was none. */
+    val previousBestScore: Int = -1
 )
 
 @HiltViewModel
@@ -73,8 +97,10 @@ class TestViewModel @Inject constructor(
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
+    private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val pathRepository: PathRepository,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -97,6 +123,7 @@ class TestViewModel @Inject constructor(
 
     init {
         restoreSession()
+        observePracticeInventory()
     }
 
     /**
@@ -128,6 +155,8 @@ class TestViewModel @Inject constructor(
                 selectedAnswers = session.selectedAnswers,
                 isAnswerChecked = session.isAnswerChecked,
                 sessionStreak = session.sessionStreak,
+                isHintVisible = session.isHintVisible,
+                eliminatedOptionIndices = session.eliminatedOptionIndices,
                 isLoading = false,
                 error = null
             )
@@ -145,6 +174,8 @@ class TestViewModel @Inject constructor(
             selectedAnswers = state.selectedAnswers,
             isAnswerChecked = state.isAnswerChecked,
             sessionStreak = state.sessionStreak,
+            isHintVisible = state.isHintVisible,
+            eliminatedOptionIndices = state.eliminatedOptionIndices,
             currentTopic = currentTopic,
             aiNodeTitle = aiNodeTitle,
             aiNodeDescription = aiNodeDescription,
@@ -161,6 +192,17 @@ class TestViewModel @Inject constructor(
      */
     private fun determineReason(): String =
         if (savedStateHandle.get<Boolean>(KEY_GENERATION_STARTED) == true) "process_restart" else "initial"
+
+    /** Keeps the practice-aid counts in [uiState] aligned with the synchronized profile. */
+    private fun observePracticeInventory() {
+        viewModelScope.launch {
+            userRepository.get().collect { user ->
+                _uiState.update {
+                    it.copy(hints = user?.hints ?: 0, fiftyFifties = user?.fiftyFifties ?: 0)
+                }
+            }
+        }
+    }
 
     fun setTopic(topic: String?) {
         if (currentTopic == topic && _uiState.value.questions.isNotEmpty()) return
@@ -225,22 +267,40 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /** Handles a quiz [event], including consuming an owned aid only for the active question. */
     fun onEvent(event: TestEvent) {
         when (event) {
             TestEvent.Retry -> retry()
             is TestEvent.SelectOption -> selectOption(event.optionIndex)
             TestEvent.CheckAnswer -> checkAnswer()
             TestEvent.NextQuestion -> nextQuestion()
-            is TestEvent.FinishTest -> {
-                viewModelScope.launch {
-                    val result = calculateResult()
-                    testFinished = true
-                    event.onResult(result)
-                }
-            }
+            TestEvent.UseHint -> useHint()
+            TestEvent.UseFiftyFifty -> useFiftyFifty()
+            is TestEvent.FinishTest -> finishTest(event.onResult)
         }
     }
 
+    /**
+     * Scores the test and hands the summary to [onResult]. A second call before [retry] is
+     * ignored, so a double tap on the last button cannot pay the rewards twice.
+     *
+     * @param onResult receives the summary once everything is saved
+     */
+    private fun finishTest(onResult: (TestSummary) -> Unit) {
+        if (testFinished) return
+        testFinished = true
+        viewModelScope.launch {
+            val summary = try {
+                calculateResult()
+            } catch (error: Exception) {
+                testFinished = false
+                throw error
+            }
+            onResult(summary)
+        }
+    }
+
+    /** Resets this practice session and loads a fresh question set for the active route. */
     private fun retry() {
         sessionStreak = 0
         testFinished = false
@@ -252,7 +312,9 @@ class TestViewModel @Inject constructor(
                 currentQuestionIndex = 0,
                 selectedAnswers = emptyMap(),
                 isAnswerChecked = false,
-                sessionStreak = 0
+                sessionStreak = 0,
+                isHintVisible = false,
+                eliminatedOptionIndices = emptySet()
             )
         }
         // Respect node type on retry
@@ -275,7 +337,7 @@ class TestViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val lastTests = testResultRepository.getRecent().first()
-                val totalTests = testResultRepository.count()
+                val totalTests = testResultRepository.count().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
                 val difficultTopics =
                     user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico"
@@ -347,17 +409,9 @@ class TestViewModel @Inject constructor(
 
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
-                val jsonStartIndex = rawText.indexOf('{')
-                val jsonEndIndex = rawText.lastIndexOf('}')
-                if (jsonStartIndex == -1 || jsonEndIndex == -1) throw Exception("Formato inválido")
-
-                val jsonString = rawText.substring(jsonStartIndex, jsonEndIndex + 1)
-                val root = jsonContent.parseToJsonElement(jsonString).jsonObject
-
-                val category = root["selectedCategory"]?.jsonPrimitive?.content ?: currentTopic
-                ?: "Práctica General"
-                
+                val category = GeminiQuestionParser.selectedCategory(rawText) ?: currentTopic ?: "Práctica General"
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
+                require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
 
                 startTime = System.currentTimeMillis()
                 _uiState.update {
@@ -409,31 +463,99 @@ class TestViewModel @Inject constructor(
         persistSession()
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }
     }
 
+    /** Consumes one hint and exposes the current question's explanation before the answer. */
+    private fun useHint() {
+        val state = _uiState.value
+        if (state.isAnswerChecked || state.isHintVisible || state.hints == 0) return
+        viewModelScope.launch {
+            if (spendAid(ShopInventoryItem.HINT)) {
+                _uiState.update { it.copy(isHintVisible = true) }
+                persistSession()
+            }
+        }
+    }
+
+    /**
+     * Spends one owned practice aid. A failure (a signed-in user without connection cannot run
+     * the transaction) means the aid is not used and not charged; it never crashes the quiz.
+     *
+     * @param item the aid to spend
+     * @return true when one was spent
+     */
+    private suspend fun spendAid(item: ShopInventoryItem): Boolean = try {
+        userRepository.consumeInventoryItem(item)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        false
+    }
+
+    /**
+     * Consumes one 50/50 aid and leaves the correct option plus one incorrect option visible. If
+     * the user had already picked an incorrect option, that one stays, so the selection never
+     * disappears from the screen.
+     */
+    private fun useFiftyFifty() {
+        val state = _uiState.value
+        if (state.isAnswerChecked || state.eliminatedOptionIndices.isNotEmpty() || state.fiftyFifties == 0) {
+            return
+        }
+        val question = state.questions.getOrNull(state.currentQuestionIndex) ?: return
+        val incorrect = question.options.indices.filter { it != question.correctAnswerIndex }
+        val kept = state.selectedAnswers[state.currentQuestionIndex]?.takeIf { it in incorrect }
+            ?: incorrect.randomOrNull()
+        val eliminated = incorrect.filter { it != kept }.toSet()
+        if (eliminated.isEmpty()) return
+        viewModelScope.launch {
+            if (spendAid(ShopInventoryItem.FIFTY_FIFTY)) {
+                _uiState.update { it.copy(eliminatedOptionIndices = eliminated) }
+                persistSession()
+            }
+        }
+    }
+
+    /** Advances to the next question and clears aids that only apply to the previous question. */
     private fun nextQuestion() {
         val currentState = _uiState.value
         if (currentState.currentQuestionIndex < currentState.questions.size - 1) {
             _uiState.update {
                 it.copy(
                     currentQuestionIndex = it.currentQuestionIndex + 1,
-                    isAnswerChecked = false
+                    isAnswerChecked = false,
+                    isHintVisible = false,
+                    eliminatedOptionIndices = emptySet()
                 )
             }
             persistSession()
         }
     }
 
+    /**
+     * Scores the finished test, pays its XP, coins and streak (plus the one-off first-test
+     * prize), saves the result and answers, and advances the learning path when the test came
+     * from a node.
+     *
+     * @return the summary the result screens show.
+     */
     private suspend fun calculateResult(): TestSummary {
         val state = _uiState.value
         val correct = state.questions.indices.count { index ->
@@ -442,7 +564,7 @@ class TestViewModel @Inject constructor(
         val durationSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
         val accuracy =
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
-        var newWeekSessions = -1
+        var newStreakDays = -1
 
         val userId = userRepository.get().first()?.id ?: ""
         // Read the node's status BEFORE this attempt overwrites it below — repeating an
@@ -460,6 +582,15 @@ class TestViewModel @Inject constructor(
         )
 
         val coinsGained = incrementCoinsUseCase(accuracy)
+        // Separate prize on top of coinsGained (which stays what the test itself pays): the very
+        // first finished test is the "Haz tu primer test" step of Home's first-steps bar.
+        completeFirstStepUseCase(FirstStepTask.FIRST_TEST)?.let(analytics::firstStepRewarded)
+
+        // Read BEFORE this result is saved below. When they cannot be read, nothing is celebrated
+        // as a first win: a celebration that may repeat is worse than one that is missed.
+        val previousResults = runCatching { testResultRepository.get().first() }.getOrNull()
+        val isFirstWin = previousResults != null &&
+            ResultMilestones.isFirstWin(previousResults, accuracy >= ResultMilestones.WIN_ACCURACY)
 
         withContext(Dispatchers.IO) {
             // 1. Save test result
@@ -473,7 +604,10 @@ class TestViewModel @Inject constructor(
                 )
             )
 
-            // 2. Save individual answers
+            // 2. Save individual answers, each tagged with its question id, the session's topic
+            // (when the category names one) and where it was given
+            val topic = DrivingTopic.fromCategory(state.category)
+            val mode = AnswerMode.fromNodeType(aiNodeType)
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
@@ -483,14 +617,17 @@ class TestViewModel @Inject constructor(
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = topic,
+                            mode = mode
                         )
                     )
                 }
             }
 
             // 3. Increment streak
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
 
             // 4. Update path if coming from a path node: always record the attempt on the
             // current node, but only unlock the next one once the score clears the bar.
@@ -538,13 +675,12 @@ class TestViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
+            newTotalXp = xpEarned.newTotalXp,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays,
+            isFirstWin = isFirstWin
         )
-    }
-
-    override fun onCleared() {
-        super.onCleared()
     }
 
     companion object {
@@ -563,6 +699,8 @@ class TestViewModel @Inject constructor(
         val selectedAnswers: Map<Int, Int>,
         val isAnswerChecked: Boolean,
         val sessionStreak: Int,
+        val isHintVisible: Boolean,
+        val eliminatedOptionIndices: Set<Int>,
         val currentTopic: String?,
         val aiNodeTitle: String?,
         val aiNodeDescription: String?,

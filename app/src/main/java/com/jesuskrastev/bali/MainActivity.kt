@@ -1,6 +1,5 @@
 package com.jesuskrastev.bali
 
-import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,16 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.graphics.Color
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
-import com.jesuskrastev.bali.domain.repository.UserRepository
-import com.jesuskrastev.bali.data.update.InAppUpdateManager
 import com.jesuskrastev.bali.domain.model.UpdateState
-import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.ui.navigation.AppNavigation
 import com.jesuskrastev.bali.ui.navigation.AuthRoute
 import com.jesuskrastev.bali.ui.navigation.GreetingsRoute
@@ -43,21 +35,13 @@ import com.jesuskrastev.bali.ui.theme.BaliTheme
 import dagger.hilt.android.AndroidEntryPoint
 import com.jesuskrastev.bali.ui.screens.main.AppEntryPoint
 import com.jesuskrastev.bali.ui.screens.main.MainViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    private val viewModel: MainViewModel by viewModels()
+
     /** Creates the app UI after resolving migration, onboarding and authentication state. */
     override fun onCreate(savedInstanceState: Bundle?) {
-        val viewModel: MainViewModel by viewModels()
-        
         installSplashScreen().apply {
             setKeepOnScreenCondition {
                 // Mantener el splash screen visible mientras se migra o se cargan datos
@@ -74,7 +58,7 @@ class MainActivity : ComponentActivity() {
                 val isMigrating by viewModel.isMigrating.collectAsStateWithLifecycle()
                 val migrationError by viewModel.migrationError.collectAsStateWithLifecycle()
                 val snackbarHostState = remember { SnackbarHostState() }
-                val activity = androidx.activity.compose.LocalActivity.current!!
+                val activity = this@MainActivity
 
                 // Launch the official Google Play update UI when available
                 LaunchedEffect(updateState) {
@@ -149,7 +133,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // Check for pending downloads or interrupted immediate updates
-        val viewModel = androidx.lifecycle.ViewModelProvider(this)[MainViewModel::class.java]
         viewModel.checkForDownloadedUpdate()
     }
 }

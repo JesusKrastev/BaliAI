@@ -63,6 +63,9 @@ class SubscriptionViewModel @Inject constructor(
     /** True once the win-back offer has been shown, so it is never offered a second time. */
     private var winbackAlreadyOffered = false
 
+    /** Monotonic timestamp of the win-back offer appearing; null until [onCloseAttempt] shows it. */
+    private var winbackShownAtNanos: Long? = null
+
     /** Null shows the main/current offering, as before; non-null switches [PaywallScreen] to it. */
     private val _winbackOffering = MutableStateFlow<Offering?>(null)
     val winbackOffering: StateFlow<Offering?> = _winbackOffering.asStateFlow()
@@ -152,27 +155,38 @@ class SubscriptionViewModel @Inject constructor(
     fun onPremiumConfirmed() {
         if (isResolved) return
         onPaywallDismissed(true)
-        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackPurchased()
+        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackPurchased(secondsOnWinback())
     }
 
     /**
      * Tracks that the paywall left the foreground before the user decided anything —
-     * pressing home, switching apps or killing the app.
+     * pressing home, switching apps or killing the app. Reports the win-back-specific event
+     * instead of the generic one when that offer is what was on screen, so a visitor who
+     * closes the app directly from the discount isn't folded into the main paywall's count.
      */
     fun onPaywallBackgrounded() {
         if (isResolved || isAway) return
         isAway = true
-        analyticsTracker.paywallBackgrounded()
+        if (_winbackOffering.value != null) {
+            analyticsTracker.paywallWinbackBackgrounded()
+        } else {
+            analyticsTracker.paywallBackgrounded()
+        }
     }
 
     /**
-     * Tracks a return to a paywall that had been backgrounded. Does nothing on the first
-     * foregrounding, which is simply the screen opening.
+     * Tracks a return to a paywall that had been backgrounded, on whichever stage (main or
+     * win-back) was on screen. Does nothing on the first foregrounding, which is simply the
+     * screen opening.
      */
     fun onPaywallResumed() {
         if (!isAway) return
         isAway = false
-        analyticsTracker.paywallResumed()
+        if (_winbackOffering.value != null) {
+            analyticsTracker.paywallWinbackResumed()
+        } else {
+            analyticsTracker.paywallResumed()
+        }
     }
 
     /**
@@ -238,6 +252,10 @@ class SubscriptionViewModel @Inject constructor(
     private fun secondsOnPaywall(): Int =
         TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - shownAtNanos).toInt()
 
+    /** Returns the whole seconds elapsed since the win-back offer appeared, or 0 if it never was. */
+    private fun secondsOnWinback(): Int =
+        winbackShownAtNanos?.let { TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - it).toInt() } ?: 0
+
     /**
      * Fetches the latest customer info and checks the premium entitlement.
      *
@@ -278,7 +296,7 @@ class SubscriptionViewModel @Inject constructor(
     private fun recordPaywallError(context: String, cause: Throwable? = null) {
         // Crashlytics reaches into real Android/Play Services classes that the plain JVM unit
         // tests for this ViewModel don't mock, unlike the Robolectric-backed tests that do —
-        // same guard used for OneSignal/Mixpanel/PostHog/RevenueCat init, see [RobolectricDetector].
+        // same guard used for OneSignal/PostHog/RevenueCat init, see [RobolectricDetector].
         if (RobolectricDetector.isRobolectric()) return
         FirebaseCrashlytics.getInstance().recordException(Exception("Paywall: $context", cause))
     }
@@ -305,12 +323,13 @@ class SubscriptionViewModel @Inject constructor(
             val winback = prefetchedWinback ?: fetchWinbackOffering()
             if (winback != null) {
                 _winbackOffering.value = winback
+                winbackShownAtNanos = System.nanoTime()
                 analyticsTracker.paywallWinbackShown()
                 return PaywallCloseOutcome.ShowWinback
             }
         }
 
-        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackClosed()
+        if (_winbackOffering.value != null) analyticsTracker.paywallWinbackClosed(secondsOnWinback())
         onPaywallDismissed(false)
         return PaywallCloseOutcome.Exit(false)
     }

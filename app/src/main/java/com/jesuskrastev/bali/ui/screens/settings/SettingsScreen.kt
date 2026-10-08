@@ -4,7 +4,15 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,9 +21,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.LocalOffer
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Star
@@ -24,9 +40,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -47,9 +66,13 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.ui.util.LegalLinks
+import com.jesuskrastev.bali.ui.util.openWhatsAppChat
 import com.jesuskrastev.bali.ui.util.replayMask
 import com.jesuskrastev.bali.BuildConfig
 
@@ -86,24 +109,33 @@ private fun Context.openLink(url: String) {
 
 /**
  * Settings destination exposed by the persistent bottom navigation. Hosts the account section
- * (profile, sign out) plus the preference rows — legal links, feedback — that used to live in
- * Home's side drawer, laid out as labeled, grouped sections like a native settings page.
+ * (profile, subscription management, sign out) plus the preference rows — legal links,
+ * feedback — that used to live in Home's side drawer, laid out as labeled, grouped sections
+ * like a native settings page.
  *
  * @param modifier layout modifier applied to the root column
  * @param viewModel supplies the signed-in profile and the sign-out action
  * @param onAuthClick navigates to sign-in when the viewer is signed out
  * @param onFeedbackClick navigates to the "send feedback" destination
+ * @param onManageSubscriptionClick opens the "Tu suscripción" screen
  */
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     onAuthClick: () -> Unit = {},
-    onFeedbackClick: () -> Unit = {}
+    onFeedbackClick: () -> Unit = {},
+    onManageSubscriptionClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
+
+    // The user switches each channel in the system settings, outside the app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationChannels() }
+    LaunchedEffect(viewModel) {
+        viewModel.openSystemNotificationSettings.collect { context.openAppNotificationSettings() }
+    }
 
     Column(
         modifier = modifier
@@ -115,6 +147,57 @@ fun SettingsScreen(
         SettingsHeader()
 
         ProfileCard(uiState = uiState, onAuthClick = onAuthClick)
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsSectionLabel("Notificaciones")
+            SettingsGroup(
+                listOf(
+                    SettingsRowSpec(
+                        icon = if (uiState.notificationsEnabled) Icons.Rounded.Notifications else Icons.Rounded.NotificationsOff,
+                        label = "Recibir notificaciones",
+                        description = if (uiState.notificationsEnabled) {
+                            "Elige abajo qué avisos quieres"
+                        } else {
+                            "No te avisaremos a tu hora de estudio ni si tu racha está en peligro"
+                        },
+                        checked = uiState.notificationsEnabled,
+                        onClick = { viewModel.setNotificationsEnabled(!uiState.notificationsEnabled) }
+                    )
+                )
+            )
+            // Each kind has its own Android channel; they only matter while notifications are on.
+            AnimatedVisibility(
+                visible = uiState.notificationsEnabled,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                SettingsGroup(
+                    NotificationCategory.entries.map { category ->
+                        val isOn = category !in uiState.disabledNotificationCategories
+                        SettingsRowSpec(
+                            icon = category.icon(),
+                            label = category.title,
+                            description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
+                            onClick = { context.openNotificationSettings(category) }
+                        )
+                    }
+                )
+            }
+        }
+
+        SettingsSection(
+            title = "Preferencias",
+            items = listOf(
+                SettingsRowSpec(
+                    icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                    label = "Sonidos",
+                    checked = uiState.soundsEnabled,
+                    onClick = { viewModel.setSoundsEnabled(!uiState.soundsEnabled) }
+                )
+            )
+        )
+
+        WhatsAppFeedbackCard(onClick = { context.openWhatsAppChat() })
 
         SettingsSection(
             title = "Soporte",
@@ -162,6 +245,17 @@ fun SettingsScreen(
                     icon = Icons.Rounded.Description,
                     label = "Términos y condiciones",
                     onClick = { context.openLink(LegalLinks.TERMS) }
+                )
+            )
+        )
+
+        SettingsSection(
+            title = "Suscripción",
+            items = listOf(
+                SettingsRowSpec(
+                    icon = Icons.Rounded.CreditCard,
+                    label = "Gestionar suscripción",
+                    onClick = onManageSubscriptionClick
                 )
             )
         )
@@ -339,12 +433,64 @@ private fun ProfileCardContent(uiState: SettingsUiState) {
     }
 }
 
-/** One tappable row inside a [SettingsGroup]: leading icon, label, and the action it triggers. */
+/**
+ * One tappable row inside a [SettingsGroup]: leading icon, label, and the action it triggers.
+ *
+ * @property checked null for a plain row that ends in a chevron; true or false for a switch row,
+ *   which shows a [Switch] in that position. The whole row is tappable either way, so [onClick]
+ *   is also what flips the switch.
+ * @property description smaller text under the label, or null for a one-line row
+ */
 private data class SettingsRowSpec(
     val icon: ImageVector,
     val label: String,
+    val checked: Boolean? = null,
+    val description: String? = null,
     val onClick: () -> Unit
 )
+
+/**
+ * The glyph Settings shows next to this notification category.
+ *
+ * @return the icon for the category's row
+ */
+private fun NotificationCategory.icon(): ImageVector = when (this) {
+    NotificationCategory.STUDY -> Icons.Rounded.NotificationsActive
+    NotificationCategory.STREAK -> Icons.Rounded.LocalFireDepartment
+    NotificationCategory.PROMOTIONS -> Icons.Rounded.LocalOffer
+}
+
+/**
+ * Opens Android's settings for [category]'s channel, where the user switches that kind of
+ * notification on or off. Below Android 8 there are no channels, and some manufacturers' builds
+ * have no channel screen: both fall back to [openAppNotificationSettings].
+ *
+ * @param category the kind of notification to configure
+ */
+private fun Context.openNotificationSettings(category: NotificationCategory) {
+    val openedChannel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
+        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, category.channelId)
+    )
+    if (!openedChannel) openAppNotificationSettings()
+}
+
+/**
+ * Opens the app's notification settings in Android, where the user lets notifications through
+ * when the system dialog will not show again; failing that, the app's details screen, which
+ * every Android has and links to them.
+ */
+private fun Context.openAppNotificationSettings() {
+    val openedNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    )
+    if (!openedNotifications) {
+        startActivityOrFalse(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        )
+    }
+}
 
 /**
  * Small uppercase eyebrow label placed above a [SettingsGroup] — the same treatment used for
@@ -399,7 +545,9 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
                         icon = item.icon,
                         label = item.label,
                         accentColor = MaterialTheme.colorScheme.primary,
-                        labelColor = MaterialTheme.colorScheme.onSurface
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        checked = item.checked,
+                        description = item.description
                     )
                 }
                 if (index != items.lastIndex) {
@@ -421,9 +569,19 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
  * @param label row name
  * @param accentColor color applied to the icon
  * @param labelColor color applied to the label text
+ * @param checked null to end the row with a chevron; otherwise the state of the [Switch] shown
+ *   instead. The switch only displays the state: the tap is handled by the row around it.
+ * @param description optional smaller text under the label
  */
 @Composable
-private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Color, labelColor: Color) {
+private fun SettingsRowContent(
+    icon: ImageVector,
+    label: String,
+    accentColor: Color,
+    labelColor: Color,
+    checked: Boolean? = null,
+    description: String? = null
+) {
     Row(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -435,19 +593,32 @@ private fun SettingsRowContent(icon: ImageVector, label: String, accentColor: Co
             Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(16.dp))
-        Text(
-            label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = labelColor,
-            modifier = Modifier.weight(1f)
-        )
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = labelColor
+            )
+            if (description != null) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (checked != null) {
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = checked, onCheckedChange = null)
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+        }
     }
 }
 
@@ -478,6 +649,58 @@ private fun SettingsActionCard(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     ) {
         SettingsRowContent(icon = icon, label = label, accentColor = accentColor, labelColor = labelColor)
+    }
+}
+
+/**
+ * Permanent invitation to chat with the team on WhatsApp. It lives in Settings, a root destination
+ * that is always one tap away, so it is visible every time without ever getting in the way of
+ * studying or playing.
+ *
+ * @param onClick opens the team's WhatsApp chat
+ */
+@Composable
+private fun WhatsAppFeedbackCard(onClick: () -> Unit) {
+    val green = Color(0xFF25D366)
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.5.dp, green.copy(alpha = 0.6f))
+    ) {
+        Column(
+            modifier = Modifier
+                .background(Brush.linearGradient(listOf(green.copy(alpha = 0.22f), green.copy(alpha = 0.06f))))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(shape = CircleShape, color = green, modifier = Modifier.size(48.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Forum, contentDescription = null, tint = Color.White)
+                    }
+                }
+                Text(
+                    text = "Tu opinión vale oro",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+            }
+            Text(
+                text = "Queremos saber qué piensas de Bali: qué te gusta, qué te falla y qué echas de menos. " +
+                    "Escríbenos directamente por WhatsApp; leemos todos los mensajes y tu feedback nos ayuda a seguir mejorando la app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Surface(shape = CircleShape, color = green, contentColor = Color.White) {
+                Text(
+                    text = "Escribir por WhatsApp",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
     }
 }
 

@@ -1,21 +1,26 @@
 package com.jesuskrastev.bali.data.remote.firestore.dao
 
-import android.util.Log
+
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.BuildConfig
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Transaction
 import com.google.firebase.firestore.WriteBatch
 import com.google.firebase.firestore.snapshots
-import com.jesuskrastev.bali.data.mapper.toFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.AnswerFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.TestResultFirestore
 import com.jesuskrastev.bali.data.remote.firestore.entities.UserFirestore
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ChestReward
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +34,36 @@ class FirestoreUserDao @Inject constructor(
 
     companion object {
         private const val BATCH_LIMIT = 500
+
+        /** Document fields of the first-steps bar; mirrored by [UserFirestore]. */
+        const val FIRST_STEPS_STARTED_AT = "firstStepsStartedAt"
+        const val FIRST_STEPS_DONE = "firstStepsDone"
+        const val FIRST_STEPS_DISMISSED = "firstStepsDismissed"
+    }
+
+    /** Returns whether [userId] earned and claimed [reward] in one Firestore transaction. */
+    @AddTrace(name = "claim_rank_reward")
+    suspend fun claimRankReward(userId: String, reward: RankReward): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val xp = snapshot.getLong("xp") ?: 0L
+            val claimed = (snapshot.get("claimedRankRewards") as? List<*>)
+                ?.filterIsInstance<String>().orEmpty()
+            if (xp < reward.requiredXp || reward.id in claimed) {
+                false
+            } else {
+                transaction.set(
+                    docRef,
+                    mapOf(
+                        "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
+                        "claimedRankRewards" to (claimed + reward.id)
+                    ),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
     }
 
     // --- User Operations ---
@@ -42,10 +77,6 @@ class FirestoreUserDao @Inject constructor(
         return collection.document(userId).snapshots().map {
             it.toObject(UserFirestore::class.java)
         }
-    }
-
-    suspend fun updateUser(userId: String, user: User) {
-        collection.document(userId).set(user.toFirestore(), SetOptions.merge()).await()
     }
 
     suspend fun updateFields(userId: String, updates: Map<String, Any>) {
@@ -86,6 +117,263 @@ class FirestoreUserDao @Inject constructor(
         }.await()
     }
 
+    /**
+     * Runs [block] as one Firestore transaction, reporting a failure to Crashlytics before
+     * rethrowing it. Shop and reward writes are transactions because they read the balance or
+     * the stock they change; unlike [incrementCoins] they need a connection.
+     *
+     * @param block the reads and writes of the transaction
+     * @return what [block] returned
+     */
+    private suspend fun <T> reportedTransaction(block: (Transaction) -> T): T =
+        try {
+            firestore.runTransaction { transaction -> block(transaction) }.await()
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            FirebaseCrashlytics.getInstance().recordException(error)
+            throw error
+        }
+
+    /**
+     * Purchases an inventory [item] for [cost] within one Firestore transaction.
+     *
+     * @param userId document owner
+     * @param item consumable or the single active streak bet to add
+     * @param cost coins to charge
+     * @return true only when the balance and item's ownership limit permit the purchase
+     */
+    @AddTrace(name = "purchase_shop_inventory")
+    suspend fun purchaseInventoryItem(userId: String, item: ShopInventoryItem, cost: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
+            val hasActiveBet = snapshot.getBoolean("activeStreakBet") ?: false
+            if (coins < cost || (item == ShopInventoryItem.STREAK_BET && hasActiveBet)) {
+                false
+            } else {
+                val updates = mutableMapOf<String, Any>("coins" to coins - cost)
+                when (item) {
+                    ShopInventoryItem.HINT -> updates["hints"] = (snapshot.getLong("hints") ?: 0L) + 1
+                    ShopInventoryItem.FIFTY_FIFTY -> updates["fiftyFifties"] =
+                        (snapshot.getLong("fiftyFifties") ?: 0L) + 1
+                    ShopInventoryItem.DOUBLE_XP -> updates["doubleXpBoosts"] =
+                        (snapshot.getLong("doubleXpBoosts") ?: 0L) + 1
+                    ShopInventoryItem.DOUBLE_COINS -> updates["doubleCoinBoosts"] =
+                        (snapshot.getLong("doubleCoinBoosts") ?: 0L) + 1
+                    ShopInventoryItem.STREAK_BET -> updates["activeStreakBet"] = true
+                }
+                transaction.set(docRef, updates, SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges a surprise chest and credits its coin [reward] atomically.
+     *
+     * @param userId document owner
+     * @param cost coins paid to open the chest
+     * @param reward random coin reward selected by the domain layer
+     * @return true if the chest opened, false when the user cannot afford it
+     */
+    @AddTrace(name = "open_surprise_chest")
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val coins = transaction.get(docRef).getLong("coins") ?: 0L
+            if (coins < cost) false else {
+                transaction.set(docRef, mapOf("coins" to coins - cost + reward), SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges a surprise chest and grants [reward] atomically.
+     *
+     * @param userId document owner
+     * @param cost coins paid to open the chest
+     * @param reward coins or an inventory item picked by the caller
+     * @return true if the chest opened, false when the user cannot afford it
+     */
+    @AddTrace(name = "open_surprise_chest_reward")
+    suspend fun openSurpriseChest(userId: String, cost: Int, reward: ChestReward): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
+            if (coins < cost) {
+                false
+            } else {
+                val updates = mutableMapOf<String, Any>("coins" to coins - cost)
+                when (reward) {
+                    is ChestReward.Coins -> updates["coins"] = coins - cost + reward.amount
+                    is ChestReward.Inventory -> {
+                        val field = reward.item.firestoreField
+                        updates[field] = (snapshot.getLong(field) ?: 0L) + reward.quantity
+                    }
+                }
+                transaction.set(docRef, updates, SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Removes one owned [item] atomically.
+     *
+     * @param userId document owner
+     * @param item consumable to use
+     * @return true only when an item was available
+     */
+    @AddTrace(name = "consume_shop_inventory")
+    suspend fun consumeInventoryItem(userId: String, item: ShopInventoryItem): Boolean {
+        require(item != ShopInventoryItem.STREAK_BET) { "A streak bet is claimed, not consumed" }
+        val field = item.firestoreField
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val count = transaction.get(docRef).getLong(field) ?: 0L
+            if (count <= 0) {
+                false
+            } else {
+                transaction.set(docRef, mapOf(field to count - 1), SetOptions.merge())
+                true
+            }
+        }
+    }
+
+    /**
+     * Credits the one outstanding streak wager and clears it in one transaction.
+     *
+     * @param userId document owner
+     * @param payout coins paid when the next study day is completed
+     * @return true if a wager was claimed, false if none was active
+     */
+    @AddTrace(name = "claim_streak_bet")
+    suspend fun claimStreakBetHead(userId: String, payout: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if (snapshot.getBoolean("activeStreakBet") != true) false else {
+                val coins = snapshot.getLong("coins") ?: 0L
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins + payout, "activeStreakBet" to false),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Charges the streak bet's [cost] and records its [target] in one transaction.
+     *
+     * @param userId document owner
+     * @param cost coins to charge
+     * @param target streak length that wins the bet
+     * @return true if the bet was placed, false for insufficient coins or a bet already active
+     */
+    suspend fun placeStreakBet(userId: String, cost: Int, target: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val coins = snapshot.getLong("coins") ?: 0L
+            val hasBet = (snapshot.getLong("streakBetTarget") ?: 0L) > 0
+            if (coins < cost || hasBet) {
+                false
+            } else {
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins - cost, "streakBetTarget" to target),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Credits the won streak bet and clears it in one transaction, so it pays only once.
+     *
+     * @param userId document owner
+     * @param payout coins paid
+     * @return true if a bet was claimed, false if none was active
+     */
+    suspend fun claimStreakBet(userId: String, payout: Int): Boolean {
+        val docRef = collection.document(userId)
+        return reportedTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            if ((snapshot.getLong("streakBetTarget") ?: 0L) <= 0) {
+                false
+            } else {
+                val coins = snapshot.getLong("coins") ?: 0L
+                transaction.set(
+                    docRef,
+                    mapOf("coins" to coins + payout, "streakBetTarget" to 0),
+                    SetOptions.merge()
+                )
+                true
+            }
+        }
+    }
+
+    /**
+     * Forgets the streak bet without paying it.
+     *
+     * @param userId document owner
+     */
+    suspend fun clearStreakBet(userId: String) {
+        collection.document(userId)
+            .set(mapOf("streakBetTarget" to 0), SetOptions.merge())
+            .await()
+    }
+
+    /**
+     * Records [taskId] in the user's `firstStepsDone` and pays its coins inside one Firestore
+     * transaction, so the "already done?" check and the payout are a single indivisible step:
+     * two devices (or two rapid calls) finishing the same task can't both be paid. Nothing is
+     * written when the account was never enrolled (`firstStepsStartedAt` is 0), the bar was
+     * dismissed, or the task is already in the list.
+     *
+     * @param userId the Firestore user to update.
+     * @param taskId the [com.jesuskrastev.bali.domain.model.FirstStepTask.id] just completed.
+     * @param taskCoins coins paid for this task.
+     * @param allTaskIds ids of every task; when [taskId] completes the set, [bonusCoins] is added.
+     * @param bonusCoins extra coins for completing every task.
+     * @return the coins paid, or 0 when nothing was written.
+     */
+    suspend fun completeFirstStep(
+        userId: String,
+        taskId: String,
+        taskCoins: Int,
+        allTaskIds: Collection<String>,
+        bonusCoins: Int
+    ): Int {
+        val docRef = collection.document(userId)
+        return firestore.runTransaction { transaction ->
+            val snapshot = transaction.get(docRef)
+            val enrolled = (snapshot.getLong(FIRST_STEPS_STARTED_AT) ?: 0L) > 0L
+            val dismissed = snapshot.getBoolean(FIRST_STEPS_DISMISSED) ?: false
+            val done = (snapshot.get(FIRST_STEPS_DONE) as? List<*>).orEmpty().filterIsInstance<String>()
+
+            if (!enrolled || dismissed || taskId in done) {
+                0
+            } else {
+                val completesAll = (done + taskId).containsAll(allTaskIds)
+                val paid = taskCoins + if (completesAll) bonusCoins else 0
+                transaction.update(
+                    docRef,
+                    mapOf(
+                        FIRST_STEPS_DONE to FieldValue.arrayUnion(taskId),
+                        "coins" to FieldValue.increment(paid.toLong())
+                    )
+                )
+                paid
+            }
+        }.await()
+    }
     // --- Test Results Operations ---
     fun getTestResults(userId: String): Flow<List<TestResultFirestore>> {
         return collection.document(userId).collection("test_results")
@@ -140,6 +428,7 @@ class FirestoreUserDao @Inject constructor(
         answers: List<AnswerFirestore>
     ) {
         val operations = mutableListOf<(WriteBatch) -> Unit>()
+        val answersByTest = answers.groupBy { it.testId }
 
         operations.add { batch ->
             batch.set(collection.document(userId), user, SetOptions.merge())
@@ -153,7 +442,7 @@ class FirestoreUserDao @Inject constructor(
                 batch.set(testResultRef, result)
             }
 
-            answers.filter { it.testId == result.id }.forEach { answer ->
+            answersByTest[result.id].orEmpty().forEach { answer ->
                 val answerRef = collection.document(userId).collection("answers").document()
                 operations.add { batch ->
                     batch.set(answerRef, answer.copy(testId = firestoreTestId))
@@ -168,3 +457,13 @@ class FirestoreUserDao @Inject constructor(
         }
     }
 }
+
+/** Returns the Firestore counter field associated with this consumable item. */
+private val ShopInventoryItem.firestoreField: String
+    get() = when (this) {
+        ShopInventoryItem.HINT -> "hints"
+        ShopInventoryItem.FIFTY_FIFTY -> "fiftyFifties"
+        ShopInventoryItem.DOUBLE_XP -> "doubleXpBoosts"
+        ShopInventoryItem.DOUBLE_COINS -> "doubleCoinBoosts"
+        ShopInventoryItem.STREAK_BET -> error("Streak bet has no counter field")
+    }

@@ -2,9 +2,9 @@
 agp = "8.13.2"
 appUpdate = "2.1.0"
 appReview = "2.0.2"
-coilSvg = "2.6.0"
 kotlin = "2.0.21"
 coreKtx = "1.17.0"
+coreSplashscreen = "1.0.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -16,7 +16,6 @@ kotlinxSerializationJson = "1.7.3"
 ksp = "2.0.21-1.0.27"
 hiltNavigationCompose = "1.2.0"
 hilt = "2.52"
-mixpanelAndroid = "7.3.3"
 posthogAndroid = "3.69.0"
 onesignal = "[5.6.1, 5.6.99]"
 purchases = "10.16.0"
@@ -39,10 +38,11 @@ chartsVersion = "0.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 app-update = { module = "com.google.android.play:app-update", version.ref = "appUpdate" }
 app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "appUpdate" }
 app-review = { module = "com.google.android.play:review", version.ref = "appReview" }
-coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coilSvg" }
+coil-svg = { module = "io.coil-kt:coil-svg", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -72,7 +72,6 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 # DataStore
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
-# Gemini
 # Coil
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 # Lottie
@@ -96,7 +95,6 @@ firebase-appcheck-debug = { module = "com.google.firebase:firebase-appcheck-debu
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
 androidx-credentials-play-services-auth = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
-mixpanel-android = { module = "com.mixpanel.android:mixpanel-android", version.ref = "mixpanelAndroid" }
 posthog-android = { module = "com.posthog:posthog-android", version.ref = "posthogAndroid" }
 onesignal = { module = "com.onesignal:OneSignal", version.ref = "onesignal" }
 
@@ -107,12 +105,8 @@ purchases = { module = "com.revenuecat.purchases:purchases", version.ref = "purc
 purchases-ui = { module = "com.revenuecat.purchases:purchases-ui", version.ref = "purchasesUi" }
 truth = { group = "com.google.truth", name = "truth", version = "1.4.4" }
 
-junit4 = { module = "junit:junit", version = "4.13.2" }
-
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
-androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version = "1.6.2" }
-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }

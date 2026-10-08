@@ -18,11 +18,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     # Los PR desde forks no reciben secrets: el job se salta en vez de fallar.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Solo release/* y hotfix/* suben: una rama sin fusionar en Play deja a los testers con
+    # migraciones que la linea principal no conoce (BaliAI-errores E-017).
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
 
     env:
       ONE_SIGNAL_APP_ID: ${{ secrets.ONE_SIGNAL_APP_ID }}
-      MIXPANEL_TOKEN: ${{ secrets.MIXPANEL_TOKEN }}
       REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
@@ -61,11 +64,14 @@ jobs:
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: java .github/scripts/ValidateKeystore.java
 
-      # NN en la banda 00-49 para los PR; release-play.yml usa la 50-99, de forma que
-      # los dos workflows nunca puedan generar el mismo versionCode el mismo día.
+      # El versionCode crece con la hora para los dos workflows (ver release-play.yml): antes
+      # cada uno tenia su banda (00-49 y 50-99) y una build de PR posterior a una manual quedaba
+      # con un codigo menor, que Play no ofrece como actualizacion.
       - name: Calcular versionCode (YYYYMMDDNN)
         run: |
-          NN=$(printf '%02d' $(( GITHUB_RUN_NUMBER % 50 )))
+          # NN = cuarto de hora UTC del dia (00-95): crece con el reloj, asi que una build mas
+          # tardia siempre tiene un versionCode mayor, la lance quien la lance.
+          NN=$(printf '%02d' $(( (10#$(date -u +%H) * 60 + 10#$(date -u +%M)) / 15 )))
           echo "CI_VERSION_CODE=$(date -u +%Y%m%d)$NN" >> "$GITHUB_ENV"
 
       - name: Tests unitarios

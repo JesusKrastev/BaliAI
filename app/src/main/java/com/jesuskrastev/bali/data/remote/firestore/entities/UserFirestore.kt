@@ -8,6 +8,7 @@ data class UserFirestore(
     val licenseType: String = "",
     val experience: String = "",
     val examDateMillis: Long = 0L,
+    val planTargetMillis: Long = 0L,
     val difficultTopics: String = "",
     val lastPracticeTimestamp: Long = 0L,
     val currentStreak: Int = 0,
@@ -16,9 +17,21 @@ data class UserFirestore(
     val coins: Int = 0,
     val streakFreezes: Int = 0,
     val highestStreak: Int = 0,
+    val lostStreak: Int = 0,
+    val lostStreakDayMillis: Long = 0L,
     val practiceDays: List<Long> = emptyList(),
-    val weekSessions: Int = 0,
-    val currentWeekStart: Long = 0L,
-    val lessonProgress: Map<String, LessonProgressFirestore> = emptyMap(),
-    val fcmToken: String = ""
+    val frozenDays: List<Long> = emptyList(),
+    val hints: Int = 0,
+    val fiftyFifties: Int = 0,
+    val doubleXpBoosts: Int = 0,
+    val doubleCoinBoosts: Int = 0,
+    val activeStreakBet: Boolean = false,
+    val streakBetTarget: Int = 0,
+    val fcmToken: String = "",
+    val firstStepsStartedAt: Long = 0L,
+    val firstStepsDone: List<String> = emptyList(),
+    val firstStepsDismissed: Boolean = false,
+    val claimedRankRewards: List<String> = emptyList(),
+    /** Schema version of the document; written once, when the account is created. */
+    val schemaVersion: Int = 0
 )

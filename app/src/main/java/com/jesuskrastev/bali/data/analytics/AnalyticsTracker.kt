@@ -3,21 +3,19 @@ package com.jesuskrastev.bali.data.analytics
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.jesuskrastev.bali.BuildConfig
-import com.mixpanel.android.mpmetrics.MixpanelAPI
+import com.jesuskrastev.bali.domain.model.FirstStepReward
 import com.posthog.PostHogInterface
-import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 open class AnalyticsTracker @Inject constructor(
     private val firebase: FirebaseAnalytics,
-    private val mixpanel: MixpanelAPI,
     private val posthog: PostHogInterface
 ) {
 
     /**
-     * Sends [event] with the properties built by [params] to Firebase, Mixpanel and PostHog.
+     * Sends [event] with the properties built by [params] to Firebase and PostHog.
      *
      * Every event carries an `environment` property (`"debug"` or `"production"`, from
      * [BuildConfig.DEBUG]) so manual testing on a debug build can be filtered out of the real
@@ -30,11 +28,10 @@ open class AnalyticsTracker @Inject constructor(
         }
         val properties = bundleToMap(bundle)
         firebase.logEvent(event, bundle)
-        mixpanel.track(event, JSONObject(properties))
         posthog.capture(event = event, properties = properties)
     }
 
-    /** Converts a params [Bundle] into a plain map so Mixpanel and PostHog can share it. */
+    /** Converts a params [Bundle] into a plain map for PostHog. */
     private fun bundleToMap(bundle: Bundle): Map<String, Any> {
         val map = mutableMapOf<String, Any>()
         for (key in bundle.keySet()) {
@@ -46,12 +43,9 @@ open class AnalyticsTracker @Inject constructor(
 
     // ── USERS ───────────────────────────────────────────────────────────────
 
-    /** Identifies the user in Firebase, Mixpanel and PostHog, and opts Mixpanel into tracking. */
+    /** Identifies the user in Firebase and PostHog. */
     open fun identifyUser(userId: String, email: String? = null) {
         firebase.setUserId(userId)
-        mixpanel.identify(userId)
-        mixpanel.optInTracking()
-        email?.let { mixpanel.people.set("\$email", it) }
         posthog.identify(distinctId = userId, userProperties = email?.let { mapOf("email" to it) })
     }
 
@@ -61,7 +55,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun resetUser() {
         firebase.setUserId(null)
-        mixpanel.reset()
         posthog.reset()
         posthog.register(KEY_ENVIRONMENT, currentEnvironment())
     }
@@ -97,10 +90,6 @@ open class AnalyticsTracker @Inject constructor(
                 putString(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 putString(KEY_ENVIRONMENT, environment)
             }
-        )
-        mixpanel.track(
-            "screen_viewed",
-            JSONObject(mapOf("screen_name" to screenName, KEY_ENVIRONMENT to environment))
         )
         posthog.screen(screenTitle = screenName, properties = mapOf(KEY_ENVIRONMENT to environment))
     }
@@ -140,14 +129,13 @@ open class AnalyticsTracker @Inject constructor(
     }
 
     /**
-     * Attaches [profile] to every later event in Mixpanel and PostHog. Firebase has no
+     * Attaches [profile] to every later event in PostHog. Firebase has no
      * per-event properties; its user properties are capped at 25 and not needed for this.
      *
      * @param profile the answers to keep, keyed by property name
      */
     private fun registerProfile(profile: Map<String, String>) {
         if (profile.isEmpty()) return
-        mixpanel.registerSuperProperties(JSONObject(profile))
         profile.forEach { (key, value) -> posthog.register(key, value) }
     }
 
@@ -160,7 +148,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun onboardingCompleted() {
         log("onboarding_completed")
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -174,6 +161,70 @@ open class AnalyticsTracker @Inject constructor(
         putString("last_step", lastStep)
         putInt("step_index", stepIndex)
     }
+
+    /**
+     * Tracks an answer to the offer of notifications: the onboarding's reminders screen, or the
+     * notifications switch in Settings turned on.
+     *
+     * @param result `granted` (Android allows them now), `denied` (refused the system dialog),
+     *   `declined` (tapped "Ahora no" in onboarding, no system dialog shown) or `system_settings`
+     *   (Settings, when Android would not show the dialog and the system settings were opened)
+     * @param studySlot the part of the day picked on the previous screen, e.g. `night`; null outside onboarding
+     * @param source `onboarding` or `settings`, so the onboarding funnel is not mixed with later opt-ins
+     */
+    open fun notificationsPermissionAnswered(result: String, studySlot: String?, source: String = "onboarding") =
+        log("notifications_permission_result") {
+            putString("result", result)
+            putString("source", source)
+            studySlot?.let { putString("study_slot", it) }
+        }
+
+    /**
+     * Tracks the user turning notifications off with the switch in Settings, which opts this
+     * install out of every push. Turning them back on is logged by [notificationsPermissionAnswered]
+     * with `source = settings`.
+     */
+    open fun notificationsSwitchedOff() = log("notifications_switched_off") {
+        putString("source", "settings")
+    }
+
+    /**
+     * Tracks an answer to the onboarding mini-test, the user's first taste of the product.
+     *
+     * @param questionId stable id of the question, independent of its wording
+     * @param topic the subject of the question, such as "Alcohol"
+     * @param isCorrect whether the option tapped was the right one
+     * @param position the question's place in the test, from 1
+     * @param seconds time from the question appearing to the answer
+     * @param concern the worry that picked the questions, without its emoji
+     */
+    open fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) = log("onboarding_quiz_answered") {
+        putString("question_id", questionId)
+        putString("topic", topic)
+        putBoolean("correct", isCorrect)
+        putInt("position", position)
+        putInt("seconds", seconds)
+        concern?.let { putString("concern", it) }
+    }
+
+    /**
+     * Tracks that a card of the onboarding intro came on screen.
+     *
+     * @param position the card, from 1
+     */
+    open fun onboardingIntroCardShown(position: Int) = log("onboarding_intro_card_shown") {
+        putInt("position", position)
+    }
+
+    /** Tracks that the user skipped the onboarding mini-test without answering. */
+    open fun onboardingQuizSkipped() = log("onboarding_quiz_skipped")
 
     // ── PAYWALL ─────────────────────────────────────────────────────────────
 
@@ -193,7 +244,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallPurchased(source: String = "onboarding") {
         log("paywall_purchased") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -204,7 +254,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallClosed(source: String = "onboarding") {
         log("paywall_closed") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -222,7 +271,6 @@ open class AnalyticsTracker @Inject constructor(
      */
     open fun paywallBackgrounded(source: String = "onboarding") {
         log("paywall_backgrounded") { putString("source", source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -320,7 +368,6 @@ open class AnalyticsTracker @Inject constructor(
         source: String = "onboarding"
     ) {
         log("paywall_purchase_completed") { putPurchaseDetails(plan, secondsOnPaywall, source) }
-        mixpanel.flush()
         posthog.flush()
     }
 
@@ -367,22 +414,43 @@ open class AnalyticsTracker @Inject constructor(
     /**
      * Tracks that the user left the paywall having bought the win-back offer. Flushes
      * immediately, like [paywallPurchased].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this purchase, so
+     *   an impulse buy can be told apart from one the user thought over
      */
-    open fun paywallWinbackPurchased() {
-        log("paywall_winback_purchased")
-        mixpanel.flush()
+    open fun paywallWinbackPurchased(secondsOnOffer: Int) {
+        log("paywall_winback_purchased") { putInt("seconds_on_offer", secondsOnOffer) }
         posthog.flush()
     }
 
     /**
      * Tracks that the user also closed the win-back offer without buying. Flushes immediately,
      * like [paywallClosed].
+     *
+     * @param secondsOnOffer seconds between the win-back offer appearing and this decline, so a
+     *   near-instant close can be told apart from one where the user considered it first
      */
-    open fun paywallWinbackClosed() {
-        log("paywall_winback_closed")
-        mixpanel.flush()
+    open fun paywallWinbackClosed(secondsOnOffer: Int) {
+        log("paywall_winback_closed") { putInt("seconds_on_offer", secondsOnOffer) }
         posthog.flush()
     }
+
+    /**
+     * Tracks that the win-back offer left the foreground with no decision taken — pressing
+     * home, switching apps or killing the app while looking at the discount.
+     *
+     * Kept as its own event rather than reusing [paywallBackgrounded] so a visitor who closes
+     * the app directly from the win-back screen isn't folded into the main paywall's count;
+     * pair with [paywallWinbackResumed] the same way [paywallBackgrounded] pairs with
+     * [paywallResumed]. Flushes immediately, because the process may not survive.
+     */
+    open fun paywallWinbackBackgrounded() {
+        log("paywall_winback_backgrounded")
+        posthog.flush()
+    }
+
+    /** Tracks that the user came back to the win-back offer after backgrounding it. */
+    open fun paywallWinbackResumed() = log("paywall_winback_resumed")
 
     /**
      * Adds the properties every paywall purchase event shares.
@@ -402,6 +470,41 @@ open class AnalyticsTracker @Inject constructor(
         }
         putInt("seconds_on_paywall", secondsOnPaywall)
         putString("source", source)
+    }
+
+    // ── SUBSCRIPTION CANCELLATION ───────────────────────────────────────────
+    // Entering the cancellation flow is already reported as the "CancelSubscription" screen view.
+
+    /**
+     * Tracks a user who started cancelling and chose to keep the plan instead.
+     *
+     * @param step where they stopped: `progress` (what they would lose) or `reason` (the survey)
+     * @param reasonId the reason picked before staying, or null when none was picked
+     */
+    open fun subscriptionCancelKept(step: String, reasonId: String?) = log("subscription_cancel_kept") {
+        putString("step", step)
+        reasonId?.let { putString("reason", it) }
+    }
+
+    /**
+     * Tracks the answer to "¿Por qué quieres cancelar?", the in-app cancellation survey.
+     * Flushes immediately: the user is about to leave for Google Play.
+     *
+     * @param reasonId the id of the chosen [com.jesuskrastev.bali.ui.screens.subscription.CancelReason],
+     *   or `skipped` when the user went on without answering
+     */
+    open fun subscriptionCancelReason(reasonId: String) {
+        log("subscription_cancel_reason") { putString("reason", reasonId) }
+        posthog.flush()
+    }
+
+    /**
+     * Tracks the app handing the user over to Google Play's subscription screen,
+     * where the cancellation actually happens. Flushes immediately, because the app is left.
+     */
+    open fun subscriptionManagementOpened() {
+        log("subscription_management_opened")
+        posthog.flush()
     }
 
     // ── AI CHAT ─────────────────────────────────────────────────────────────
@@ -479,6 +582,68 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
+    // ── EXAM DATE (Statistics, Home) ────────────────────────────────────────
+
+    /**
+     * Tracks that the user set their exam date, from the statistics countdown or from Home's plan chip.
+     *
+     * @param daysUntil calendar days from today to the chosen exam day
+     * @param hadPlanDate true when there was already a date being counted down to (so this is a
+     *   correction), false when the app was asking for one
+     * @param source where the date was set: "stats" or "home"
+     */
+    open fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String = "stats") = log("exam_date_set") {
+        putInt("days_until", daysUntil)
+        putBoolean("had_plan_date", hadPlanDate)
+        putString("source", source)
+    }
+
+    // ── PLAN CHIP (Home) ────────────────────────────────────────────────────
+
+    /**
+     * Tracks a tap on the plan chip at the top of Home, which opens the plan sheet.
+     *
+     * @param stage what the chip showed: a lower-case [com.jesuskrastev.bali.ui.screens.stats.PlanUrgency]
+     *   name such as "final_week", or "date_passed" when the saved date is behind
+     * @param daysLeft days until the date, or null when there is no date ahead
+     * @param todayDone whether today already had a study session
+     */
+    open fun homePlanChipClicked(stage: String, daysLeft: Int?, todayDone: Boolean) =
+        log("home_plan_chip_clicked") {
+            putString("stage", stage)
+            daysLeft?.let { putInt("days_left", it) }
+            putBoolean("today_done", todayDone)
+        }
+
+    /**
+     * Tracks a button pressed on Home's plan sheet.
+     *
+     * @param action "start_session", "see_plan", "set_date" or "change_date"
+     * @param stage what the chip showed, as in [homePlanChipClicked]
+     * @param daysLeft days until the date, or null when there is no date ahead
+     */
+    open fun homePlanActionClicked(action: String, stage: String, daysLeft: Int?) =
+        log("home_plan_action_clicked") {
+            putString("action", action)
+            putString("stage", stage)
+            daysLeft?.let { putInt("days_left", it) }
+        }
+
+    /**
+     * Tracks that the user opened the statistics screen and what it told them, so the verdict can
+     * later be compared with the real exam result.
+     *
+     * @param level the [com.jesuskrastev.bali.domain.model.ReadinessLevel] name shown
+     * @param mocksTaken mock exams completed when the screen opened
+     * @param passPercent shown chance of passing from 0 to 100, or null when no percentage was shown
+     */
+    open fun readinessViewed(level: String, mocksTaken: Int, passPercent: Int?) =
+        log("readiness_viewed") {
+            putString("level", level)
+            putInt("mocks_taken", mocksTaken)
+            passPercent?.let { putInt("pass_percent", it) }
+        }
+
     // ── MINI-GAMES ──────────────────────────────────────────────────────────
 
     /**
@@ -515,6 +680,47 @@ open class AnalyticsTracker @Inject constructor(
     open fun gameAbandoned(gameId: String, roundIndex: Int) = log("game_abandoned") {
         putString("game_id", gameId)
         putInt("round_index", roundIndex)
+    }
+
+    // ── FIRST STEPS (day-0 bar on Home) ────────────────────────────────────
+
+    /**
+     * Tracks that the first-steps bar reached the screen. Sent once per Home instance, so it
+     * counts students who saw it rather than every recomposition.
+     *
+     * @param tasksDone how many of the tasks the student had already completed
+     */
+    open fun firstStepsShown(tasksDone: Int) = log("first_steps_shown") {
+        putInt("tasks_done", tasksDone)
+    }
+
+    /**
+     * Tracks the coins earned for a first step. Also sends `first_steps_completed` when it was the
+     * last one, which is the event retention and cancellations are compared against.
+     *
+     * @param reward the task that was completed and what it paid
+     */
+    open fun firstStepRewarded(reward: FirstStepReward) {
+        log("first_steps_task_completed") {
+            putString("task", reward.task.id)
+            putInt("coins", reward.coins)
+        }
+        if (reward.completedAll) log("first_steps_completed")
+    }
+
+    /**
+     * Tracks that the student tapped the final "haz tu primer simulacro" call to action.
+     * Together with the exam's own events it gives the day-1 first-simulacro rate.
+     */
+    open fun firstStepsExamClicked() = log("first_steps_exam_clicked")
+
+    /**
+     * Tracks that the student hid the bar, giving up the coins still pending.
+     *
+     * @param tasksDone how many tasks they had completed when they dismissed it
+     */
+    open fun firstStepsDismissed(tasksDone: Int) = log("first_steps_dismissed") {
+        putInt("tasks_done", tasksDone)
     }
 
     companion object {

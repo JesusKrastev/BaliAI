@@ -1,4 +1,4 @@
-﻿package com.jesuskrastev.bali.domain.usecase
+package com.jesuskrastev.bali.domain.usecase
 
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.TestMode
@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.domain.model.XpEarned
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import com.jesuskrastev.bali.domain.util.LevelCalculator
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 
 /**
  * Use case responsible for calculating and applying XP rewards after a user completes a test.
@@ -70,6 +71,18 @@ open class IncrementXpUseCase @Inject constructor(
         return if (accuracy == 100 && totalQuestions >= 5) 5 else null
     }
 
+    /**
+     * Adds the experience a finished activity earned to the user, raising the level if it is reached.
+     *
+     * @param mode the kind of activity, which sets the base experience
+     * @param correctAnswers questions answered correctly
+     * @param totalQuestions questions in the activity
+     * @param durationSeconds time the activity took, for the speed bonus
+     * @param isRepeat true for an already completed lesson: 30 % of the base and no speed or
+     *   perfection bonus
+     * @return the experience earned, its breakdown and the resulting level; an owned double-XP
+     *   boost doubles every part of it and is spent by it
+     */
     open suspend operator fun invoke(
         mode: TestMode,
         correctAnswers: Int,
@@ -91,7 +104,9 @@ open class IncrementXpUseCase @Inject constructor(
         val perfectionBonus = if (isRepeat) null else calculatePerfectionBonus(accuracy, totalQuestions)
         val streakBonus = calculateStreakBonus(user.currentStreak)
 
-        val totalXpGained = baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0)
+        val doublesXp = userRepository.spendBoostIfOwned(ShopInventoryItem.DOUBLE_XP, user.doubleXpBoosts)
+        val factor = if (doublesXp) 2 else 1
+        val totalXpGained = factor * (baseXp + (speedBonus ?: 0) + (perfectionBonus ?: 0) + (streakBonus ?: 0))
 
         val newTotalXp = user.xp + totalXpGained
         val newLevel = LevelCalculator.calculateLevel(newTotalXp)
@@ -107,10 +122,12 @@ open class IncrementXpUseCase @Inject constructor(
         return XpEarned(
             xpGained = totalXpGained,
             levelUp = hasLeveledUp,
-            baseXp = baseXp,
-            bonusPerfection = perfectionBonus,
-            bonusFast = speedBonus,
-            bonusStreak = streakBonus
+            newLevel = newLevel,
+            newTotalXp = newTotalXp,
+            baseXp = factor * baseXp,
+            bonusPerfection = perfectionBonus?.times(factor),
+            bonusFast = speedBonus?.times(factor),
+            bonusStreak = streakBonus?.times(factor)
         )
     }
 }

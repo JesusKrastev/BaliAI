@@ -4,6 +4,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.jesuskrastev.bali.data.local.room.dao.UserDao
 import com.jesuskrastev.bali.data.local.room.entities.UserEntity
+import com.jesuskrastev.bali.domain.model.RankReward
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.flow.first
@@ -122,16 +123,67 @@ class UserDaoTest {
     }
 
     @Test
-    fun userStreakCanBeReset() = runTest {
+    fun updateStreakWritesEveryDailyStreakField() = runTest {
+        userDao.insert(UserEntity(id = "user_123", currentStreak = 10, coins = 50))
+
+        userDao.updateStreak(
+            current = 4,
+            highest = 12,
+            freezes = 1,
+            lastPracticeMillis = 3_000L,
+            lostStreak = 6,
+            lostStreakDayMillis = 2_500L,
+            practiceDaysJson = "[1000,2000,3000]",
+            frozenDaysJson = "[1500]"
+        )
+
+        val retrieved = userDao.get().first()
+        assertThat(retrieved?.currentStreak).isEqualTo(4)
+        assertThat(retrieved?.highestStreak).isEqualTo(12)
+        assertThat(retrieved?.streakFreezes).isEqualTo(1)
+        assertThat(retrieved?.lastPracticeTimestamp).isEqualTo(3_000L)
+        assertThat(retrieved?.lostStreak).isEqualTo(6)
+        assertThat(retrieved?.lostStreakDayMillis).isEqualTo(2_500L)
+        assertThat(retrieved?.practiceDays).containsExactly(1000L, 2000L, 3000L).inOrder()
+        assertThat(retrieved?.frozenDays).containsExactly(1500L)
+        assertThat(retrieved?.coins).isEqualTo(50)
+    }
+
+    @Test
+    fun aNewUserHasNoFrozenDays() = runTest {
+        userDao.insert(UserEntity(id = "user_123"))
+
+        assertThat(userDao.get().first()?.frozenDays).isEmpty()
+    }
+
+    @Test
+    fun updateExamDateReplacesTheEstimateAndKeepsThePlanDate() = runTest {
         val user = UserEntity(
             id = "user_123",
-            currentStreak = 10
+            examDateMillis = 1_000L,
+            planTargetMillis = 2_000L
         )
 
         userDao.insert(user)
-        userDao.resetStreak()
+        userDao.updateExamDate(3_000L)
 
         val retrieved = userDao.get().first()
-        assertThat(retrieved?.currentStreak).isEqualTo(0)
+        assertThat(retrieved?.examDateMillis).isEqualTo(3_000L)
+        assertThat(retrieved?.planTargetMillis).isEqualTo(2_000L)
+    }
+
+    @Test
+    fun rankRewardNeedsXpAndCanOnlyBeClaimedOnce() = runTest {
+        val reward = RankReward("xp_100", requiredXp = 100, coins = 30)
+        userDao.insert(UserEntity(id = "user_123", xp = 99, coins = 5))
+
+        assertThat(userDao.claimRankReward(reward)).isFalse()
+        userDao.updateXp(100, 1)
+        assertThat(userDao.claimRankReward(reward)).isTrue()
+        assertThat(userDao.claimRankReward(reward)).isFalse()
+
+        val user = userDao.get().first()
+        assertThat(user?.coins).isEqualTo(35)
+        assertThat(user?.claimedRankRewards).containsExactly("xp_100")
     }
 }

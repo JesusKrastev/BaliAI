@@ -6,16 +6,21 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
+import com.jesuskrastev.bali.domain.audio.SoundEffects
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.AnswerMode
+import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
+import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,9 +37,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Date
 import javax.inject.Inject
 
@@ -61,6 +63,7 @@ class ExamViewModel @Inject constructor(
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val analytics: AnalyticsTracker,
+    private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -156,31 +159,53 @@ class ExamViewModel @Inject constructor(
             is ExamEvent.GoToQuestion -> goToQuestion(event.index)
             ExamEvent.NextQuestion -> nextQuestion()
             ExamEvent.PreviousQuestion -> previousQuestion()
-            is ExamEvent.FinishExam -> {
-                viewModelScope.launch {
-                    val result = calculateResult()
-                    examFinished = true
-                    event.onResult(result)
-                }
-            }
+            is ExamEvent.FinishExam -> finishExam(event.onResult)
 
             ExamEvent.ToggleQuestionReview -> toggleReviewGrid()
             ExamEvent.CheckAnswer -> checkAnswer()
         }
     }
 
+    /**
+     * Reveals whether the selected option is right: updates the session streak, marks the answer
+     * as checked and plays the matching sound. Does nothing when no option is selected or the
+     * answer was already checked, so a double tap neither double-counts nor plays twice.
+     */
     private fun checkAnswer() {
         val currentState = _uiState.value
+        if (currentState.isAnswerChecked) return
         val selectedOption = currentState.selectedAnswers[currentState.currentQuestionIndex]
         if (selectedOption != null) {
             val isCorrect =
                 selectedOption == currentState.questions[currentState.currentQuestionIndex].correctAnswerIndex
             if (isCorrect) sessionStreak++ else sessionStreak = 0
+            if (isCorrect) soundEffects.playCorrect() else soundEffects.playWrong()
             _uiState.update { it.copy(isAnswerChecked = true, sessionStreak = sessionStreak) }
             persistSession()
         }
     }
 
+    /**
+     * Scores the exam and hands the summary to [onResult]. A second call before [retry] is
+     * ignored, so a double tap on the last button cannot pay the rewards twice.
+     *
+     * @param onResult receives the summary once everything is saved
+     */
+    private fun finishExam(onResult: (TestSummary) -> Unit) {
+        if (examFinished) return
+        examFinished = true
+        viewModelScope.launch {
+            val summary = try {
+                calculateResult()
+            } catch (error: Exception) {
+                examFinished = false
+                throw error
+            }
+            onResult(summary)
+        }
+    }
+
+    /** Throws the current exam away and generates a fresh one. */
     private fun retry() {
         timerJob?.cancel()
         sessionStreak = 0
@@ -202,14 +227,15 @@ class ExamViewModel @Inject constructor(
             try {
                 val user = userRepository.get().first()
                 val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics ?: "Ninguno específico (distribución estándar)"
-                val studentLevel = user?.level
+                val difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() }
+                    ?: "Ninguno específico (distribución estándar)"
+                val studentLevel = user?.level ?: 1
                 val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
                 val daysToExam = user?.examDateMillis?.let {
                     val diffMillis = it - System.currentTimeMillis()
                     (diffMillis / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
                 }
-                val totalTests = testResultRepository.count()
+                val totalTests = testResultRepository.count().first()
                 val examUrgency = if (daysToExam != null && daysToExam in 1..15) {
                     "¡El examen es en $daysToExam días! Sé estricto y pon preguntas de alta probabilidad de fallo."
                 } else {
@@ -265,6 +291,7 @@ class ExamViewModel @Inject constructor(
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val questionUiStates = GeminiQuestionParser.parse(rawText)
+                require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
 
                 startTime = System.currentTimeMillis()
                 examEndAtMillis = System.currentTimeMillis() + EXAM_DURATION_SECONDS * 1000L
@@ -283,16 +310,32 @@ class ExamViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Counts the clock down to [examEndAtMillis] once a second and flags [ExamUiState.isTimeUp]
+     * when it runs out. The reading comes from the wall clock rather than from counting ticks,
+     * so a delayed tick (the phone dozing, the app in the background) cannot hand out extra time.
+     */
     private fun startTimer() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            while (_uiState.value.timeLeftSeconds > 0) {
+            while (true) {
+                val secondsLeft = secondsUntilDeadline()
+                _uiState.update { it.copy(timeLeftSeconds = secondsLeft) }
+                if (secondsLeft == 0) break
                 delay(1000)
-                _uiState.update { it.copy(timeLeftSeconds = it.timeLeftSeconds - 1) }
             }
             _uiState.update { it.copy(isTimeUp = true) }
         }
     }
+
+    /**
+     * Whole seconds left until [examEndAtMillis], rounded up so the clock shows 00:00 only when
+     * the time is really over.
+     *
+     * @return the seconds left, never negative
+     */
+    private fun secondsUntilDeadline(): Int =
+        ((examEndAtMillis - System.currentTimeMillis() + 999) / 1000).toInt().coerceAtLeast(0)
 
     private fun selectOption(optionIndex: Int) {
         if (_uiState.value.isAnswerChecked) return
@@ -354,13 +397,18 @@ class ExamViewModel @Inject constructor(
             if (state.questions.isNotEmpty()) ((correct.toFloat() / state.questions.size) * 100).toInt() else 0
 
         // Un examen de la DGT de 30 preguntas se aprueba con 3 fallos o menos (27 correctas)
-        val isPassed = correct >= 27
-        var newWeekSessions = -1
+        val isPassed = ExamRules.isPassed(correct)
+        var newStreakDays = -1
 
         // Every EXAM path node opens this same generic simulator (no specific node is tracked
         // here), so "repeat" means "not this user's first official exam" rather than "this exact
         // content again" — otherwise a 100-coin exam would silently pay full XP every time.
-        val isRepeat = testResultRepository.get().first().any { it.category == OFFICIAL_EXAM_CATEGORY }
+        val previousResults = runCatching { testResultRepository.get().first() }.getOrNull()
+        val isRepeat = previousResults.orEmpty().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
+        // Only judged when the earlier results could be read, so a failed read never invents a record.
+        val previousBest = previousResults?.let { ResultMilestones.bestExamScore(it) }
+        val isNewRecord = ResultMilestones.isNewExamRecord(correct, previousBest)
+        val isFirstWin = previousResults != null && ResultMilestones.isFirstWin(previousResults, isPassed)
 
         val xpEarned = incrementXpUseCase(
             mode = TestMode.EXAM,
@@ -375,7 +423,7 @@ class ExamViewModel @Inject constructor(
         withContext(Dispatchers.IO) {
             val testId = testResultRepository.insert(
                 TestResult(
-                    category = OFFICIAL_EXAM_CATEGORY,
+                    category = ExamRules.OFFICIAL_EXAM_CATEGORY,
                     score = correct,
                     total = state.questions.size,
                     date = Date(),
@@ -386,19 +434,24 @@ class ExamViewModel @Inject constructor(
             state.questions.forEachIndexed { index, question ->
                 val selectedOption = state.selectedAnswers[index]
                 if (selectedOption != null) {
+                    // The official exam mixes every topic and its questions carry none, so the
+                    // answer has no topic; the question id and the mode are still saved.
                     answerRepository.insert(
                         Answer(
                             date = Date(),
                             testId = testId,
                             questionText = question.text,
                             selectedOption = selectedOption,
-                            isCorrect = selectedOption == question.correctAnswerIndex
+                            isCorrect = selectedOption == question.correctAnswerIndex,
+                            questionId = QuestionId.of(question.text),
+                            topic = null,
+                            mode = AnswerMode.OFFICIAL_EXAM
                         )
                     )
                 }
             }
 
-            newWeekSessions = incrementStreakUseCase()
+            newStreakDays = incrementStreakUseCase()
         }
 
         return TestSummary(
@@ -412,8 +465,15 @@ class ExamViewModel @Inject constructor(
             bonusFast = xpEarned.bonusFast,
             bonusStreak = xpEarned.bonusStreak,
             leveledUp = xpEarned.levelUp,
+            newLevel = xpEarned.newLevel,
+            newTotalXp = xpEarned.newTotalXp,
             coinsGained = coinsGained,
-            newWeekSessions = newWeekSessions
+            newStreakDays = newStreakDays,
+            isFailedExam = !isPassed,
+            isPassedExam = isPassed,
+            isFirstWin = isFirstWin,
+            isNewRecord = isNewRecord,
+            previousBestScore = previousBest ?: -1
         )
     }
 
@@ -428,9 +488,6 @@ class ExamViewModel @Inject constructor(
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"
-
-        /** [TestResult.category] used for every official-exam attempt, win or lose. */
-        private const val OFFICIAL_EXAM_CATEGORY = "Examen Oficial"
     }
 
     @Serializable

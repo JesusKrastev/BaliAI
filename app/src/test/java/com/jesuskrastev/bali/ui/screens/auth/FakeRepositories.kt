@@ -1,8 +1,19 @@
 package com.jesuskrastev.bali.ui.screens.auth
 
 import com.jesuskrastev.bali.domain.model.Answer
+import com.jesuskrastev.bali.domain.model.ChestReward
+import com.jesuskrastev.bali.domain.model.DailyStreak
+import com.jesuskrastev.bali.domain.model.EnablePushesResult
+import com.jesuskrastev.bali.domain.model.FIRST_STEPS_BONUS_COINS
+import com.jesuskrastev.bali.domain.model.FirstStepReward
+import com.jesuskrastev.bali.domain.model.FirstStepTask
+import com.jesuskrastev.bali.domain.model.FirstStepsProgress
+import com.jesuskrastev.bali.domain.model.NotificationCategory
+import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.model.ShopInventoryItem
+import com.jesuskrastev.bali.domain.model.RankReward
 import com.jesuskrastev.bali.domain.repository.*
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import kotlinx.coroutines.flow.Flow
@@ -10,13 +21,30 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 
-class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepository {
+class FakeUserRepository(
+    hasCompletedOnboarding: Boolean = true,
+    private val userExists: Boolean = true,
+    private val uploadSucceeds: Boolean = true
+) : UserRepository {
+    /** Claims an earned rank prize once in the in-memory test profile. */
+    override suspend fun claimRankReward(reward: RankReward): Boolean {
+        val user = _user.value ?: return false
+        if (user.xp < reward.requiredXp || reward.id in user.claimedRankRewards) return false
+        _user.value = user.copy(
+            coins = user.coins + reward.coins,
+            claimedRankRewards = user.claimedRankRewards + reward.id
+        )
+        return true
+    }
     private val _user = MutableStateFlow<User?>(User(name = "Jesus", coins = 500, level = 1, xp = 0))
     private val _hasCompletedOnboarding = MutableStateFlow(hasCompletedOnboarding)
 
+    /** Every profile handed to [uploadAll], i.e. every brand-new account created. */
+    val uploadedUsers = mutableListOf<User>()
+
     override fun get(): Flow<User?> = _user
 
-    override fun exists(userId: String?): Flow<Boolean> = flowOf(true)
+    override fun exists(userId: String?): Flow<Boolean> = flowOf(userExists)
 
     override fun hasCompletedOnboarding(): Flow<Boolean> = _hasCompletedOnboarding
 
@@ -27,16 +55,19 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _hasCompletedOnboarding.value = true
     }
 
-    override suspend fun resetStreak() {
-        _user.update { it?.copy(currentStreak = 0) }
-    }
-
-    override suspend fun updateStreak(streak: Int, timestamp: Long, practiceDays: List<Long>) {
-        _user.update { it?.copy(currentStreak = streak, lastPracticeTimestamp = timestamp, practiceDays = practiceDays) }
-    }
-
-    override suspend fun updateWeeklyProgress(weekSessions: Int, currentWeekStart: Long, lastPracticeTimestamp: Long, practiceDays: List<Long>) {
-        _user.update { it?.copy(weekSessions = weekSessions, lastPracticeTimestamp = lastPracticeTimestamp, practiceDays = practiceDays) }
+    override suspend fun updateStreak(streak: DailyStreak) {
+        _user.update {
+            it?.copy(
+                currentStreak = streak.current,
+                highestStreak = streak.highest,
+                streakFreezes = streak.freezes,
+                lastPracticeTimestamp = streak.lastPracticeMillis,
+                lostStreak = streak.lostStreak,
+                lostStreakDayMillis = streak.lostStreakDayMillis,
+                practiceDays = streak.practiceDays,
+                frozenDays = streak.frozenDays
+            )
+        }
     }
 
     override suspend fun updateXp(xp: Int, level: Int) {
@@ -63,12 +94,128 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
         _user.update { it?.copy(streakFreezes = count) }
     }
 
-    override suspend fun updateHighestStreak(highestStreak: Int) {
-        _user.update { it?.copy(highestStreak = highestStreak) }
+    /** Buys [item] from the fake inventory when the test profile can afford [cost]. */
+    override suspend fun purchaseInventoryItem(item: ShopInventoryItem, cost: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost || (item == ShopInventoryItem.STREAK_BET && user.activeStreakBet)) return false
+        _user.value = user.copy(
+            coins = user.coins - cost,
+            hints = user.hints + if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties + if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts + if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts + if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0,
+            activeStreakBet = user.activeStreakBet || item == ShopInventoryItem.STREAK_BET
+        )
+        return true
+    }
+
+    /** Charges [cost] and grants the coin [reward]; returns whether the fake user could pay. */
+    override suspend fun openSurpriseChest(cost: Int, reward: Int): Boolean =
+        openSurpriseChest(cost, ChestReward.Coins(reward))
+
+    /** Opens a fake surprise chest by charging [cost] and granting its [reward]. */
+    override suspend fun openSurpriseChest(cost: Int, reward: ChestReward): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost) return false
+        _user.value = when (reward) {
+            is ChestReward.Coins -> user.copy(coins = user.coins - cost + reward.amount)
+            is ChestReward.Inventory -> user.copy(
+                coins = user.coins - cost,
+                hints = user.hints + if (reward.item == ShopInventoryItem.HINT) reward.quantity else 0,
+                fiftyFifties = user.fiftyFifties +
+                    if (reward.item == ShopInventoryItem.FIFTY_FIFTY) reward.quantity else 0,
+                doubleXpBoosts = user.doubleXpBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_XP) reward.quantity else 0,
+                doubleCoinBoosts = user.doubleCoinBoosts +
+                    if (reward.item == ShopInventoryItem.DOUBLE_COINS) reward.quantity else 0
+            )
+        }
+        return true
+    }
+
+    /** Consumes one fake inventory [item] when it is owned. */
+    override suspend fun consumeInventoryItem(item: ShopInventoryItem): Boolean {
+        val user = _user.value ?: return false
+        val canConsume = when (item) {
+            ShopInventoryItem.HINT -> user.hints > 0
+            ShopInventoryItem.FIFTY_FIFTY -> user.fiftyFifties > 0
+            ShopInventoryItem.DOUBLE_XP -> user.doubleXpBoosts > 0
+            ShopInventoryItem.DOUBLE_COINS -> user.doubleCoinBoosts > 0
+            ShopInventoryItem.STREAK_BET -> false
+        }
+        if (!canConsume) return false
+        _user.value = user.copy(
+            hints = user.hints - if (item == ShopInventoryItem.HINT) 1 else 0,
+            fiftyFifties = user.fiftyFifties - if (item == ShopInventoryItem.FIFTY_FIFTY) 1 else 0,
+            doubleXpBoosts = user.doubleXpBoosts - if (item == ShopInventoryItem.DOUBLE_XP) 1 else 0,
+            doubleCoinBoosts = user.doubleCoinBoosts - if (item == ShopInventoryItem.DOUBLE_COINS) 1 else 0
+        )
+        return true
+    }
+
+    /** Pays an active streak bet once; returns whether a payout was made. */
+    override suspend fun claimStreakBet(): Boolean {
+        val user = _user.value ?: return false
+        if (!user.activeStreakBet) return false
+        _user.value = user.copy(coins = user.coins + 100, activeStreakBet = false)
+        return true
+    }
+
+    /** Places a fake streak bet when the profile can pay and has none running. */
+    override suspend fun placeStreakBet(cost: Int, target: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.coins < cost || user.streakBetTarget > 0) return false
+        _user.value = user.copy(coins = user.coins - cost, streakBetTarget = target)
+        return true
+    }
+
+    /** Pays [payout] if the fake profile has a streak bet, and clears it. */
+    override suspend fun claimStreakBet(payout: Int): Boolean {
+        val user = _user.value ?: return false
+        if (user.streakBetTarget <= 0) return false
+        _user.value = user.copy(coins = user.coins + payout, streakBetTarget = 0)
+        return true
+    }
+
+    /** Forgets the fake profile's streak bet without paying it. */
+    override suspend fun clearStreakBet() {
+        _user.update { it?.copy(streakBetTarget = 0) }
+    }
+
+
+    /** Mirrors the Firestore transaction: pays once, only while enrolled and not dismissed. */
+    override suspend fun completeFirstStep(task: FirstStepTask): Int {
+        val user = _user.value ?: return 0
+        val progress = user.firstSteps
+        if (!progress.isActive || progress.isDone(task)) return 0
+
+        val completed = progress.completed + task
+        val paid = task.coins + if (completed.containsAll(FirstStepTask.entries)) FIRST_STEPS_BONUS_COINS else 0
+        _user.value = user.copy(coins = user.coins + paid, firstSteps = progress.copy(completed = completed))
+        return paid
+    }
+
+    override suspend fun dismissFirstSteps() {
+        _user.update { it?.copy(firstSteps = it.firstSteps.copy(dismissed = true)) }
+    }
+
+    /** Test-only helper that puts the account in the first-steps window with [completed] already done. */
+    fun enrollInFirstStepsForTest(completed: Set<FirstStepTask> = emptySet()) {
+        _user.update { it?.copy(firstSteps = FirstStepsProgress.startingAt(1_000L).copy(completed = completed)) }
+    }
+
+    override suspend fun updateExamDate(examDateMillis: Long) {
+        _user.update { it?.copy(examDateMillis = examDateMillis) }
+    }
+
+    /** Test-only helper to set the saved exam and plan dates directly. */
+    fun setPlanDatesForTest(examDateMillis: Long?, planTargetMillis: Long?) {
+        _user.update { it?.copy(examDateMillis = examDateMillis, planTargetMillis = planTargetMillis) }
     }
 
     override suspend fun uploadAll(userId: String, user: User, results: List<TestResult>, answers: List<Answer>): Result<Unit> {
-        return Result.success(Unit)
+        uploadedUsers.add(user)
+        return if (uploadSucceeds) Result.success(Unit) else Result.failure(IllegalStateException("Upload failed"))
     }
 
     override suspend fun updateFcmToken(token: String) {}
@@ -80,9 +227,9 @@ class FakeUserRepository(hasCompletedOnboarding: Boolean = true) : UserRepositor
     override suspend fun getSchemaVersion(): Int = 1
 }
 
-class FakeTestResultRepository : TestResultRepository {
+class FakeTestResultRepository(private val results: List<TestResult> = emptyList()) : TestResultRepository {
     override fun getRecent(): Flow<List<TestResult>> = flowOf(emptyList())
-    override fun get(): Flow<List<TestResult>> = flowOf(emptyList())
+    override fun get(): Flow<List<TestResult>> = flowOf(results)
     override suspend fun insert(result: TestResult): String = "test_id"
     override fun count(): Flow<Int> = flowOf(0)
     override fun getAverageScore(): Flow<Double?> = flowOf(0.0)
@@ -106,16 +253,23 @@ class FakePathRepository : PathRepository {
 
 class FakeAuthRepository(
     isLoggedIn: Boolean = true,
-    private val currentUserId: String? = "user_123"
+    private val currentUserId: String? = "user_123",
+    private val existsInAuthFailure: Throwable? = null
 ) : AuthRepository {
+    /** How many times the session was closed. */
+    var signOutCount = 0
+        private set
+
     override val isLoggedIn: Flow<Boolean> = flowOf(isLoggedIn)
     override val currentUserFlow: Flow<String?> = flowOf(currentUserId)
     override suspend fun getGoogleIdTokenAndEmail(context: android.content.Context): Result<Pair<String, String>> {
         return Result.success("token" to "test@example.com")
     }
     override suspend fun signInWithGoogleCredential(idToken: String): Result<Unit> = Result.success(Unit)
-    override suspend fun existsInAuth(email: String): Boolean = true
-    override suspend fun signOut(context: android.content.Context) {}
+    override suspend fun existsInAuth(email: String): Boolean = existsInAuthFailure?.let { throw it } ?: true
+    override suspend fun signOut(context: android.content.Context) {
+        signOutCount++
+    }
     override suspend fun currentUser(): String? = currentUserId
     override val currentUserEmailFlow: Flow<String?> = flowOf("test@example.com")
     override val currentUserPhotoUrlFlow: Flow<String?> = flowOf(null)
@@ -125,9 +279,8 @@ data class GameCompletedEvent(val gameId: String, val score: Int, val totalRound
 
 class FakeAnalyticsTracker(
     firebase: com.google.firebase.analytics.FirebaseAnalytics,
-    mixpanel: com.mixpanel.android.mpmetrics.MixpanelAPI,
     posthog: com.posthog.PostHogInterface
-) : AnalyticsTracker(firebase, mixpanel, posthog) {
+) : AnalyticsTracker(firebase, posthog) {
     val identifiedUsers = mutableListOf<Pair<String, String?>>()
     val signUpEvents = mutableListOf<String>()
     val loginEvents = mutableListOf<String>()
@@ -135,7 +288,47 @@ class FakeAnalyticsTracker(
     val gameStartedEvents = mutableListOf<String>()
     val gameCompletedEvents = mutableListOf<GameCompletedEvent>()
     val gameAbandonedEvents = mutableListOf<Pair<String, Int>>()
+    val firstStepsShownEvents = mutableListOf<Int>()
+    val firstStepRewards = mutableListOf<FirstStepReward>()
+    val firstStepsDismissedEvents = mutableListOf<Int>()
+    var firstStepsExamClicks = 0
+        private set
+    val notificationsAnswers = mutableListOf<Pair<String, String?>>()
+    /** Every mini-test answer reported, as question id and whether it was right. */
+    val quizAnswers = mutableListOf<Pair<String, Boolean>>()
+    /** Every intro card reported, by position from 1. */
+    val introCards = mutableListOf<Int>()
+    var quizSkips = 0
+        private set
+    /** Every exam date reported, as days until it and the screen it was set from. */
+    val examDates = mutableListOf<Pair<Int, String>>()
+    /** The answers profile sent when the onboarding content was finished. */
+    var completedProfile: Map<String, String>? = null
+        private set
 
+    /** The `source` of each [notificationsAnswers] entry, in the same order. */
+    val notificationsAnswerSources = mutableListOf<String>()
+
+    override fun notificationsPermissionAnswered(result: String, studySlot: String?, source: String) {
+        notificationsAnswers.add(result to studySlot)
+        notificationsAnswerSources.add(source)
+    }
+    override fun onboardingQuizAnswered(
+        questionId: String,
+        topic: String,
+        isCorrect: Boolean,
+        position: Int,
+        seconds: Int,
+        concern: String?
+    ) {
+        quizAnswers.add(questionId to isCorrect)
+    }
+    override fun onboardingQuizSkipped() { quizSkips++ }
+    override fun onboardingIntroCardShown(position: Int) { introCards.add(position) }
+    override fun examDateSet(daysUntil: Int, hadPlanDate: Boolean, source: String) {
+        examDates.add(daysUntil to source)
+    }
+    override fun onboardingFlowCompleted(profile: Map<String, String>) { completedProfile = profile }
     override fun identifyUser(userId: String, email: String?) { identifiedUsers.add(userId to email) }
     override fun resetUser() {}
     override fun signUp(method: String) { signUpEvents.add(method) }
@@ -155,6 +348,10 @@ class FakeAnalyticsTracker(
         gameCompletedEvents.add(GameCompletedEvent(gameId, score, totalRounds, durationSeconds))
     }
     override fun gameAbandoned(gameId: String, roundIndex: Int) { gameAbandonedEvents.add(gameId to roundIndex) }
+    override fun firstStepsShown(tasksDone: Int) { firstStepsShownEvents.add(tasksDone) }
+    override fun firstStepRewarded(reward: FirstStepReward) { firstStepRewards.add(reward) }
+    override fun firstStepsExamClicked() { firstStepsExamClicks++ }
+    override fun firstStepsDismissed(tasksDone: Int) { firstStepsDismissedEvents.add(tasksDone) }
 
     fun clear() {
         identifiedUsers.clear()
@@ -164,6 +361,80 @@ class FakeAnalyticsTracker(
         gameStartedEvents.clear()
         gameCompletedEvents.clear()
         gameAbandonedEvents.clear()
+        firstStepsShownEvents.clear()
+        firstStepRewards.clear()
+        firstStepsDismissedEvents.clear()
+        firstStepsExamClicks = 0
+        notificationsAnswers.clear()
+        notificationsAnswerSources.clear()
+        quizAnswers.clear()
+        introCards.clear()
+        quizSkips = 0
+        examDates.clear()
+        completedProfile = null
+    }
+}
+
+/**
+ * [NotificationsRepository] that records every call instead of reaching OneSignal.
+ *
+ * @param grantsPermission what the system dialog answers when permission is requested
+ */
+class FakeNotificationsRepository(private val grantsPermission: Boolean = true) : NotificationsRepository {
+    private val _studySchedule = MutableStateFlow<StudySchedule?>(null)
+    override val studySchedule: Flow<StudySchedule?> = _studySchedule
+
+    var permissionRequests = 0
+        private set
+    var optedOut = false
+        private set
+
+    /** Every [identify] call in order; null entries are sign-outs. */
+    val identifiedUsers = mutableListOf<String?>()
+
+    /** Every [updateTags] call in order. */
+    val sentTags = mutableListOf<Map<String, String?>>()
+
+    /** [identify] and [updateTags] calls interleaved, as `identify:<id>` and `tags`. */
+    val calls = mutableListOf<String>()
+
+    /** The latest saved study moment, or null if none was saved. */
+    val savedSchedule: StudySchedule? get() = _studySchedule.value
+
+    /** Whether a push would be shown; tests set it to simulate the permission and the opt-out. */
+    override val pushesAllowed = MutableStateFlow(true)
+
+    /** The categories whose channel the user turned off in Android's settings; tests fill it to simulate that. */
+    val disabledCategories = mutableSetOf<NotificationCategory>()
+
+    /** What [enablePushes] answers; [EnablePushesResult.ENABLED] also lets pushes through. */
+    var enableResult = EnablePushesResult.ENABLED
+
+    var enableRequests = 0
+        private set
+
+    override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
+    override fun isCategoryEnabled(category: NotificationCategory): Boolean = category !in disabledCategories
+    override suspend fun requestPermission(): Boolean {
+        permissionRequests++
+        return grantsPermission
+    }
+    override suspend fun enablePushes(): EnablePushesResult {
+        enableRequests++
+        if (enableResult == EnablePushesResult.ENABLED) pushesAllowed.value = true
+        return enableResult
+    }
+    override fun optOut() {
+        optedOut = true
+        pushesAllowed.value = false
+    }
+    override fun identify(userId: String?) {
+        identifiedUsers.add(userId)
+        calls.add("identify:$userId")
+    }
+    override fun updateTags(tags: Map<String, String?>) {
+        sentTags.add(tags)
+        calls.add("tags")
     }
 }
 

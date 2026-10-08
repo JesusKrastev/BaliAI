@@ -11,7 +11,8 @@ import java.util.Date
  * @property total Total number of questions in the test.
  * @property date The timestamp when the test was completed.
  * @property isPassed Indicates whether the user's score meets the passing threshold.
- */data class TestResult(
+ */
+data class TestResult(
     val id: String = "",
     val category: String,
     val score: Int,

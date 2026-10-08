@@ -14,7 +14,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -103,7 +102,8 @@ fun MascotHeader(
     }
 }
 
-private class SpeechBubbleShape(
+/** Rounded bubble with a pointer on its left edge, aimed at the mascot beside it. */
+internal class SpeechBubbleShape(
     private val cornerRadius: Dp = 16.dp,
     private val pointerSize: Dp = 12.dp,
     private val pointerOffset: Dp = 16.dp

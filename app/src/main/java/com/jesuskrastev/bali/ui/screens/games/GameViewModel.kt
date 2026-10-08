@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.perf.metrics.AddTrace
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
+import com.jesuskrastev.bali.domain.model.FirstStepTask
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.XpEarned
+import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -51,19 +53,24 @@ data class GameSessionUiState(
  * Each mini-game composable drives its own round-by-round timing and interaction locally
  * (reflexes, timers, gestures are ephemeral UI concerns); this ViewModel only tracks how many
  * rounds were won and, once the session ends, applies the same XP/coins/streak rewards a full
- * test grants via [IncrementXpUseCase], [IncrementCoinsUseCase] and [IncrementStreakUseCase].
+ * test grants via [IncrementXpUseCase], [IncrementCoinsUseCase] and [IncrementStreakUseCase],
+ * plus the one-off first-steps prize through [CompleteFirstStepUseCase].
  */
 @HiltViewModel
 class GameViewModel @Inject constructor(
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val incrementStreakUseCase: IncrementStreakUseCase,
+    private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val analyticsTracker: AnalyticsTracker,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(GameSessionUiState())
     val uiState: StateFlow<GameSessionUiState> = _uiState.asStateFlow()
 
     private var sessionStartMs = 0L
+
+    /** True from the last round until its rewards are published, so a late extra round pays nothing twice. */
+    private var isGrantingRewards = false
 
     /** Game types already rewarded once this ViewModel's lifetime — replaying one earns reduced XP. */
     private val rewardedGames = mutableSetOf<GameType>()
@@ -72,6 +79,7 @@ class GameViewModel @Inject constructor(
     @AddTrace(name = "start_dgt_minigame")
     fun startSession(game: GameType) {
         sessionStartMs = System.currentTimeMillis()
+        isGrantingRewards = false
         _uiState.value = GameSessionUiState(game = game, sessionSeed = Random.nextLong())
         analyticsTracker.gameStarted(game.id)
     }
@@ -84,10 +92,11 @@ class GameViewModel @Inject constructor(
      */
     fun recordRound(won: Boolean) {
         val state = _uiState.value
-        if (state.isFinished) return
+        if (state.isFinished || isGrantingRewards) return
         val newScore = state.score + if (won) 1 else 0
         if (state.roundIndex == state.totalRounds - 1) {
             _uiState.update { it.copy(score = newScore) }
+            isGrantingRewards = true
             viewModelScope.launch { grantSessionRewards(newScore) }
         } else {
             _uiState.update { it.copy(roundIndex = it.roundIndex + 1, score = newScore) }
@@ -112,6 +121,9 @@ class GameViewModel @Inject constructor(
         )
         val coinsGained = incrementCoinsUseCase(accuracy)
         incrementStreakUseCase()
+        // Separate prize on top of coinsGained: the first finished session is the "Juega un
+        // minijuego" step of Home's first-steps bar.
+        completeFirstStepUseCase(FirstStepTask.PLAY_GAME)?.let(analyticsTracker::firstStepRewarded)
         analyticsTracker.gameCompleted(game.id, finalScore, ROUNDS_PER_SESSION, durationSeconds)
 
         _uiState.update {

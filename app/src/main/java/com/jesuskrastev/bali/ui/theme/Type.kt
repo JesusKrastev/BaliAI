@@ -21,6 +21,9 @@ val Gantari = FontFamily(
     Font(R.font.gantari_extralight, FontWeight.ExtraLight)
 )
 
+/** Racing-style display face (Russo One, OFL) for Bali Drive's titles, buttons and big numbers; single weight. */
+val RacingFont = FontFamily(Font(R.font.russo_one, FontWeight.Normal))
+
 private val MaterialDefaults = Typography()
 
 /**

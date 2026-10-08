@@ -26,12 +26,14 @@ import com.jesuskrastev.bali.ui.screens.games.mechanics.LegalOMultaGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PrioridadCruceGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.PuntosCarneGame
 import com.jesuskrastev.bali.ui.screens.games.mechanics.SenalRelampagoGame
+import com.jesuskrastev.bali.ui.screens.test.ResultKind
+import com.jesuskrastev.bali.ui.screens.test.ResultSoundViewModel
 import com.jesuskrastev.bali.ui.screens.test.TestResultScreen
 
 /**
  * Hosts an active arcade mini-game session: shows the round chrome and the mechanic matching
- * [game] while the session is in progress, then reuses [TestResultScreen] to celebrate the
- * result once all rounds are done, wiring in a "play again" action on top of the usual continue.
+ * [game] while the session is in progress, then shows [GameResultScreen] with full arcade
+ * styling once all rounds are done.
  */
 @Composable
 fun GamePlayScreen(
@@ -54,18 +56,19 @@ fun GamePlayScreen(
             if (rewards == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else {
-                TestResultScreen(
+                GameResultScreen(
                     xpGained = rewards.xpEarned.xpGained,
                     baseXp = rewards.xpEarned.baseXp,
                     bonusPerfection = rewards.xpEarned.bonusPerfection,
                     bonusFast = rewards.xpEarned.bonusFast,
                     bonusStreak = rewards.xpEarned.bonusStreak,
                     leveledUp = rewards.xpEarned.levelUp,
-                    durationSeconds = rewards.durationSeconds,
+                    newLevel = rewards.xpEarned.newLevel,
+                    score = state.score,
                     accuracy = rewards.accuracy,
+                    durationSeconds = rewards.durationSeconds,
                     onContinueClick = onBackClick,
-                    secondaryActionLabel = "JUGAR OTRA VEZ",
-                    onSecondaryActionClick = viewModel::replay,
+                    onPlayAgainClick = viewModel::replay,
                 )
             }
         } else {
@@ -91,6 +94,8 @@ fun GamePlayScreen(
                         GameType.SENAL -> SenalRelampagoGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                         GameType.LEGAL_O_MULTA -> LegalOMultaGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                         GameType.PELIGRO -> EncuentraElPeligroGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
+                        // Routed to BaliDriveScreen by AppNavigation: a continuous run, not five rounds.
+                        GameType.DRIVE -> Unit
                         GameType.PRIORIDAD_CRUCE -> PrioridadCruceGame(sessionSeed = state.sessionSeed, roundIndex = state.roundIndex, onRoundResult = viewModel::recordRound, modifier = Modifier.weight(1f))
                     }
                 }

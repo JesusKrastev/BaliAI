@@ -10,14 +10,15 @@ import com.jesuskrastev.bali.domain.model.UpdateState
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.migration.FirestoreMigrationManager
+import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
-import com.onesignal.OneSignal
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -55,7 +56,8 @@ class MainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val migrationManager: FirestoreMigrationManager,
-    private val inAppUpdateManager: InAppUpdateManager
+    private val inAppUpdateManager: InAppUpdateManager,
+    private val syncNotificationTags: SyncNotificationTagsUseCase
 ) : ViewModel() {
 
     /**
@@ -101,30 +103,23 @@ class MainViewModel @Inject constructor(
 
     val updateState: StateFlow<UpdateState> = inAppUpdateManager.updateState
 
-    private val _isMigrating = MutableStateFlow(true) // Start assuming migration might be needed if user is null initially until checked
-    val isMigrating: StateFlow<Boolean> = _isMigrating.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = true
-    )
+    /** True until the signed-in user's pending Firestore migrations have run (or there is none to run). */
+    private val _isMigrating = MutableStateFlow(true)
+    val isMigrating: StateFlow<Boolean> = _isMigrating.asStateFlow()
 
     private val _migrationError = MutableStateFlow<String?>(null)
-    val migrationError: StateFlow<String?> = _migrationError.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = null
-    )
+    val migrationError: StateFlow<String?> = _migrationError.asStateFlow()
 
     init {
+        // Also links OneSignal to the account on every sign-in and sign-out.
+        viewModelScope.launch { syncNotificationTags() }
         viewModelScope.launch {
             val currentUserUid = authRepository.currentUser()
             if (currentUserUid != null) {
-                OneSignal.login(currentUserUid)
                 runCatching {
                     val token = FirebaseMessaging.getInstance().token.await()
                     userRepository.updateFcmToken(token)
                 }
-                _isMigrating.value = true
                 try {
                     migrationManager.executePendingMigrations(currentUserUid)
                 } catch (e: Exception) {
