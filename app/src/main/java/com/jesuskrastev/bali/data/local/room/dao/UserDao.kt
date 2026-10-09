@@ -16,12 +16,27 @@ interface UserDao {
     @Query("SELECT * FROM users LIMIT 1")
     suspend fun getOnce(): UserEntity?
 
-    /** Adds [coins] and writes [claimedJson] for [id] with [requiredXp]; returns updated row count. */
+    /**
+     * Adds [coins], [hints], [fiftyFifties], [doubleXpBoosts] and [doubleCoinBoosts], and records
+     * [claimedJson] for [id] with [requiredXp] atomically; returns the updated row count.
+     */
     @Query(
-        "UPDATE users SET coins = coins + :coins, claimedRankRewards = :claimedJson " +
-            "WHERE id = :id AND xp >= :requiredXp"
+        "UPDATE users SET coins = coins + :coins, hints = hints + :hints, " +
+            "fiftyFifties = fiftyFifties + :fiftyFifties, " +
+            "doubleXpBoosts = doubleXpBoosts + :doubleXpBoosts, " +
+            "doubleCoinBoosts = doubleCoinBoosts + :doubleCoinBoosts, " +
+            "claimedRankRewards = :claimedJson WHERE id = :id AND xp >= :requiredXp"
     )
-    suspend fun saveRankClaim(id: String, requiredXp: Int, coins: Int, claimedJson: String): Int
+    suspend fun saveRankClaim(
+        id: String,
+        requiredXp: Int,
+        coins: Int,
+        hints: Int,
+        fiftyFifties: Int,
+        doubleXpBoosts: Int,
+        doubleCoinBoosts: Int,
+        claimedJson: String
+    ): Int
 
     /** Returns whether [reward] was newly claimed, checking and updating in one Room transaction. */
     @Transaction
@@ -32,6 +47,10 @@ interface UserDao {
             user.id,
             reward.requiredXp,
             reward.coins,
+            reward.hints,
+            reward.fiftyFifties,
+            reward.doubleXpBoosts,
+            reward.doubleCoinBoosts,
             Converters().fromStringList(user.claimedRankRewards + reward.id)
         ) == 1
     }
