@@ -15,7 +15,7 @@ sealed interface PathStop {
     /**
      * A rank milestone.
      *
-     * @property prize the coins paid for reaching the rank, or null for the starting rank
+     * @property prize the guaranteed reward for reaching the rank, or null for the starting rank
      * @property prizesOnTheWay the prizes between this rank and the next one
      */
     data class Rank(
@@ -27,7 +27,7 @@ sealed interface PathStop {
     }
 
     /**
-     * A coin prize between two ranks.
+     * A guaranteed coin or inventory prize between two ranks.
      *
      * @property side 0 or 1, alternating, so the road zigzags from prize to prize
      */

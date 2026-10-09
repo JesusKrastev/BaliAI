@@ -24,12 +24,13 @@ class RankPathTest {
         assertThat(path.map { it.requiredXp }).isInOrder()
     }
 
+    /** A rank owns its threshold prize, followed only by rewards before the next rank. */
     @Test
     fun `a prize at a rank threshold is that rank's own prize`() {
         val conductor = path.filterIsInstance<PathStop.Rank>().first { it.rank.id == "conductor" }
 
         assertThat(conductor.prize?.id).isEqualTo("xp_100")
-        assertThat(conductor.prizesOnTheWay.map { it.id }).containsExactly("xp_200")
+        assertThat(conductor.prizesOnTheWay.map { it.id }).containsExactly("hints_150")
     }
 
     @Test
