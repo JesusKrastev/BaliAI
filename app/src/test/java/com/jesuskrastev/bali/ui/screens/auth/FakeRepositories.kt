@@ -32,6 +32,10 @@ class FakeUserRepository(
         if (user.xp < reward.requiredXp || reward.id in user.claimedRankRewards) return false
         _user.value = user.copy(
             coins = user.coins + reward.coins,
+            hints = user.hints + reward.hints,
+            fiftyFifties = user.fiftyFifties + reward.fiftyFifties,
+            doubleXpBoosts = user.doubleXpBoosts + reward.doubleXpBoosts,
+            doubleCoinBoosts = user.doubleCoinBoosts + reward.doubleCoinBoosts,
             claimedRankRewards = user.claimedRankRewards + reward.id
         )
         return true
