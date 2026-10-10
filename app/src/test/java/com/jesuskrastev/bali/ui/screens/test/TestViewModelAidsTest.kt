@@ -21,6 +21,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
+import com.jesuskrastev.bali.util.FakeImagePrefetcher
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -50,6 +52,8 @@ class TestViewModelAidsTest {
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
             completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
             pathRepository = FakePathRepository(),
+            imagePrefetcher = FakeImagePrefetcher(),
+            completePathNodeUseCase = CompletePathNodeUseCase(FakePathRepository()),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle()

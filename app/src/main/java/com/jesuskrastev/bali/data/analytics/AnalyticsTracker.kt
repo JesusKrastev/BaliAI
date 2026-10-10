@@ -582,6 +582,29 @@ open class AnalyticsTracker @Inject constructor(
             putInt("output_tokens", outputTokens)
         }
 
+    /**
+     * Tracks how a path exam was put together, to see how much of Gemini's output survives the checks.
+     *
+     * @param nodeId the path node the exam belongs to
+     * @param variantsAccepted Gemini variants that passed the checks and went into the exam
+     * @param bankFill bank questions that stood in for missing variants
+     * @param imagesReplaced questions swapped out because their picture failed to load
+     * @param modelFailed true when the Gemini call failed and the exam is bank questions only
+     */
+    open fun examAssembled(
+        nodeId: String,
+        variantsAccepted: Int,
+        bankFill: Int,
+        imagesReplaced: Int,
+        modelFailed: Boolean
+    ) = log("exam_assembled") {
+        putString("node_id", nodeId)
+        putInt("variants_accepted", variantsAccepted)
+        putInt("bank_fill", bankFill)
+        putInt("images_replaced", imagesReplaced)
+        putBoolean("model_failed", modelFailed)
+    }
+
     // ── EXAM DATE (Statistics, Home) ────────────────────────────────────────
 
     /**

@@ -100,7 +100,6 @@ import kotlinx.coroutines.launch
  * @param onStreakClick opens the streak detail screen
  * @param onChatClick opens the Chat tab (the first-steps "ask Bali" task)
  * @param onPlayGameClick starts a mini-game straight away (the first-steps game task)
- * @param onExamClick starts the first simulacro (the first-steps closing action)
  * @param onSeePlanClick opens the statistics tab, from the plan sheet
  * @param pathUnlockViewModel tells the path which nodes opened since Home last showed it
  */
@@ -114,7 +113,6 @@ fun HomeScreen(
     onStreakClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
     onPlayGameClick: () -> Unit = {},
-    onExamClick: () -> Unit = {},
     onSeePlanClick: () -> Unit = {},
     pathUnlockViewModel: PathUnlockViewModel = hiltViewModel()
 ) {
@@ -174,6 +172,8 @@ fun HomeScreen(
         bottomBar = {
             // Always a lesson with written questions, never a Gemini test: see firstStepTestNodeOf.
             val firstTestNode = uiState.firstStepTestNode
+            // The closing simulacro opens the first exam that is unlocked, never an exam out of nowhere.
+            val firstExamNode = uiState.firstStepExamNode
             FirstStepsBar(
                 progress = uiState.firstSteps,
                 reward = uiState.firstStepReward,
@@ -187,9 +187,12 @@ fun HomeScreen(
                     }
                 },
                 onExamClick = {
-                    viewModel.onFirstStepsExamClicked()
-                    onExamClick()
+                    firstExamNode?.let { node ->
+                        viewModel.onFirstStepsExamClicked()
+                        onNodeTestClick(node.title, node.description, node.id, node.nodeType.name)
+                    }
                 },
+                isExamEnabled = firstExamNode != null,
                 onDismissClick = {
                     // Nothing is lost once everything is paid, so only ask when it costs coins.
                     if (uiState.firstSteps?.isComplete == true) viewModel.dismissFirstSteps() else showDismissFirstSteps = true
