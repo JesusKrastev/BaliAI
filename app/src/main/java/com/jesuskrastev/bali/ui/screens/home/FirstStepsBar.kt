@@ -140,6 +140,8 @@ private sealed interface FirstStepsBarContent {
  * @param modifier layout modifier applied to the bar
  * @param isTaskEnabled whether a pending task can be started right now (the first test needs
  *   the learning path to exist)
+ * @param isExamEnabled whether the closing simulacro can be opened; it cannot until the student
+ *   has completed the first unit, because an exam only asks about what was studied
  */
 @Composable
 fun FirstStepsBar(
@@ -152,6 +154,7 @@ fun FirstStepsBar(
     onShown: () -> Unit,
     modifier: Modifier = Modifier,
     isTaskEnabled: (FirstStepTask) -> Boolean = { true },
+    isExamEnabled: Boolean = true,
 ) {
     val content: FirstStepsBarContent? = when {
         reward != null -> FirstStepsBarContent.Celebrating(reward)
@@ -197,7 +200,11 @@ fun FirstStepsBar(
                         onDismissClick = onDismissClick,
                         isTaskEnabled = isTaskEnabled,
                     )
-                    is FirstStepsBarContent.Exam -> ExamRow(onExamClick = onExamClick, onDismissClick = onDismissClick)
+                    is FirstStepsBarContent.Exam -> ExamRow(
+                        isEnabled = isExamEnabled,
+                        onExamClick = onExamClick,
+                        onDismissClick = onDismissClick,
+                    )
                     null -> Unit
                 }
             }
@@ -534,13 +541,15 @@ private fun CoinAmount(coins: Int, dimmed: Boolean = false) {
 }
 
 /**
- * Closing face: the three tasks are done, so the bar invites to the first simulacro.
+ * Closing face: the three tasks are done, so the bar invites to the first simulacro. Until the
+ * first unit is completed the invitation says what is missing and the button stays off.
  *
+ * @param isEnabled whether the simulacro can be opened yet
  * @param onExamClick opens the simulacro
  * @param onDismissClick hides the bar (nothing is lost any more)
  */
 @Composable
-private fun ExamRow(onExamClick: () -> Unit, onDismissClick: () -> Unit) {
+private fun ExamRow(isEnabled: Boolean, onExamClick: () -> Unit, onDismissClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -562,16 +571,17 @@ private fun ExamRow(onExamClick: () -> Unit, onDismissClick: () -> Unit) {
                 maxLines = 1,
             )
             Text(
-                text = "Haz tu primer simulacro",
+                text = if (isEnabled) "Haz tu primer simulacro" else "Termina tu primera unidad para desbloquearlo",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
         Button(
             onClick = onExamClick,
+            enabled = isEnabled,
             modifier = Modifier.height(36.dp),
             shape = RoundedCornerShape(12.dp),
             contentPadding = PaddingValues(horizontal = 14.dp),

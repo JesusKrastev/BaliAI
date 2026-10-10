@@ -199,6 +199,7 @@ class HomeViewModel @Inject constructor(
                 // taken, so an unfinished task keeps its coins available even after an exam.
                 firstSteps = user.firstSteps.takeIf { it.isActive && !(it.isComplete && results.hasTakenExam) },
                 firstStepTestNode = firstStepTestNodeOf(path.nodes),
+                firstStepExamNode = firstStepExamNodeOf(path.nodes),
                 firstStepReward = firstStepReward
             )
         }

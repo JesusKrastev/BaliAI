@@ -25,6 +25,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
+import com.jesuskrastev.bali.util.FakeImagePrefetcher
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -67,6 +69,8 @@ class TestViewModelTest {
             incrementCoinsUseCase = fakeIncrementCoinsUseCase,
             completeFirstStepUseCase = fakeCompleteFirstStepUseCase,
             pathRepository = fakePathRepository,
+            imagePrefetcher = FakeImagePrefetcher(),
+            completePathNodeUseCase = CompletePathNodeUseCase(fakePathRepository),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = fakeSoundEffects,
             savedStateHandle = SavedStateHandle()

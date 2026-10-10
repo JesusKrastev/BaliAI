@@ -27,3 +27,18 @@ internal fun firstStepTestNodeOf(
     return lessons.firstOrNull { it.status == NodeStatus.UNLOCKED }
         ?: lessons.lastOrNull { it.status == NodeStatus.COMPLETED }
 }
+
+/**
+ * Picks the exam the first-steps bar's closing "Simulacro" button opens.
+ *
+ * An exam only asks about the lessons of its unit that the student has completed, so the button
+ * has nothing to open until the first unit's exam is unlocked: the first simulacro cannot be
+ * taken before the unit is studied.
+ *
+ * @param pathNodes the student's learning path, in any order.
+ * @return the earliest exam node that is unlocked, or null when none is yet.
+ */
+internal fun firstStepExamNodeOf(pathNodes: List<LessonNode>): LessonNode? =
+    pathNodes
+        .filter { it.nodeType == NodeType.EXAM && it.status == NodeStatus.UNLOCKED }
+        .minByOrNull { it.orderIndex }

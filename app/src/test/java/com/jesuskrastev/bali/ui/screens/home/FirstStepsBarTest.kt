@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.ui.screens.home
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -37,11 +38,13 @@ class FirstStepsBarTest {
      * @param progress the card's progress, or null for an account outside the first-steps window
      * @param reward coins waiting to be celebrated
      * @param isTaskEnabled which pending tasks can start right now
+     * @param isExamEnabled whether the closing simulacro can be opened yet
      */
     private fun setBar(
         progress: FirstStepsProgress?,
         reward: FirstStepReward? = null,
         isTaskEnabled: (FirstStepTask) -> Boolean = { true },
+        isExamEnabled: Boolean = true,
     ) {
         composeTestRule.setContent {
             BaliTheme(darkTheme = false) {
@@ -54,6 +57,7 @@ class FirstStepsBarTest {
                     onRewardShown = { rewardsShown++ },
                     onShown = {},
                     isTaskEnabled = isTaskEnabled,
+                    isExamEnabled = isExamEnabled,
                 )
             }
         }
@@ -107,6 +111,21 @@ class FirstStepsBarTest {
         composeTestRule.onNodeWithText("Simulacro").performClick()
 
         assertThat(examClicks).isEqualTo(1)
+    }
+
+    @Test
+    fun `the simulacro waits for the first unit and says so`() {
+        setBar(enrolled.copy(completed = FirstStepTask.entries.toSet()), isExamEnabled = false)
+
+        composeTestRule.onNodeWithText("Termina tu primera unidad para desbloquearlo").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Simulacro").assertIsNotEnabled()
+    }
+
+    @Test
+    fun `once the first exam is unlocked the simulacro button opens it`() {
+        setBar(enrolled.copy(completed = FirstStepTask.entries.toSet()), isExamEnabled = true)
+
+        composeTestRule.onNodeWithText("Simulacro").assertIsEnabled()
     }
 
     @Test
