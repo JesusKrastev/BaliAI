@@ -6,6 +6,7 @@ import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.domain.model.ExamRules
 import com.jesuskrastev.bali.domain.model.TestResult
 import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -14,6 +15,7 @@ import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
 import com.jesuskrastev.bali.ui.screens.auth.FakeUserRepository
 import com.jesuskrastev.bali.ui.screens.exam.ExamEvent
 import com.jesuskrastev.bali.ui.screens.exam.ExamViewModel
+import com.jesuskrastev.bali.util.FakeImagePrefetcher
 import com.jesuskrastev.bali.util.FakeSoundEffects
 import com.jesuskrastev.bali.util.MainDispatcherRule
 import com.jesuskrastev.bali.util.RecordingAnswerRepository
@@ -52,6 +54,8 @@ class ResultMilestonesViewModelTest {
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
             completeFirstStepUseCase = CompleteFirstStepUseCase(userRepository, PendingFirstStepRewards()),
             pathRepository = FakePathRepository(),
+            imagePrefetcher = FakeImagePrefetcher(),
+            completePathNodeUseCase = CompletePathNodeUseCase(FakePathRepository()),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle()
@@ -85,10 +89,13 @@ class ResultMilestonesViewModelTest {
             userRepository = userRepository,
             testResultRepository = StaticTestResultRepository(earlier),
             answerRepository = RecordingAnswerRepository(),
+            pathRepository = FakePathRepository(),
             gemini = mock(),
+            imagePrefetcher = FakeImagePrefetcher(),
             incrementStreakUseCase = IncrementStreakUseCase(userRepository),
             incrementXpUseCase = IncrementXpUseCase(userRepository),
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
+            completePathNodeUseCase = CompletePathNodeUseCase(FakePathRepository()),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle(mapOf("exam_saved_session" to session))

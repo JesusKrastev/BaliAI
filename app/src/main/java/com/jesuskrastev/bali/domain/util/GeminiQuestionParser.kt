@@ -36,7 +36,22 @@ object GeminiQuestionParser {
      * @return the parsed questions, skipping any entry that is malformed.
      * @throws IllegalArgumentException when the text holds no JSON object at all.
      */
-    fun parse(rawText: String, random: Random = Random.Default): List<QuestionUiState> {
+    fun parse(rawText: String, random: Random = Random.Default): List<QuestionUiState> =
+        parseWithSource(rawText, random).map { it.question }
+
+    /** A parsed question with the number of the study-material question it was written from, if the model said. */
+    data class SourcedQuestion(val sourceIndex: Int?, val question: QuestionUiState)
+
+    /**
+     * Like [parse], but keeps the `sourceIndex` the model attached to each question, which a review
+     * uses to hand the picture of the original question back to its rewrite.
+     *
+     * @param rawText the model's reply; JSON, optionally wrapped in other text.
+     * @param random source of shuffling, overridable so tests can pin the order.
+     * @return the parsed questions with their source numbers, skipping any malformed entry.
+     * @throws IllegalArgumentException when the text holds no JSON object at all.
+     */
+    fun parseWithSource(rawText: String, random: Random = Random.Default): List<SourcedQuestion> {
         val root = GeminiJson.parseObject(rawText)
 
         return root["questions"]?.jsonArray?.mapNotNull { element ->
@@ -46,16 +61,31 @@ object GeminiQuestionParser {
                 val correctIndex = obj["correctAnswerIndex"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                 val shuffled = options.shuffledKeepingAnswer(correctIndex, random)
 
-                QuestionUiState(
-                    text = obj["text"]?.jsonPrimitive?.content.orEmpty(),
-                    options = shuffled.options,
-                    correctAnswerIndex = shuffled.correctAnswerIndex,
-                    explanation = obj["explanation"]?.jsonPrimitive?.content.orEmpty(),
-                    imageUrl = obj["imageUrl"]?.jsonPrimitive?.content
-                        ?.takeIf { it != "null" && it.startsWith("http") }
+                SourcedQuestion(
+                    sourceIndex = obj["sourceIndex"]?.jsonPrimitive?.content?.toIntOrNull(),
+                    question = QuestionUiState(
+                        text = obj["text"]?.jsonPrimitive?.content.orEmpty(),
+                        options = shuffled.options,
+                        correctAnswerIndex = shuffled.correctAnswerIndex,
+                        explanation = obj["explanation"]?.jsonPrimitive?.content.orEmpty(),
+                        imageUrl = obj["imageUrl"]?.jsonPrimitive?.content
+                            ?.takeIf { it != "null" && it.startsWith("http") }
+                    )
                 )
             }.getOrNull()
         } ?: emptyList()
+    }
+
+    /**
+     * Reorders one question's options at random, keeping the correct answer pointing at the right text.
+     *
+     * @param question the question to shuffle; its options and `correctAnswerIndex` are replaced.
+     * @param random source of shuffling, overridable so tests can pin the order.
+     * @return a copy of [question] with its options in a new order.
+     */
+    fun shuffleOptions(question: QuestionUiState, random: Random = Random.Default): QuestionUiState {
+        val shuffled = question.options.shuffledKeepingAnswer(question.correctAnswerIndex, random)
+        return question.copy(options = shuffled.options, correctAnswerIndex = shuffled.correctAnswerIndex)
     }
 
     /** A question's options together with the position its correct answer ended up in. */

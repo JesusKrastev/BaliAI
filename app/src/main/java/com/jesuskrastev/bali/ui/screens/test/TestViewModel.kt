@@ -7,6 +7,14 @@ import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.audio.SoundEffects
+import com.jesuskrastev.bali.domain.exam.ExamScope
+import com.jesuskrastev.bali.domain.exam.ImagePrefetcher
+import com.jesuskrastev.bali.domain.exam.PendingMistakes
+import com.jesuskrastev.bali.domain.exam.ScopedExamComposer
+import com.jesuskrastev.bali.domain.exam.ScopedExamPrompt
+import com.jesuskrastev.bali.domain.exam.ScopedReviewComposer
+import com.jesuskrastev.bali.domain.exam.ScopedReviewPrompt
+import com.jesuskrastev.bali.domain.exam.unloadableAmong
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
@@ -22,6 +30,7 @@ import com.jesuskrastev.bali.domain.model.ShopInventoryItem
 import com.jesuskrastev.bali.domain.path.LessonQuestionBank
 import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.usecase.CompleteFirstStepUseCase
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -29,6 +38,8 @@ import com.jesuskrastev.bali.domain.util.GeminiQuestionParser
 import com.jesuskrastev.bali.domain.util.QuestionId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,6 +110,8 @@ class TestViewModel @Inject constructor(
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
     private val completeFirstStepUseCase: CompleteFirstStepUseCase,
     private val pathRepository: PathRepository,
+    private val imagePrefetcher: ImagePrefetcher,
+    private val completePathNodeUseCase: CompletePathNodeUseCase,
     private val analytics: AnalyticsTracker,
     private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
@@ -225,7 +238,7 @@ class TestViewModel @Inject constructor(
         // Route based on node type
         when (nodeType) {
             "LESSON" -> loadStaticQuestions(id)
-            "REVIEW", "EXAM" -> generateGeminiTest()
+            "REVIEW" -> generateReview()
             else -> generateGeminiTest()
         }
     }
@@ -320,6 +333,7 @@ class TestViewModel @Inject constructor(
         // Respect node type on retry
         when (aiNodeType) {
             "LESSON" -> loadStaticQuestions(aiNodeId)
+            "REVIEW" -> generateReview(reason = "retry")
             else -> generateGeminiTest(reason = "retry")
         }
     }
@@ -349,18 +363,7 @@ class TestViewModel @Inject constructor(
                     "Sin tests previos."
                 }
 
-                // Context of failures for REVIEW and EXAM
-                val sectionFailuresContext = if (aiNodeType == "REVIEW" || aiNodeType == "EXAM") {
-                    buildSectionFailuresContext()
-                } else ""
-
                 val topicInstruction = when {
-                    aiNodeTitle != null && (aiNodeType == "REVIEW" || aiNodeType == "EXAM") -> """
-                        Tu misión es generar un ${if (aiNodeType == "EXAM") "EXAMEN DE SECCIÓN" else "REPASO"} de 10 preguntas sobre: $aiNodeTitle.
-                        $sectionFailuresContext
-                        INSTRUCCIÓN CLAVE: Basa el 60% de las preguntas en los conceptos donde el usuario ha fallado más.
-                        El 40% restante cubre el resto de la sección para una revisión completa.
-                    """.trimIndent()
                     aiNodeTitle != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE enfocada en: Titulo: $aiNodeTitle. Descripción: ${aiNodeDescription ?: ""}. Adapta la dificultad al nivel del alumno."
                     currentTopic != null -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas EXCLUSIVAMENTE sobre el tema: $currentTopic. Adapta la dificultad al nivel del alumno."
                     else -> "Tu misión es generar una SESIÓN DE PRÁCTICA de 10 preguntas. Analiza su historial: $historyContext. ELIGE UNA categoría de esta lista (Prioriza las que NO se han practicado recientemente o cruza con los temas que más le cuestan: $difficultTopics): Alumbrado, Prioridad, Maniobras, Velocidad, El conductor, Mecánica, Documentación, Usuarios de la vía, Señales, Marcas viales."
@@ -386,12 +389,8 @@ class TestViewModel @Inject constructor(
                     - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente. Ejemplos obligatorios: uso de la baliza luminosa V-16 (los triángulos ya no son obligatorios en autopista/autovía), límites de velocidad a 30 km/h en vías urbanas de un único carril, nuevas normativas de VMP (patinetes eléctricos) y las señales de tráfico de nueva creación. Cero información obsoleta.
                     - TRAMPAS TÍPICAS DGT: Haz que las respuestas incorrectas sean muy atractivas usando el lenguaje de la DGT. Juega con matices como "siempre", "nunca", "sólo", o "como norma general" para poner a prueba la atención del alumno.
                     
-                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
-                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física.
-                    - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - Codigos ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teórica (ej: tasa de alcohol), usa null.
-                    
+                    SIN IMÁGENES: deja imageUrl a null en todas las preguntas y no hagas referencia a imágenes ni figuras; cada pregunta debe poder contestarse leyendo.
+
                     Genera EXACTAMENTE 10 preguntas e indica en "selectedCategory" la categoría elegida.
                     """.trimIndent()
 
@@ -410,7 +409,7 @@ class TestViewModel @Inject constructor(
                 val rawText = response.text ?: throw Exception("Sin respuesta")
 
                 val category = GeminiQuestionParser.selectedCategory(rawText) ?: currentTopic ?: "Práctica General"
-                val questionUiStates = GeminiQuestionParser.parse(rawText)
+                val questionUiStates = GeminiQuestionParser.parse(rawText).map { it.copy(imageUrl = null) }
                 require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
 
                 startTime = System.currentTimeMillis()
@@ -428,28 +427,116 @@ class TestViewModel @Inject constructor(
         }
     }
 
-    // Builds context of recent failures for REVIEW/EXAM prompts
-    private suspend fun buildSectionFailuresContext(): String {
-        return try {
-            val allAnswers = answerRepository.getAll().first()
-            val mistakes = allAnswers.filter { !it.isCorrect }.takeLast(50)
-            if (mistakes.isEmpty()) return ""
+    /**
+     * Builds the review of this unit: the questions of its completed lessons that the student still
+     * gets wrong (the unit's own questions when there is none), up to 10.
+     *
+     * Each question is a harder rewording of one mistake. A question that came with a picture keeps that picture, taken from the bank
+     * and not from Gemini, so question and picture always agree; if the picture does not load, the
+     * question is swapped for a text one. What Gemini does not rewrite properly stays as the bank
+     * wrote it, so a failing model never leaves the student without a review.
+     *
+     * @param reason why this build is happening — `"initial"`/`"process_restart"` (from
+     *   [determineReason]) or `"retry"` — logged with the real token cost of the Gemini call.
+     */
+    private fun generateReview(reason: String = determineReason()) {
+        _uiState.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            try {
+                val nodeId = aiNodeId ?: error("Este repaso no pertenece a ninguna unidad.")
+                val user = userRepository.get().first()
+                val path = pathRepository.getPathNodes(user?.id.orEmpty()).first()
+                val node = path.find { it.id == nodeId } ?: error("No se encontró la unidad de este repaso.")
 
-            val frequentMistakes = mistakes
-                .groupBy { it.questionText }
-                .entries
-                .sortedByDescending { it.value.size }
-                .take(5)
-                .joinToString("\n") { (questionText, answers) ->
-                    "- Falló ${answers.size} veces en: '${questionText.take(80)}'"
+                val lessons = ExamScope.lessonsFor(node, path)
+                check(lessons.isNotEmpty()) { "Completa alguna lección de esta unidad para poder repasarla." }
+
+                val plan = ScopedReviewComposer.plan(lessons, PendingMistakes.idsOf(answerRepository.getAll().first()))
+                val prompt = ScopedReviewPrompt.build(
+                    scopeTitle = node.title,
+                    sources = plan.sources,
+                    student = ScopedExamPrompt.Student(
+                        license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)",
+                        level = user?.level ?: 1,
+                        experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida",
+                        difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico",
+                        totalTests = testResultRepository.count().first(),
+                        daysToExam = null
+                    )
+                )
+
+                savedStateHandle[KEY_GENERATION_STARTED] = true
+                // The model and the picture checks do not depend on each other, so they overlap.
+                val (rewrites, brokenUrls) = coroutineScope {
+                    val rewrites = async { requestReviewRewrites(prompt, reason) }
+                    val broken = async {
+                        imagePrefetcher.unloadableAmong(plan.sources.mapNotNull { it.question.imageUrl })
+                    }
+                    rewrites.await() to broken.await()
                 }
 
-            """
-            CONTEXTO DE FALLOS RECIENTES DEL USUARIO:
-            $frequentMistakes
-            """.trimIndent()
+                val assembly = ScopedReviewComposer.assemble(plan, rewrites ?: emptyList())
+                val questions = ScopedExamComposer.replaceBrokenImages(
+                    assembly.questions, assembly.reserve, brokenUrls
+                )
+                analytics.examAssembled(
+                    nodeId = nodeId,
+                    variantsAccepted = assembly.rewritten,
+                    bankFill = assembly.questions.size - assembly.rewritten,
+                    imagesReplaced = assembly.questions.count { it.imageUrl in brokenUrls },
+                    modelFailed = rewrites == null
+                )
+                check(questions.size == plan.sources.size) {
+                    "No se pudo preparar el repaso. Revisa tu conexión e inténtalo de nuevo."
+                }
+
+                startTime = System.currentTimeMillis()
+                _uiState.update {
+                    it.copy(
+                        category = aiNodeTitle ?: "Repaso",
+                        questions = questions,
+                        isLoading = false,
+                        error = null
+                    )
+                }
+                persistSession()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
+            }
+        }
+    }
+
+    /**
+     * Asks Gemini to reword the review's questions.
+     *
+     * @param prompt what [ScopedReviewPrompt.build] wrote
+     * @param reason why the call happens, logged with the tokens it cost
+     * @return the rewrites with the source number each quoted, or null when the call failed or
+     *   came back unreadable
+     */
+    private suspend fun requestReviewRewrites(
+        prompt: String,
+        reason: String
+    ): List<GeminiQuestionParser.SourcedQuestion>? {
+        return try {
+            val response = gemini.generateContent(prompt)
+
+            // Logged as soon as the response is back: tokens are billed whether or not it parses.
+            val usage = response.usageMetadata
+            analytics.testGenerated(
+                reason = reason,
+                inputTokens = usage?.promptTokenCount ?: 0,
+                outputTokens = usage?.candidatesTokenCount ?: 0
+            )
+
+            val rawText = response.text ?: return null
+            GeminiQuestionParser.parseWithSource(rawText)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            ""
+            null
         }
     }
 
@@ -632,35 +719,7 @@ class TestViewModel @Inject constructor(
             // 4. Update path if coming from a path node: always record the attempt on the
             // current node, but only unlock the next one once the score clears the bar.
             if (aiNodeId != null) {
-
-                // 4a. Mark current node as COMPLETED (with its real score) and WAIT for confirmation
-                pathRepository.updateNodeStatus(
-                    userId,
-                    aiNodeId!!,
-                    NodeStatus.COMPLETED.name,
-                    accuracy
-                )
-
-                // 4b. Read updated state (update already finished)
-                val allNodes = pathRepository.getPathNodes(userId).first()
-                val currentNode = allNodes.find { it.id == aiNodeId }
-
-                if (currentNode != null && accuracy >= PASSING_ACCURACY) {
-                    // Find the next LOCKED node with immediately higher orderIndex
-                    val nextLockedNode = allNodes
-                        .filter { it.orderIndex > currentNode.orderIndex }
-                        .minByOrNull { it.orderIndex }
-
-                    if (nextLockedNode != null && nextLockedNode.status == NodeStatus.LOCKED) {
-                        // 4c. Unlock the next node
-                        pathRepository.updateNodeStatus(
-                            userId,
-                            nextLockedNode.id,
-                            NodeStatus.UNLOCKED.name,
-                            null
-                        )
-                    }
-                }
+                completePathNodeUseCase(userId, aiNodeId!!, accuracy)
             }
         }
 
@@ -687,8 +746,6 @@ class TestViewModel @Inject constructor(
         private const val KEY_SESSION = "test_saved_session"
         private const val KEY_GENERATION_STARTED = "test_generation_started"
 
-        /** Minimum accuracy percentage required to unlock the next node on the learning path. */
-        private const val PASSING_ACCURACY = 70
     }
 
     @Serializable
