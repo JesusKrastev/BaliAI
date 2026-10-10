@@ -7,15 +7,25 @@ import com.google.firebase.ai.GenerativeModel
 import com.jesuskrastev.bali.data.analytics.AnalyticsTracker
 import com.jesuskrastev.bali.di.QuestionsModel
 import com.jesuskrastev.bali.domain.audio.SoundEffects
+import com.jesuskrastev.bali.domain.exam.ExamScope
+import com.jesuskrastev.bali.domain.exam.ImagePrefetcher
+import com.jesuskrastev.bali.domain.exam.PendingMistakes
+import com.jesuskrastev.bali.domain.exam.ScopedExamComposer
+import com.jesuskrastev.bali.domain.exam.ScopedExamPrompt
+import com.jesuskrastev.bali.domain.exam.unloadableAmong
 import com.jesuskrastev.bali.domain.repository.AnswerRepository
+import com.jesuskrastev.bali.domain.repository.PathRepository
 import com.jesuskrastev.bali.domain.repository.TestResultRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import com.jesuskrastev.bali.domain.model.Answer
 import com.jesuskrastev.bali.domain.model.AnswerMode
 import com.jesuskrastev.bali.domain.model.ExamRules
+import com.jesuskrastev.bali.domain.model.NodeStatus
 import com.jesuskrastev.bali.domain.model.ResultMilestones
 import com.jesuskrastev.bali.domain.model.TestMode
 import com.jesuskrastev.bali.domain.model.TestResult
+import com.jesuskrastev.bali.domain.model.User
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
@@ -24,8 +34,11 @@ import com.jesuskrastev.bali.domain.util.QuestionId
 import com.jesuskrastev.bali.ui.screens.test.QuestionUiState
 import com.jesuskrastev.bali.ui.screens.test.TestSummary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,10 +71,13 @@ class ExamViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val testResultRepository: TestResultRepository,
     private val answerRepository: AnswerRepository,
+    private val pathRepository: PathRepository,
     @QuestionsModel private val gemini: GenerativeModel,
+    private val imagePrefetcher: ImagePrefetcher,
     private val incrementStreakUseCase: IncrementStreakUseCase,
     private val incrementXpUseCase: IncrementXpUseCase,
     private val incrementCoinsUseCase: IncrementCoinsUseCase,
+    private val completePathNodeUseCase: CompletePathNodeUseCase,
     private val analytics: AnalyticsTracker,
     private val soundEffects: SoundEffects,
     private val savedStateHandle: SavedStateHandle
@@ -69,6 +85,9 @@ class ExamViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ExamUiState())
     val uiState: StateFlow<ExamUiState> = _uiState.asStateFlow()
+
+    /** The path node this exam belongs to, from the route's `nodeId` argument. */
+    private val examNodeId: String? = savedStateHandle.get<String>(KEY_NODE_ID)
 
     private var timerJob: Job? = null
     private var startTime: Long = 0
@@ -215,100 +234,125 @@ class ExamViewModel @Inject constructor(
     }
 
     /**
-     * Calls Gemini for a fresh 30-question exam — the single most expensive generation in
-     * the app.
+     * Builds the exam from the lessons this exam's path node covers, see [ExamScope].
      *
-     * @param reason why this call is happening — `"initial"`/`"process_restart"` (from
-     *   [determineReason]) or `"retry"` — logged alongside the real token cost once the
-     *   response comes back, so cost spikes can be traced to the reason that caused them.
+     * Gemini rewrites part of those lessons' own questions while their pictures are checked at the
+     * same time; the result is put together by [ScopedExamComposer]. If Gemini fails the exam is
+     * made of bank questions alone, so a bad connection to the model no longer costs the student
+     * the exam. Only a student who has studied nothing in scope, or whose pictures cannot be
+     * loaded and leave the exam short, gets an error.
+     *
+     * @param reason why this build is happening — `"initial"`/`"process_restart"` (from
+     *   [determineReason]) or `"retry"` — logged alongside the real token cost of the Gemini call.
      */
     private fun generateExam(reason: String = determineReason()) {
         viewModelScope.launch {
             try {
+                val nodeId = examNodeId ?: error("Este examen no pertenece a ninguna unidad.")
                 val user = userRepository.get().first()
-                val license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)"
-                val difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() }
-                    ?: "Ninguno específico (distribución estándar)"
-                val studentLevel = user?.level ?: 1
-                val experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida"
-                val daysToExam = user?.examDateMillis?.let {
-                    val diffMillis = it - System.currentTimeMillis()
-                    (diffMillis / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
-                }
-                val totalTests = testResultRepository.count().first()
-                val examUrgency = if (daysToExam != null && daysToExam in 1..15) {
-                    "¡El examen es en $daysToExam días! Sé estricto y pon preguntas de alta probabilidad de fallo."
-                } else {
-                    "Modo simulacro estándar."
-                }
+                val path = pathRepository.getPathNodes(user?.id.orEmpty()).first()
+                val examNode = path.find { it.id == nodeId } ?: error("No se encontró la unidad de este examen.")
 
-                val prompt = """
-                    Eres el Examinador Jefe de la DGT (Dirección General de Tráfico) en España. Tu misión es generar un EXAMEN OFICIAL COMPLETO y riguroso de EXACTAMENTE 30 preguntas.
-                    
-                    CONTEXTO DEL ALUMNO (PERSONALIZACIÓN):
-                    - Permiso al que aspira: Permiso $license.
-                    - Nivel actual en la app: $studentLevel (A mayor nivel, usa distractores más complejos y sutiles).
-                    - Total de tests realizados: $totalTests (Si son pocos, haz explicaciones más didácticas paso a paso. Si son muchos, asume que tiene experiencia y usa un tono más exigente).
-                    - Experiencia previa: $experience.
-                    - Temas que más le cuestan: $difficultTopics. (IMPORTANTE: Asegúrate de que varias preguntas del examen ataquen estos puntos débiles específicos para que practique).
-                    - Urgencia: $examUrgency
-                    
-                    REGLAS DE DISTRIBUCIÓN (ESTRICTAS PARA 30 PREGUNTAS):
-                    - Debe ser un simulacro exacto del examen real para el permiso $license.
-                    - Variedad obligatoria. Distribuye las preguntas así: Señales (aprox. 6), Normativa y Velocidad (aprox. 6), Seguridad Vial y Accidentes (aprox. 5), Maniobras e Intersecciones (aprox. 5), El Conductor, fatiga y Alcohol/Drogas (aprox. 5), Mecánica básica y Mantenimiento (aprox. 3).
-                    - Si los "Temas que más le cuestan" encajan en alguna de estas categorías, aumenta la dificultad de esas preguntas específicas.
-                    
-                    REGLAS DE LA PREGUNTA Y OPCIONES:
-                    - Estilo DGT oficial: Lenguaje técnico, preciso y con situaciones hipotéticas ("Circula por una vía...", "Como norma general...").
-                    - 3 opciones por pregunta con el TEXTO REAL de la respuesta (no pongas solo "A", "B" o "C"). Solo una es correcta.
-                    - Las respuestas incorrectas (distractores) deben ser muy creíbles y usar trampas típicas de la DGT (ej. usar absolutos como "siempre" o "nunca" para confundir).
-                    - EXPLICACIÓN: Máximo 20 palabras. Debe ser clara, pedagógica y justificar la norma. Intenta darle un toque motivador o de tutor si falla en sus temas difíciles.
-                    
-                    REGLAS DE CALIDAD Y ACTUALIZACIÓN (¡MUY IMPORTANTE!):
-                    - NORMATIVA VIGENTE: Usa SIEMPRE la ley de tráfico española más reciente (ej. baliza V-16 en lugar de triángulos en autopista, límites de 30 km/h en vías urbanas de un carril, nueva normativa de VMP/patinetes, 0,0 alcohol para menores).
-                    
-                    REGLAS DE IMÁGENES (SISTEMA FILEPATH):
-                    - Usa imágenes SOLO si la pregunta describe una situación visual o una señal física. (Máximo 10-12 imágenes en todo el examen para no saturar).
-                    - Formato obligatorio: https://commons.wikimedia.org/wiki/Special:FilePath/Spain_traffic_signal[codigo].svg
-                    - Códigos válidos de ejemplo: r1 (ceda), r2 (stop), p1 (peligro), r301 (velocidad 40), s1 (autopista).
-                    - Si la pregunta es puramente teórica (ej: tasa de alcohol, mecánica), usa null.
-                    
-                    Genera EXACTAMENTE 30 preguntas.
-                """.trimIndent()
+                val lessons = ExamScope.lessonsFor(examNode, path)
+                check(lessons.isNotEmpty()) { "Completa alguna lección de esta unidad para poder examinarte." }
+
+                val failedIds = PendingMistakes.idsOf(answerRepository.getAll().first())
+                val plan = ScopedExamComposer.plan(lessons, failedIds)
 
                 savedStateHandle[KEY_GENERATION_STARTED] = true
-                val response = gemini.generateContent(prompt)
-
-                // Logged as soon as the response is back — tokens are billed the moment
-                // Gemini answers, whether or not the JSON below turns out parseable.
-                val usage = response.usageMetadata
-                analytics.examGenerated(
-                    reason = reason,
-                    inputTokens = usage?.promptTokenCount ?: 0,
-                    outputTokens = usage?.candidatesTokenCount ?: 0
+                val prompt = ScopedExamPrompt.build(
+                    scopeTitle = examNode.title,
+                    sources = plan.sources,
+                    student = studentOf(user),
+                    questionCount = ScopedExamComposer.GENERATED_REQUESTED
                 )
+                // The model and the picture checks do not depend on each other, so they overlap.
+                val (variants, brokenUrls) = coroutineScope {
+                    val variants = async { requestVariants(prompt, reason) }
+                    val broken = async { imagePrefetcher.unloadableAmong(plan.verbatim.mapNotNull { it.imageUrl }) }
+                    variants.await() to broken.await()
+                }
 
-                val rawText = response.text ?: throw Exception("Sin respuesta")
-
-                val questionUiStates = GeminiQuestionParser.parse(rawText)
-                require(questionUiStates.isNotEmpty()) { "La IA no devolvió ninguna pregunta" }
+                val assembly = ScopedExamComposer.assemble(plan, variants ?: emptyList())
+                val questions = ScopedExamComposer.replaceBrokenImages(
+                    assembly.questions, assembly.reserve, brokenUrls
+                )
+                analytics.examAssembled(
+                    nodeId = nodeId,
+                    variantsAccepted = assembly.variantsAccepted,
+                    bankFill = assembly.bankFill,
+                    imagesReplaced = assembly.questions.count { it.imageUrl in brokenUrls },
+                    modelFailed = variants == null
+                )
+                check(questions.size == ExamRules.QUESTION_COUNT) {
+                    "No se pudo preparar el examen. Revisa tu conexión e inténtalo de nuevo."
+                }
 
                 startTime = System.currentTimeMillis()
                 examEndAtMillis = System.currentTimeMillis() + EXAM_DURATION_SECONDS * 1000L
                 _uiState.update {
                     it.copy(
-                        questions = questionUiStates,
+                        questions = questions,
                         isLoading = false,
                         timeLeftSeconds = EXAM_DURATION_SECONDS
                     )
                 }
                 startTimer()
                 persistSession()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage, isLoading = false) }
             }
         }
     }
+
+    /**
+     * Asks Gemini for new questions from the study material in [prompt].
+     *
+     * @param prompt what [ScopedExamPrompt.build] wrote
+     * @param reason why the call happens, logged with the tokens it cost
+     * @return the questions Gemini wrote, or null when the call failed or came back unreadable
+     */
+    private suspend fun requestVariants(prompt: String, reason: String): List<QuestionUiState>? {
+        return try {
+            val response = gemini.generateContent(prompt)
+
+            // Logged as soon as the response is back — tokens are billed the moment
+            // Gemini answers, whether or not the JSON below turns out parseable.
+            val usage = response.usageMetadata
+            analytics.examGenerated(
+                reason = reason,
+                inputTokens = usage?.promptTokenCount ?: 0,
+                outputTokens = usage?.candidatesTokenCount ?: 0
+            )
+
+            val rawText = response.text ?: return null
+            GeminiQuestionParser.parse(rawText)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Gathers what the prompt tells Gemini about the student.
+     *
+     * @param user the signed-in user, or null before the profile has loaded
+     * @return the student's permit, level, experience, weak topics and days to the exam
+     */
+    private suspend fun studentOf(user: User?): ScopedExamPrompt.Student =
+        ScopedExamPrompt.Student(
+            license = user?.licenseType?.takeIf { it.isNotBlank() } ?: "B (Coche)",
+            level = user?.level ?: 1,
+            experience = user?.experience?.takeIf { it.isNotBlank() } ?: "Desconocida",
+            difficultTopics = user?.difficultTopics?.takeIf { it.isNotBlank() } ?: "Ninguno específico",
+            totalTests = testResultRepository.count().first(),
+            daysToExam = user?.examDateMillis?.let {
+                ((it - System.currentTimeMillis()) / (1000 * 60 * 60 * 24)).coerceAtLeast(0)
+            }
+        )
 
     /**
      * Counts the clock down to [examEndAtMillis] once a second and flags [ExamUiState.isTimeUp]
@@ -386,6 +430,12 @@ class ExamViewModel @Inject constructor(
         _uiState.update { it.copy(showReviewGrid = !it.showReviewGrid) }
     }
 
+    /**
+     * Scores the finished exam: pays XP and coins, saves the result and every answer, advances the
+     * streak and, when the exam belongs to a path node, completes it (unlocking the next on a pass).
+     *
+     * @return the summary the result screen shows
+     */
     private suspend fun calculateResult(): TestSummary {
         timerJob?.cancel()
         val state = _uiState.value
@@ -400,11 +450,13 @@ class ExamViewModel @Inject constructor(
         val isPassed = ExamRules.isPassed(correct)
         var newStreakDays = -1
 
-        // Every EXAM path node opens this same generic simulator (no specific node is tracked
-        // here), so "repeat" means "not this user's first official exam" rather than "this exact
-        // content again" — otherwise a 100-coin exam would silently pay full XP every time.
+        val userId = userRepository.get().first()?.id.orEmpty()
+        // Read the node's status BEFORE this attempt overwrites it below: repeating an exam node
+        // that is already COMPLETED earns reduced XP, same as repeating a lesson.
+        val isRepeat = examNodeId?.let { nodeId ->
+            pathRepository.getPathNodes(userId).first().find { it.id == nodeId }?.status == NodeStatus.COMPLETED
+        } ?: false
         val previousResults = runCatching { testResultRepository.get().first() }.getOrNull()
-        val isRepeat = previousResults.orEmpty().any { it.category == ExamRules.OFFICIAL_EXAM_CATEGORY }
         // Only judged when the earlier results could be read, so a failed read never invents a record.
         val previousBest = previousResults?.let { ResultMilestones.bestExamScore(it) }
         val isNewRecord = ResultMilestones.isNewExamRecord(correct, previousBest)
@@ -452,6 +504,7 @@ class ExamViewModel @Inject constructor(
             }
 
             newStreakDays = incrementStreakUseCase()
+            examNodeId?.let { completePathNodeUseCase(userId, it, accuracy) }
         }
 
         return TestSummary(
@@ -485,6 +538,9 @@ class ExamViewModel @Inject constructor(
     companion object {
         /** The exam's fixed time limit, matching [ExamUiState]'s default `timeLeftSeconds`. */
         private const val EXAM_DURATION_SECONDS = 1800
+
+        /** Name of the route argument carrying the exam's path node, see `ExamRoute`. */
+        private const val KEY_NODE_ID = "nodeId"
 
         private const val KEY_SESSION = "exam_saved_session"
         private const val KEY_GENERATION_STARTED = "exam_generation_started"

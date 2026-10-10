@@ -35,8 +35,13 @@ data class TestRoute(
     val nodeType: String? = null
 )
 
+/**
+ * An exam of the learning path.
+ *
+ * @property nodeId id of the path node being examined; it decides which lessons the exam asks about
+ */
 @Serializable
-object ExamRoute
+data class ExamRoute(val nodeId: String)
 
 @Serializable
 object ShopRoute

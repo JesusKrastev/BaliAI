@@ -50,6 +50,9 @@ data class HomeUiState(
     val firstSteps: FirstStepsProgress? = null,
     /** Lesson the "Haz tu primer test" step opens (see [firstStepTestNodeOf]), or null when there is none. */
     val firstStepTestNode: LessonNode? = null,
+
+    /** Exam the first-steps closing action opens (see [firstStepExamNodeOf]), or null while none is unlocked. */
+    val firstStepExamNode: LessonNode? = null,
     /** Coins just earned on another screen that Home has yet to celebrate, if any. */
     val firstStepReward: FirstStepReward? = null
 )

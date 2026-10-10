@@ -17,6 +17,9 @@ import com.jesuskrastev.bali.util.RecordingAnswerRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
+import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
+import com.jesuskrastev.bali.util.FakeImagePrefetcher
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -45,10 +48,13 @@ class ExamViewModelAnswersTest {
             userRepository = userRepository,
             testResultRepository = FakeTestResultRepository(),
             answerRepository = answers,
+            pathRepository = FakePathRepository(),
             gemini = mock(),
+            imagePrefetcher = FakeImagePrefetcher(),
             incrementStreakUseCase = IncrementStreakUseCase(userRepository),
             incrementXpUseCase = IncrementXpUseCase(userRepository),
             incrementCoinsUseCase = IncrementCoinsUseCase(userRepository),
+            completePathNodeUseCase = CompletePathNodeUseCase(FakePathRepository()),
             analytics = mock<AnalyticsTracker>(),
             soundEffects = FakeSoundEffects(),
             savedStateHandle = SavedStateHandle(mapOf("exam_saved_session" to session))
