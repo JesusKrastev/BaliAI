@@ -138,6 +138,7 @@ fun HomeScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column {
+                FeedbackBanner()
                 UserStatusRow(
                     modifier = Modifier
                         .fillMaxWidth()

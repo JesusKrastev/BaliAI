@@ -404,8 +404,8 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
     /** Whether a push would be shown; tests set it to simulate the permission and the opt-out. */
     override val pushesAllowed = MutableStateFlow(true)
 
-    /** The categories whose channel the user turned off in Android's settings; tests fill it to simulate that. */
-    val disabledCategories = mutableSetOf<NotificationCategory>()
+    /** The categories switched off in Settings; null until the switches are first used. */
+    override val disabledCategories = MutableStateFlow<Set<NotificationCategory>?>(null)
 
     /** What [enablePushes] answers; [EnablePushesResult.ENABLED] also lets pushes through. */
     var enableResult = EnablePushesResult.ENABLED
@@ -414,7 +414,10 @@ class FakeNotificationsRepository(private val grantsPermission: Boolean = true) 
         private set
 
     override suspend fun saveStudySchedule(schedule: StudySchedule) { _studySchedule.value = schedule }
-    override fun isCategoryEnabled(category: NotificationCategory): Boolean = category !in disabledCategories
+    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
+        val current = disabledCategories.value.orEmpty()
+        disabledCategories.value = if (enabled) current - category else current + category
+    }
     override suspend fun requestPermission(): Boolean {
         permissionRequests++
         return grantsPermission

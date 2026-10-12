@@ -54,11 +54,10 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `a channel the user turned off in Android shows as off once Settings is opened again`() = runTest {
+    fun `switching a category off shows it as off and leaves the others on`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
 
-        fakeNotifications.disabledCategories.add(NotificationCategory.PROMOTIONS)
-        viewModel.refreshNotificationChannels()
+        viewModel.setCategoryEnabled(NotificationCategory.PROMOTIONS, false)
 
         assertThat(viewModel.uiState.value.disabledNotificationCategories)
             .containsExactly(NotificationCategory.PROMOTIONS)
@@ -66,19 +65,15 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `a channel turned back on stops showing as off`() = runTest {
-        fakeNotifications.disabledCategories.add(NotificationCategory.STREAK)
-        viewModel = SettingsViewModel(
-            FakeUserRepository(), FakeAuthRepository(), analyticsTracker, fakeSoundEffects, fakeNotifications
-        )
+    fun `switching a category back on stops showing it as off`() = runTest {
         val collectJob = launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect {} }
+        viewModel.setCategoryEnabled(NotificationCategory.STREAK, false)
+        viewModel.setCategoryEnabled(NotificationCategory.STUDY, false)
+
+        viewModel.setCategoryEnabled(NotificationCategory.STREAK, true)
+
         assertThat(viewModel.uiState.value.disabledNotificationCategories)
-            .containsExactly(NotificationCategory.STREAK)
-
-        fakeNotifications.disabledCategories.clear()
-        viewModel.refreshNotificationChannels()
-
-        assertThat(viewModel.uiState.value.disabledNotificationCategories).isEmpty()
+            .containsExactly(NotificationCategory.STUDY)
         collectJob.cancel()
     }
 

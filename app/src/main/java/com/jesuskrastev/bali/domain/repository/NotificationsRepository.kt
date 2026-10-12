@@ -33,15 +33,20 @@ interface NotificationsRepository {
     val pushesAllowed: Flow<Boolean>
 
     /**
-     * Whether the user left a category's notification channel on. Each category has its own
-     * channel in Android's settings, and a push sent to a channel the user turned off is
-     * never shown; the app can read that choice but only the user can change it.
-     *
-     * @param category the kind of notification to look up
-     * @return false when the user turned the channel off; true otherwise, also below Android 8,
-     *   which has no channels
+     * The kinds of notification the user switched off inside the app, or null on a device where
+     * they never touched the switches (then nothing is written to OneSignal for them). Each kind
+     * is sent to OneSignal in the `notif_off` tag, which the dashboard's journeys exclude, so a
+     * switched-off kind is never sent at all.
      */
-    fun isCategoryEnabled(category: NotificationCategory): Boolean
+    val disabledCategories: Flow<Set<NotificationCategory>?>
+
+    /**
+     * Remembers whether the user wants a kind of notification.
+     *
+     * @param category the kind of notification the switch controls
+     * @param enabled true to receive it, false to switch it off
+     */
+    suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean)
 
     /**
      * Asks Android for permission to show notifications and lets pushes through when it is
