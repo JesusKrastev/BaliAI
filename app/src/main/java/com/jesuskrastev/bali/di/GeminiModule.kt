@@ -140,9 +140,13 @@ object GeminiModule {
                 "imageUrl" to Schema.string(
                     description = "URL de la senal ilustrada, ausente si la pregunta es teorica",
                     nullable = true
+                ),
+                "sourceIndex" to Schema.integer(
+                    description = "Numero de la pregunta del material de estudio de la que parte, solo en repasos",
+                    nullable = true
                 )
             ),
-            optionalProperties = listOf("imageUrl"),
+            optionalProperties = listOf("imageUrl", "sourceIndex"),
             description = "Una pregunta tipo test al estilo del examen oficial de la DGT"
         )
 

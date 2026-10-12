@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.jesuskrastev.bali.domain.model.RankProgression
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,9 +59,9 @@ class RankRewardsViewModel @Inject constructor(
         val reward = RankProgression.rewardFor(rewardId) ?: return
         val before = uiState.value
         if (_claimingId.value != null || before.xp < reward.requiredXp || rewardId in before.claimedIds) return
+        _claimingId.value = rewardId
+        _message.value = null
         viewModelScope.launch {
-            _claimingId.value = rewardId
-            _message.value = null
             try {
                 if (userRepository.claimRankReward(reward)) {
                     _celebration.value = prizeCelebrationOf(
@@ -72,6 +73,8 @@ class RankRewardsViewModel @Inject constructor(
                 } else {
                     _message.value = "Este premio ya no está disponible."
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: Exception) {
                 _message.value = "No se pudo recoger el premio. Inténtalo de nuevo."
             } finally {

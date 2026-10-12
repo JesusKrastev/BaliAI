@@ -89,4 +89,34 @@ class FirstStepTestTest {
     fun `no path yet means no test to open`() {
         assertThat(firstStepTestNodeOf(emptyList())).isNull()
     }
+
+    // ── firstStepExamNodeOf ───────────────────────────────────────────────
+
+    @Test
+    fun `the first simulacro has nothing to open until an exam is unlocked`() {
+        val path = DgtLearningPathTemplate.buildInitialPath()
+
+        assertThat(firstStepExamNodeOf(path)).isNull()
+    }
+
+    @Test
+    fun `the first simulacro opens the earliest unlocked exam`() {
+        val path = listOf(
+            node("a-exam", 3, NodeType.EXAM, NodeStatus.UNLOCKED),
+            node("b-exam", 9, NodeType.EXAM, NodeStatus.UNLOCKED),
+            node("lesson", 1, NodeType.LESSON, NodeStatus.UNLOCKED)
+        )
+
+        assertThat(firstStepExamNodeOf(path)?.id).isEqualTo("a-exam")
+    }
+
+    @Test
+    fun `a locked or finished exam is not offered as the first simulacro`() {
+        val path = listOf(
+            node("done", 3, NodeType.EXAM, NodeStatus.COMPLETED),
+            node("locked", 9, NodeType.EXAM, NodeStatus.LOCKED)
+        )
+
+        assertThat(firstStepExamNodeOf(path)).isNull()
+    }
 }

@@ -11,6 +11,9 @@ import com.jesuskrastev.bali.domain.usecase.IncrementCoinsUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementStreakUseCase
 import com.jesuskrastev.bali.domain.usecase.IncrementXpUseCase
 import kotlinx.coroutines.test.runTest
+import com.jesuskrastev.bali.domain.usecase.CompletePathNodeUseCase
+import com.jesuskrastev.bali.ui.screens.auth.FakePathRepository
+import com.jesuskrastev.bali.util.FakeImagePrefetcher
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -48,10 +51,13 @@ class ExamViewModelTest {
         userRepository = fakeUserRepository,
         testResultRepository = fakeTestResultRepository,
         answerRepository = fakeAnswerRepository,
+        pathRepository = FakePathRepository(),
         gemini = mock(),
+        imagePrefetcher = FakeImagePrefetcher(),
         incrementStreakUseCase = fakeIncrementStreakUseCase,
         incrementXpUseCase = fakeIncrementXpUseCase,
         incrementCoinsUseCase = fakeIncrementCoinsUseCase,
+        completePathNodeUseCase = CompletePathNodeUseCase(FakePathRepository()),
         analytics = mock<AnalyticsTracker>(),
         soundEffects = fakeSoundEffects,
         savedStateHandle = savedStateHandle

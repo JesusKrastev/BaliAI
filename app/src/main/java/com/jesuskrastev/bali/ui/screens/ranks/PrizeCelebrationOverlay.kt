@@ -15,6 +15,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,8 +86,8 @@ internal const val PRIZE_CELEBRATION_TAG = "prize_celebration"
 
 /**
  * Full-screen celebration of a prize collected on the rank road: rotating rays, confetti, the
- * rank badge (rank prize) or a coin (prize on the way) popping in, the coins counting up, the new
- * balance and what comes next. A tap anywhere closes it, like the surprise chest.
+ * rank wheel or prize illustration popping in, the guaranteed contents, the updated balance
+ * or inventory usage and what comes next. A tap anywhere closes it after the guard delay.
  *
  * @param celebration what was collected and what is next
  * @param onDismiss invoked when the user taps it away or presses back
@@ -161,7 +163,8 @@ internal fun PrizeCelebrationContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 32.dp, vertical = 24.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -177,7 +180,7 @@ internal fun PrizeCelebrationContent(
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(240.dp)) {
                 Rays()
                 Image(
-                    painter = painterResource(celebration.rank?.badgeRes() ?: R.drawable.coin),
+                    painter = painterResource(celebration.rank?.badgeRes() ?: celebration.reward.prizeRes()),
                     contentDescription = null,
                     modifier = Modifier
                         .size(if (celebration.rank != null) 170.dp else 130.dp)
@@ -187,15 +190,32 @@ internal fun PrizeCelebrationContent(
                         }
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painterResource(R.drawable.coin), contentDescription = null, modifier = Modifier.size(40.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "+$shownCoins",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = BaliAccentYellow
-                )
+            if (celebration.reward.coins > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Image(painterResource(R.drawable.coin), contentDescription = null, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "+$shownCoins",
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        color = BaliAccentYellow
+                    )
+                }
+            }
+            celebration.reward.lines().filter { it.image != R.drawable.coin }.forEach { line ->
+                Row(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(painterResource(line.image), contentDescription = null, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        line.label,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = BaliAccentYellow
+                    )
+                }
             }
             Text(
                 headline(celebration),
@@ -206,7 +226,8 @@ internal fun PrizeCelebrationContent(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Ahora tienes ${celebration.coinsAfter} monedas para la tienda.",
+                if (celebration.reward.hasInventory) celebration.reward.usageText()
+                else "Ahora tienes ${celebration.coinsAfter} monedas para la tienda.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White.copy(alpha = 0.8f),
                 textAlign = TextAlign.Center
@@ -219,19 +240,19 @@ internal fun PrizeCelebrationContent(
     }
 }
 
-/** The line under the coins: which rank was reached, or which XP mark paid the prize. */
+/** Returns the rank reached or XP milestone associated with [celebration]. */
 private fun headline(celebration: PrizeCelebration): String = celebration.rank
     ?.let { "¡Ya eres ${it.name}!" }
     ?: "Por llegar a ${celebration.reward.requiredXp} XP"
 
-/** What to do next: collect the other prizes waiting, or how far the next one is. */
+/** Displays unclaimed prizes or the next guaranteed reward described by [celebration]. */
 @Composable
 private fun WhatsNext(celebration: PrizeCelebration) {
     val text = when {
         celebration.stillClaimable == 1 -> "🎁 Te queda 1 premio más por recoger"
         celebration.stillClaimable > 1 -> "🎁 Te quedan ${celebration.stillClaimable} premios más por recoger"
         celebration.next != null ->
-            "Siguiente premio: +${celebration.next.coins} a los ${celebration.next.requiredXp} XP\nTe faltan ${celebration.xpToNext} XP"
+            "Siguiente premio: ${celebration.next.contents()} a los ${celebration.next.requiredXp} XP\nTe faltan ${celebration.xpToNext} XP"
         else -> "🏆 ¡Has recogido todos los premios del camino!"
     }
     Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.1f)) {

@@ -113,7 +113,7 @@ fun RankRewardsScreen(onBackClick: () -> Unit, viewModel: RankRewardsViewModel =
 
 /**
  * The rank road: a header with the current rank, then a winding road where every rank is a
- * milestone and the coin prizes earned on the way to the next rank are stops between them.
+ * milestone and the guaranteed prizes earned on the way to the next rank sit between them.
  * The stretch already driven is painted in the brand colour; claimable prizes pulse.
  *
  * @param state XP, claimed prizes and the claim in progress
@@ -205,11 +205,13 @@ fun RankRewardsContent(
     state.celebration?.let { PrizeCelebrationOverlay(celebration = it, onDismiss = onCelebrationShown) }
 }
 
+/** Returns a stable lazy-list key for this rank or prize stop. */
 private fun PathStop.key(): String = when (this) {
     is PathStop.Rank -> "rank_${rank.id}"
     is PathStop.Prize -> "prize_${reward.id}"
 }
 
+/** Returns the guaranteed prizes collected at this stop. */
 private fun PathStop.prizes(): List<RankReward> = when (this) {
     is PathStop.Rank -> listOfNotNull(prize)
     is PathStop.Prize -> listOf(reward)
@@ -357,7 +359,7 @@ private fun Road(fromX: Float?, atX: Float, toX: Float?, drivenIn: Boolean, driv
 }
 
 /**
- * A coin prize on the road, with its amount and status on the other side of the road.
+ * A guaranteed prize on the road, with its contents and status on the opposite side.
  *
  * @param missingXp XP left to reach it when it is the next goal, else null
  * @param centre horizontal centre of the node within the row
@@ -380,7 +382,7 @@ private fun PrizeStop(
                 .align(Alignment.CenterStart)
                 .offset(x = centre - PRIZE_NODE / 2)
         ) {
-            PrizeNode(state = state, claiming = claiming, onClaim = onClaim)
+            PrizeNode(reward = stop.reward, state = state, claiming = claiming, onClaim = onClaim)
         }
         Column(
             modifier = Modifier
@@ -394,23 +396,31 @@ private fun PrizeStop(
     }
 }
 
-/** Coins and status text for a prize. */
+/** Displays [reward] contents and [state], with [missingXp] and optional end alignment. */
 @Composable
 private fun PrizeLabel(reward: RankReward, state: PrizeState, missingXp: Int?, alignEnd: Boolean) {
     val locked = state == PrizeState.Locked
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(
-            painterResource(R.drawable.coin),
+            painterResource(reward.prizeRes()),
             contentDescription = null,
             modifier = Modifier.size(22.dp),
             colorFilter = if (locked) grayscale() else null
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            "+${reward.coins}",
-            style = MaterialTheme.typography.titleLarge,
+            reward.title(),
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Black,
             color = if (locked) MaterialTheme.colorScheme.onSurfaceVariant else GOLD_DARK
+        )
+    }
+    if (reward.itemKinds > 1) {
+        Text(
+            reward.contents(),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
     Text(
@@ -431,9 +441,9 @@ private fun PrizeLabel(reward: RankReward, state: PrizeState, missingXp: Int?, a
     )
 }
 
-/** The round coin bubble: gold and pulsing when claimable, ticked when claimed, grey when locked. */
+/** Displays [reward] as a pulsing claim target; [claiming] blocks taps while [onClaim] runs. */
 @Composable
-private fun PrizeNode(state: PrizeState, claiming: Boolean, onClaim: () -> Unit) {
+private fun PrizeNode(reward: RankReward, state: PrizeState, claiming: Boolean, onClaim: () -> Unit) {
     val pulse = rememberInfiniteTransition(label = "prize_pulse")
     val scale by pulse.animateFloat(
         initialValue = 1f,
@@ -466,11 +476,11 @@ private fun PrizeNode(state: PrizeState, claiming: Boolean, onClaim: () -> Unit)
             CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp, color = Color.White)
         } else {
             Image(
-                painterResource(R.drawable.coin),
+                painterResource(reward.prizeRes()),
                 contentDescription = when (state) {
-                    PrizeState.Claimable -> "Recoger premio"
-                    PrizeState.Claimed -> "Premio recogido"
-                    PrizeState.Locked -> "Premio bloqueado"
+                    PrizeState.Claimable -> "Recoger ${reward.contents()}"
+                    PrizeState.Claimed -> "Premio recogido: ${reward.contents()}"
+                    PrizeState.Locked -> "Premio bloqueado: ${reward.contents()}"
                 },
                 modifier = Modifier
                     .size(PRIZE_NODE * 0.5f)
@@ -579,8 +589,7 @@ private fun RankMilestone(
                 Spacer(Modifier.height(8.dp))
                 val count = stop.prizesOnTheWay.size
                 Text(
-                    "Por el camino: ${if (count == 1) "1 premio" else "$count premios"} · " +
-                        "${stop.prizesOnTheWay.sumOf { it.coins }} monedas",
+                    "Por el camino: ${if (count == 1) "1 premio" else "$count premios"}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -590,7 +599,7 @@ private fun RankMilestone(
     }
 }
 
-/** The prize for reaching a rank, as a pill that becomes a button when it can be collected. */
+/** Shows [prize] and [state] as a pill, invoking [onClaim] unless [claiming] is in progress. */
 @Composable
 private fun RankPrizeButton(prize: RankReward, state: PrizeState, claiming: Boolean, onClaim: () -> Unit) {
     val shape = RoundedCornerShape(50)
@@ -611,14 +620,14 @@ private fun RankPrizeButton(prize: RankReward, state: PrizeState, claiming: Bool
                 Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             state == PrizeState.Locked ->
                 Icon(Icons.Rounded.Lock, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            else -> Image(painterResource(R.drawable.coin), null, Modifier.size(18.dp))
+            else -> Image(painterResource(prize.prizeRes()), null, Modifier.size(24.dp))
         }
         Spacer(Modifier.width(6.dp))
         Text(
             when (state) {
-                PrizeState.Claimable -> "Recoger +${prize.coins}"
-                PrizeState.Claimed -> "+${prize.coins} recogidas"
-                PrizeState.Locked -> "Premio de rango: +${prize.coins}"
+                PrizeState.Claimable -> "Recoger ${prize.title()}"
+                PrizeState.Claimed -> "${prize.title()} · Recogido"
+                PrizeState.Locked -> "Premio: ${prize.title()}"
             },
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Black,
@@ -669,11 +678,15 @@ private fun grayscale(): ColorFilter = ColorFilter.colorMatrix(ColorMatrix().app
 
 /** Returns the generated badge drawable for this rank's stable id. */
 fun RankTier.badgeRes(): Int = when (id) {
-    "aprendiz" -> R.drawable.rank_aprendiz
-    "conductor" -> R.drawable.rank_conductor
-    "explorador" -> R.drawable.rank_explorador
-    "piloto" -> R.drawable.rank_piloto
-    "experto" -> R.drawable.rank_experto
-    "maestro" -> R.drawable.rank_maestro
-    else -> R.drawable.rank_leyenda
+    "aprendiz" -> R.drawable.rank_wheel_aprendiz
+    "novato" -> R.drawable.rank_wheel_novato
+    "conductor" -> R.drawable.rank_wheel_conductor
+    "agil" -> R.drawable.rank_wheel_agil
+    "explorador" -> R.drawable.rank_wheel_explorador
+    "aventurero" -> R.drawable.rank_wheel_aventurero
+    "piloto" -> R.drawable.rank_wheel_piloto
+    "especialista" -> R.drawable.rank_wheel_especialista
+    "experto" -> R.drawable.rank_wheel_experto
+    "maestro" -> R.drawable.rank_wheel_maestro
+    else -> R.drawable.rank_wheel_leyenda
 }

@@ -57,6 +57,10 @@ class FirestoreUserDao @Inject constructor(
                     docRef,
                     mapOf(
                         "coins" to ((snapshot.getLong("coins") ?: 0L) + reward.coins),
+                        "hints" to ((snapshot.getLong("hints") ?: 0L) + reward.hints),
+                        "fiftyFifties" to ((snapshot.getLong("fiftyFifties") ?: 0L) + reward.fiftyFifties),
+                        "doubleXpBoosts" to ((snapshot.getLong("doubleXpBoosts") ?: 0L) + reward.doubleXpBoosts),
+                        "doubleCoinBoosts" to ((snapshot.getLong("doubleCoinBoosts") ?: 0L) + reward.doubleCoinBoosts),
                         "claimedRankRewards" to (claimed + reward.id)
                     ),
                     SetOptions.merge()

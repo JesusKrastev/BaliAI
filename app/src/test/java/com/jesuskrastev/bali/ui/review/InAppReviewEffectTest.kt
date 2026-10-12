@@ -5,17 +5,32 @@ import org.junit.Test
 
 class InAppReviewEffectTest {
 
-    /** Verifies that an excellent score is eligible for an in-app review request. */
+    /** Verifies that a happy result after enough finished tests or games asks for a review. */
     @Test
-    fun excellentResult_requestsReview() {
-        assertThat(shouldRequestInAppReview(90)).isTrue()
-        assertThat(shouldRequestInAppReview(100)).isTrue()
+    fun goodResultAfterSeveralCompletions_requestsReview() {
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 3), accuracy = 70)).isTrue()
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 12), accuracy = 100)).isTrue()
     }
 
-    /** Verifies that ordinary or poor scores never interrupt the user with a review request. */
+    /** Verifies that new users are not interrupted before they have finished several tests or games. */
     @Test
-    fun resultBelowExcellent_doesNotRequestReview() {
-        assertThat(shouldRequestInAppReview(89)).isFalse()
-        assertThat(shouldRequestInAppReview(0)).isFalse()
+    fun tooFewCompletions_doesNotRequestReview() {
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 1), accuracy = 100)).isFalse()
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 2), accuracy = 100)).isFalse()
+    }
+
+    /** Verifies that a poor result never interrupts the user, however experienced. */
+    @Test
+    fun poorResult_doesNotRequestReview() {
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 10), accuracy = 69)).isFalse()
+    }
+
+    /** Verifies the spacing between requests and the lifetime cap. */
+    @Test
+    fun repeatedRequests_areSpacedAndCapped() {
+        val asked = ReviewPromptState(completions = 5, requests = 1, completionsAtLastRequest = 3)
+        assertThat(shouldRequestInAppReview(asked, accuracy = 100)).isFalse()
+        assertThat(shouldRequestInAppReview(asked.copy(completions = 8), accuracy = 100)).isTrue()
+        assertThat(shouldRequestInAppReview(ReviewPromptState(completions = 99, requests = 3), accuracy = 100)).isFalse()
     }
 }

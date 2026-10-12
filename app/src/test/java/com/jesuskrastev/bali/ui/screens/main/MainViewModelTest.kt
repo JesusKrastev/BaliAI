@@ -14,7 +14,8 @@ import com.revenuecat.purchases.CustomerInfo
 import com.revenuecat.purchases.Offering
 import androidx.lifecycle.viewModelScope
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,7 +104,9 @@ class MainViewModelTest {
             )
         )
         val result = viewModel.entryPoint.filterNotNull().first()
-        viewModel.viewModelScope.cancel()
+        // Joined, not just cancelled: the completion handlers of the cancelled jobs dispatch to
+        // Main, and must run before MainDispatcherRule resets it or the test flakes.
+        viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
         return result
     }
 

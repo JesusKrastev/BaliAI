@@ -172,13 +172,11 @@ fun AppNavigation(
                 val viewModel: HomeViewModel = hiltViewModel()
                 // Mock exams are free for subscribers (idea 015): no coin check, from a path
                 // node or from the first-steps bar alike.
-                val openExam = { navController.navigate(ExamRoute) }
-
                 HomeScreen(
                     viewModel = viewModel,
                     onNodeTestClick = { title, desc, id, type ->
                         if (type == "EXAM") {
-                            openExam()
+                            navController.navigate(ExamRoute(nodeId = id))
                         } else {
                             navController.navigate(TestRoute(nodeTitle = title, nodeDescription = desc, nodeId = id, nodeType = type))
                         }
@@ -198,7 +196,6 @@ fun AppNavigation(
                         // The first-steps bar opens Bali Drive; every exit returns to Juegos.
                         navController.openBaliDrive()
                     },
-                    onExamClick = openExam,
                     onSeePlanClick = {
                         navController.navigateTopLevel(StatsRoute)
                     }
@@ -327,7 +324,7 @@ fun AppNavigation(
                     },
                     onFinishExam = { result ->
                         navController.navigate(result.toResultRoute()) {
-                            popUpTo(ExamRoute) { inclusive = true }
+                            popUpTo<ExamRoute> { inclusive = true }
                         }
                     },
                     viewModel = viewModel
