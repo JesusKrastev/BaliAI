@@ -10,10 +10,10 @@ import com.jesuskrastev.bali.domain.model.NotificationCategory
  * @property profilePictureUrl authenticated user's avatar URL, null when signed out or unavailable
  * @property isLoggedIn whether a user session is currently active
  * @property soundsEnabled whether the answer sound effects are on (they are until the user turns them off)
- * @property disabledNotificationCategories the notification kinds the user switched off (all are on until they do)
+ * @property disabledNotificationCategories the notification kinds the user switched off with the per-kind switches (all are on until they do)
  * @property notificationsEnabled whether pushes reach this install: Android allows the app's notifications
  *   and the user has not turned them off in the app (with the Settings switch or the onboarding's
- *   "Ahora no"). While false no category delivers anything, whatever its channel says
+ *   "Ahora no"). While false no category delivers anything, whatever its switch says
  */
 data class SettingsUiState(
     val userName: String = "Futuro Conductor",

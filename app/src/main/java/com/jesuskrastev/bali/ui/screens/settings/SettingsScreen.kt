@@ -71,6 +71,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.jesuskrastev.bali.domain.model.NotificationCategory
+import com.jesuskrastev.bali.ui.screens.home.FeedbackBannerContent
+import com.jesuskrastev.bali.ui.screens.home.openWhatsApp
 import com.jesuskrastev.bali.ui.util.LegalLinks
 import com.jesuskrastev.bali.ui.util.openWhatsAppChat
 import com.jesuskrastev.bali.ui.util.replayMask
@@ -131,8 +133,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
 
-    // The user switches each channel in the system settings, outside the app.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshNotificationChannels() }
     LaunchedEffect(viewModel) {
         viewModel.openSystemNotificationSettings.collect { context.openAppNotificationSettings() }
     }
@@ -147,6 +147,11 @@ fun SettingsScreen(
         SettingsHeader()
 
         ProfileCard(uiState = uiState, onAuthClick = onAuthClick)
+
+        // Same invitation as Home's banner, always here and without a close button.
+        FeedbackBannerContent(
+            onContactClick = { openWhatsApp(context) }
+        )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SettingsSectionLabel("Notificaciones")
@@ -165,7 +170,7 @@ fun SettingsScreen(
                     )
                 )
             )
-            // Each kind has its own Android channel; they only matter while notifications are on.
+            // One switch per kind, so the student keeps only the notifications they care about.
             AnimatedVisibility(
                 visible = uiState.notificationsEnabled,
                 enter = expandVertically() + fadeIn(),
@@ -177,8 +182,9 @@ fun SettingsScreen(
                         SettingsRowSpec(
                             icon = category.icon(),
                             label = category.title,
-                            description = "${if (isOn) "Activado" else "Desactivado"} · ${category.description}",
-                            onClick = { context.openNotificationSettings(category) }
+                            description = category.description,
+                            checked = isOn,
+                            onClick = { viewModel.setCategoryEnabled(category, !isOn) }
                         )
                     }
                 )
@@ -461,22 +467,6 @@ private fun NotificationCategory.icon(): ImageVector = when (this) {
 }
 
 /**
- * Opens Android's settings for [category]'s channel, where the user switches that kind of
- * notification on or off. Below Android 8 there are no channels, and some manufacturers' builds
- * have no channel screen: both fall back to [openAppNotificationSettings].
- *
- * @param category the kind of notification to configure
- */
-private fun Context.openNotificationSettings(category: NotificationCategory) {
-    val openedChannel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && startActivityOrFalse(
-        Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-            .putExtra(Settings.EXTRA_CHANNEL_ID, category.channelId)
-    )
-    if (!openedChannel) openAppNotificationSettings()
-}
-
-/**
  * Opens the app's notification settings in Android, where the user lets notifications through
  * when the system dialog will not show again; failing that, the app's details screen, which
  * every Android has and links to them.
@@ -560,6 +550,7 @@ private fun SettingsGroup(items: List<SettingsRowSpec>) {
         }
     }
 }
+
 
 /**
  * Leading icon badge, label and trailing chevron shared by every settings row — both the ones

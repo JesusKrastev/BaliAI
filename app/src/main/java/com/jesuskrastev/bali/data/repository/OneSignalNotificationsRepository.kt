@@ -1,11 +1,11 @@
 package com.jesuskrastev.bali.data.repository
 
-import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.jesuskrastev.bali.domain.model.EnablePushesResult
@@ -89,17 +89,27 @@ class OneSignalNotificationsRepository @Inject constructor(
         }
     }.distinctUntilChanged()
 
+    override val disabledCategories: Flow<Set<NotificationCategory>?> = context.notificationsDataStore.data
+        .map { preferences ->
+            preferences[KEY_DISABLED_CATEGORIES]?.let { tags ->
+                NotificationCategory.entries.filter { it.channelId in tags }.toSet()
+            }
+        }
+        .distinctUntilChanged()
+
     /**
-     * Reads the importance of the category's channel, which the user sets in Android's settings.
+     * Stores the choice. The first call writes the set, so from then on [disabledCategories]
+     * is non-null and the `notif_off` tag follows it.
      *
-     * @param category the kind of notification to look up
-     * @return false when the channel is set to "no notifications"; true otherwise
+     * @param category the kind of notification the switch controls
+     * @param enabled true to receive it, false to switch it off
      */
-    override fun isCategoryEnabled(category: NotificationCategory): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
-        val channel = context.getSystemService(NotificationManager::class.java)
-            .getNotificationChannel(category.channelId)
-        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    override suspend fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
+        context.notificationsDataStore.edit { preferences ->
+            val current = preferences[KEY_DISABLED_CATEGORIES].orEmpty()
+            preferences[KEY_DISABLED_CATEGORIES] =
+                if (enabled) current - category.channelId else current + category.channelId
+        }
     }
 
     /**
@@ -168,5 +178,6 @@ class OneSignalNotificationsRepository @Inject constructor(
     private companion object {
         val KEY_STUDY_SLOT = stringPreferencesKey("study_slot")
         val KEY_STUDY_RHYTHM = stringPreferencesKey("study_rhythm")
+        val KEY_DISABLED_CATEGORIES = stringSetPreferencesKey("disabled_categories")
     }
 }

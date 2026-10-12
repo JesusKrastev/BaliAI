@@ -15,6 +15,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -31,6 +32,8 @@ import com.jesuskrastev.bali.ui.navigation.AuthRoute
 import com.jesuskrastev.bali.ui.navigation.GreetingsRoute
 import com.jesuskrastev.bali.ui.navigation.HomeRoute
 import com.jesuskrastev.bali.ui.navigation.PaywallRoute
+import com.jesuskrastev.bali.ui.review.FeedbackPromptViewModel
+import com.jesuskrastev.bali.ui.review.LocalFeedbackPromptRaiser
 import com.jesuskrastev.bali.ui.theme.BaliTheme
 import dagger.hilt.android.AndroidEntryPoint
 import com.jesuskrastev.bali.ui.screens.main.AppEntryPoint
@@ -39,6 +42,7 @@ import com.jesuskrastev.bali.ui.screens.main.MainViewModel
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+    private val feedbackPrompt: FeedbackPromptViewModel by viewModels()
 
     /** Creates the app UI after resolving migration, onboarding and authentication state. */
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,7 +124,9 @@ class MainActivity : ComponentActivity() {
                                 else -> GreetingsRoute
                             }
                             key(entryPoint) {
-                                AppNavigation(startDestination = startDestination)
+                                CompositionLocalProvider(LocalFeedbackPromptRaiser provides feedbackPrompt::markPending) {
+                                    AppNavigation(startDestination = startDestination)
+                                }
                             }
                         }
                     }

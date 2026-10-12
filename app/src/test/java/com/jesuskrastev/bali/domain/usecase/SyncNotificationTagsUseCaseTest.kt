@@ -2,6 +2,7 @@ package com.jesuskrastev.bali.domain.usecase
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudyRhythm
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.StudySlot
@@ -9,6 +10,7 @@ import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
 import com.jesuskrastev.bali.domain.repository.SubscriptionRepository
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_LAST_SESSION_AT
+import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_NOTIF_OFF
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_PREMIUM_SINCE
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_STREAK_DAYS
 import com.jesuskrastev.bali.domain.usecase.SyncNotificationTagsUseCase.Companion.TAG_STUDY_RHYTHM
@@ -102,6 +104,33 @@ class SyncNotificationTagsUseCaseTest {
         val tags = notificationTags(null, premiumSinceMillis = 1_700_000_000_999, premiumKnown = true, schedule = null)
 
         assertThat(tags[TAG_PREMIUM_SINCE]).isEqualTo("1700000000")
+    }
+
+    @Test
+    fun `switched-off categories are sent as their channel ids in one tag`() {
+        val tags = notificationTags(
+            null, premiumSinceMillis = null, premiumKnown = false, schedule = null,
+            disabledCategories = setOf(NotificationCategory.STUDY, NotificationCategory.PROMOTIONS)
+        )
+
+        assertThat(tags).containsEntry(TAG_NOTIF_OFF, "reminders,promotions")
+    }
+
+    @Test
+    fun `turning every category back on removes the tag`() {
+        val tags = notificationTags(
+            null, premiumSinceMillis = null, premiumKnown = false, schedule = null,
+            disabledCategories = emptySet()
+        )
+
+        assertThat(tags).containsEntry(TAG_NOTIF_OFF, null)
+    }
+
+    @Test
+    fun `a device that never used the switches leaves the tag alone`() {
+        val tags = notificationTags(null, premiumSinceMillis = null, premiumKnown = false, schedule = null)
+
+        assertThat(tags).doesNotContainKey(TAG_NOTIF_OFF)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.jesuskrastev.bali.domain.usecase
 
+import com.jesuskrastev.bali.domain.model.NotificationCategory
 import com.jesuskrastev.bali.domain.model.StudySchedule
 import com.jesuskrastev.bali.domain.model.User
 import com.jesuskrastev.bali.domain.repository.AuthRepository
@@ -24,8 +25,8 @@ import javax.inject.Inject
  * account already exists in OneSignal, so linking and re-sending the tags have to happen in
  * that order, in one place.
  *
- * The free OneSignal plan keeps at most 6 tags per user. This sends the 5 in [Companion] and
- * leaves one free.
+ * The free OneSignal plan keeps at most 6 tags per user. This sends the 5 in [Companion] plus
+ * `notif_off`, which takes the sixth.
  */
 class SyncNotificationTagsUseCase @Inject constructor(
     private val authRepository: AuthRepository,
@@ -51,9 +52,12 @@ class SyncNotificationTagsUseCase @Inject constructor(
             authRepository.currentUserFlow,
             userRepository.get(),
             premium(),
-            notificationsRepository.studySchedule
-        ) { userId, user, premium, schedule ->
-            userId to notificationTags(user, premium?.sinceMillis, premiumKnown = premium != null, schedule)
+            notificationsRepository.studySchedule,
+            notificationsRepository.disabledCategories
+        ) { userId, user, premium, schedule, disabled ->
+            userId to notificationTags(
+                user, premium?.sinceMillis, premiumKnown = premium != null, schedule, disabled
+            )
         }
             .distinctUntilChanged()
             .collect { (userId, tags) ->
@@ -95,6 +99,13 @@ class SyncNotificationTagsUseCase @Inject constructor(
         const val TAG_STREAK_DAYS = "streak_days"
 
         /**
+         * Comma-separated channel ids of the notification kinds the user switched off in the app
+         * (`reminders`, `streak`, `promotions`); absent when all are on. The dashboard's journeys
+         * must exclude users whose value contains the kind they send.
+         */
+        const val TAG_NOTIF_OFF = "notif_off"
+
+        /**
          * Builds the tags to write. A tag is only removed when its absence is known to be
          * true: a missing profile or an unanswered RevenueCat call leaves the tag as it is,
          * so a slow network never drops a subscriber from the paying segments.
@@ -103,19 +114,25 @@ class SyncNotificationTagsUseCase @Inject constructor(
          * @param premiumSinceMillis when premium was first bought, or null when not subscribed
          * @param premiumKnown false while RevenueCat has not answered yet
          * @param schedule the study moment saved on this device, or null if never answered
+         * @param disabledCategories the kinds switched off in Settings, or null when this device
+         *   never used the switches (the tag is then left as OneSignal has it)
          * @return values keyed by tag name; a null value removes that tag
          */
         fun notificationTags(
             user: User?,
             premiumSinceMillis: Long?,
             premiumKnown: Boolean,
-            schedule: StudySchedule?
+            schedule: StudySchedule?,
+            disabledCategories: Set<NotificationCategory>? = null
         ): Map<String, String?> = buildMap {
             // Never removed when missing: a reinstall starts without it, and the answer the
             // account already has in OneSignal is better than none.
             schedule?.let {
                 put(TAG_STUDY_SLOT, it.slot.tag)
                 it.rhythm?.let { rhythm -> put(TAG_STUDY_RHYTHM, rhythm.tag) }
+            }
+            disabledCategories?.let { disabled ->
+                put(TAG_NOTIF_OFF, disabled.joinToString(",") { it.channelId }.ifEmpty { null })
             }
             if (premiumKnown) put(TAG_PREMIUM_SINCE, premiumSinceMillis?.let(::unixSeconds))
             user?.let {

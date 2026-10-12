@@ -12,12 +12,12 @@ import com.jesuskrastev.bali.domain.repository.NotificationsRepository
 import com.jesuskrastev.bali.domain.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,7 +25,7 @@ import javax.inject.Inject
 /**
  * Backs the Settings tab: the signed-in profile and sign-out action that used to live in Home's
  * side drawer, now surfaced from the persistent bottom navigation, the sound effects switch and
- * what the user allowed in Android for each kind of notification.
+ * the switches for each kind of notification.
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -35,12 +35,6 @@ class SettingsViewModel @Inject constructor(
     private val soundEffects: SoundEffects,
     private val notificationsRepository: NotificationsRepository
 ) : ViewModel() {
-
-    /**
-     * The categories whose channel is off. Android has no callback for channel changes, so this
-     * is re-read by [refreshNotificationChannels] each time the screen comes back to the front.
-     */
-    private val disabledCategories = MutableStateFlow(readDisabledCategories())
 
     /** What the preference rows show, gathered so the profile flows keep fitting one `combine`. */
     private data class Preferences(
@@ -52,7 +46,7 @@ class SettingsViewModel @Inject constructor(
     private val preferences = combine(
         soundEffects.isEnabled,
         notificationsRepository.pushesAllowed,
-        disabledCategories,
+        notificationsRepository.disabledCategories.map { it.orEmpty() },
         ::Preferences
     )
 
@@ -101,12 +95,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Re-reads every category's channel. Called whenever the screen comes back to the front,
-     * because the user switches channels in Android's settings. The permission needs no
-     * refresh: [NotificationsRepository.pushesAllowed] follows it by itself.
+     * Follows one of the per-kind switches under the notifications switch.
+     *
+     * @param category the kind of notification the switch controls
+     * @param enabled true to receive that kind, false to switch it off
      */
-    fun refreshNotificationChannels() {
-        disabledCategories.value = readDisabledCategories()
+    fun setCategoryEnabled(category: NotificationCategory, enabled: Boolean) {
+        viewModelScope.launch { notificationsRepository.setCategoryEnabled(category, enabled) }
     }
 
     /**
@@ -155,15 +150,6 @@ class SettingsViewModel @Inject constructor(
             analyticsTracker.resetUser()
         }
     }
-
-    /**
-     * Reads the channels from Android.
-     *
-     * @return the categories whose channel the user switched off
-     */
-    private fun readDisabledCategories(): Set<NotificationCategory> = NotificationCategory.entries
-        .filterNot(notificationsRepository::isCategoryEnabled)
-        .toSet()
 
     private companion object {
         /** `source` of `notifications_permission_result` when the answer comes from Settings. */
